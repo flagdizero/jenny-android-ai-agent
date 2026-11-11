@@ -112,9 +112,13 @@ class _FakeCronRecorder:
 
     def __init__(self) -> None:
         self.records: list[tuple[str, dict[str, Any]]] = []
+        self.wakes: list[str] = []
 
     def write_run_record(self, run_id: str, record: dict[str, Any]) -> None:
         self.records.append((run_id, dict(record)))
+
+    def note_wake(self, job: Any) -> None:
+        self.wakes.append(job.id)
 
 
 class _SpyCronTool(CronTool):

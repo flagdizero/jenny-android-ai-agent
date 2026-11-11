@@ -10,6 +10,7 @@
 import { i18n, tr } from './shared/i18n.js';
 import { describeSchedule, zoneWatchText } from './shared/cron-view.js';
 import { button, el } from './shared/dom.js';
+import { botName } from './shared/bot-name.js';
 
 
 
@@ -46,6 +47,8 @@ export function automationRow(job, { stamp, onPause, onChange, onRemove }) {
     sign.push(i18n.t('board.cron.next', { when: stamp(new Date(job.nextRunAtMs).toISOString()) }));
   }
   sign.push(i18n.t('board.cron.costs'));
+  /* Se l'e' messa Jenny da sola: una firma piccola, in fondo. */
+  if (job.autonomous) sign.push(i18n.t('cron.job.by', { name: botName.get() }));
   body.appendChild(el('div', 'home-drawer-hint', sign.join(' · ')));
   const tools = el('div', 'home-drawer-row');
   tools.append(

@@ -18,6 +18,15 @@ Releases before 1.0 are described only on their
 - **A step-by-step plan in the personal chat too**, for a job that spans several notebooks and
   apps. Messages you send while a step runs wait for that step's turn and get their own answer
   right after it.
+- **Jenny prepares what comes next by herself.** When a job wakes her — a morning check, an
+  arrival at a place — she can now set other jobs: the alert for the afternoon train, a check
+  on a flight every fifteen minutes. Before, she could only tell you and stay silent until the
+  next job you had asked for. What she sets on her own is marked "by Jenny" in the lists.
+- **A recurring job can have an end**: "check the flight every 15 minutes until 10:35", "every
+  hour until Friday". After its end it goes away by itself.
+- **A notice when Jenny wakes up too often.** With 50 or more wake-ups in 24 hours, a pill
+  above the message field says how many; tapping it shows which jobs wake her most, with a
+  pause button next to each. It is a notice, not a limit: nothing is stopped for you.
 
 ### Changed
 

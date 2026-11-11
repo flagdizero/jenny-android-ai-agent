@@ -10,6 +10,7 @@ non entra, e chi scrive non aspetta un lock su file.
   e la posizione nella lista.
 - ``cron_runs``: i record di esecuzione, una traccia per il post-mortem che non
   legge nessuno; ne restano gli ultimi ``RUNS_KEEP``.
+- ``cron_wakes``: una riga per ogni risveglio del modello, tenuta ``WAKES_KEEP_MS``.
 
 Il formato vecchio lo legge solo ``jenny/db_migration/cron.py``.
 """
@@ -41,10 +42,22 @@ SCHEMA = Schema(
         CREATE INDEX cron_runs_job ON cron_runs(job_id);
         CREATE INDEX cron_runs_at ON cron_runs(at_ms);
         """,
+        # I risvegli: una riga ogni volta che un job sveglia il modello. Servono
+        # al conto delle ultime 24 ore (``CronService.wakes``); il nome e la
+        # firma stanno nella riga, perché un singolo scattato non c'è più.
+        """
+        CREATE TABLE cron_wakes (
+          at_ms INTEGER NOT NULL,
+          job_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          autonomous INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX cron_wakes_at ON cron_wakes(at_ms);
+        """,
     ),
     # Negli snapshot i record di un giorno stanno insieme: quelli dei giorni
     # passati non cambiano più, e restano lo stesso blob.
-    shards={"cron_runs": "at_ms / 86400000"},
+    shards={"cron_runs": "at_ms / 86400000", "cron_wakes": "at_ms / 86400000"},
 )
 
 # Quanti record di esecuzione tenere. Un conteggio e non un'età: una scadenza a
@@ -123,3 +136,39 @@ def read_runs(database, job_id: str | None = None) -> list[dict[str, Any]]:
         (job_id, job_id),
     )
     return [json.loads(r["data"]) for r in rows]
+
+
+# Quanto si tengono i risvegli: il conto guarda le ultime 24 ore, il doppio basta.
+WAKES_KEEP_MS = 48 * 60 * 60 * 1000
+
+
+def add_wake(database, at_ms: int, job_id: str, name: str, autonomous: bool) -> None:
+    with database.write() as conn:
+        conn.execute(
+            "INSERT INTO cron_wakes(at_ms, job_id, name, autonomous) VALUES (?, ?, ?, ?)",
+            (at_ms, job_id, name, 1 if autonomous else 0),
+        )
+
+
+def prune_wakes(database, now_ms: int, keep_ms: int = WAKES_KEEP_MS) -> int:
+    with database.write() as conn:
+        return conn.execute("DELETE FROM cron_wakes WHERE at_ms < ?", (now_ms - keep_ms,)).rowcount
+
+
+def read_wakes(database, since_ms: int) -> list[dict[str, Any]]:
+    """I risvegli da *since_ms* raggruppati per job, dal più frequente."""
+    rows = database.read(
+        "SELECT job_id, COUNT(*) AS n, MAX(at_ms) AS last_ms FROM cron_wakes "
+        "WHERE at_ms >= ? GROUP BY job_id ORDER BY n DESC, last_ms DESC",
+        (since_ms,),
+    )
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        last = database.read(
+            "SELECT name, autonomous FROM cron_wakes WHERE job_id = ? AND at_ms = ? LIMIT 1",
+            (row["job_id"], row["last_ms"]),
+        )
+        name, autonomous = (last[0]["name"], bool(last[0]["autonomous"])) if last else ("", False)
+        out.append({"job_id": row["job_id"], "name": name, "autonomous": autonomous,
+                    "count": int(row["n"]), "last_ms": int(row["last_ms"])})
+    return out

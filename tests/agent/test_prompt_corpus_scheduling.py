@@ -229,6 +229,9 @@ _ALLOWED: dict[str, str] = {
     "tool cron.parameters.properties.zone": (
         "idem — dice con quali altri «quando» una zona non si combina, non dove va un lavoro"
     ),
+    "tool cron.parameters.properties.until_date": (
+        "idem — dice quali «quando» possono avere una fine, non dove va un lavoro"
+    ),
 }
 
 

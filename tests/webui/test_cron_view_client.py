@@ -664,3 +664,27 @@ def test_a_zone_says_its_place_and_its_end() -> None:
     assert said["waiting"] == "cron.zone.waiting"
     assert said["blind"] == "cron.zone.blind"
     assert dict(said["rows"]) == {"z": "blind", "c": None}
+
+
+def test_a_recurring_job_says_its_end_and_who_set_it() -> None:
+    """«ogni 15 minuti · fino a…», e la firma di quel che Jenny si è messa da sola."""
+    out = _run_js("""
+      const say = (s) => describeSchedule(s, { tr, locale: 'it', timeZone: 'Europe/Rome' });
+      console.log(JSON.stringify({
+        plain: say({ kind: 'every', every_ms: 900_000 }),
+        ending: say({ kind: 'every', every_ms: 900_000, until_ms: NOW }),
+        cron: say({ kind: 'cron', expr: '0 7 * * *', until_ms: NOW }),
+        rows: buildCronView({ available: true, now_ms: NOW, jobs: [
+          { id: 'a', name: 'volo', kind: 'user', autonomous: true,
+            schedule: { kind: 'every', every_ms: 900_000 } },
+          { id: 'b', name: 'piante', kind: 'user', schedule: { kind: 'every', every_ms: 900_000 } },
+        ] }, { nowMs: NOW, tr, locale: 'it' }).rows.map((r) => [r.id, r.autonomous]),
+      }));
+    """)
+    said = json.loads(out)
+
+    assert said["plain"].startswith("cron.schedule.every:")
+    assert said["ending"].startswith('cron.schedule.until:{"schedule":"cron.schedule.every:')
+    assert '"until":' in said["ending"]
+    assert said["cron"].startswith("cron.schedule.until:")
+    assert dict(said["rows"]) == {"a": True, "b": False}

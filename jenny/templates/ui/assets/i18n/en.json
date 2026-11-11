@@ -784,7 +784,8 @@
       "monthly": "on day {days} of every month at {time}",
       "zone": "when you arrive at {place}",
       "zoneUntil": "when you arrive at {place}, until {until}",
-      "zonePlace": "a place"
+      "zonePlace": "a place",
+      "until": "{schedule} · until {until}"
     },
     "when": {
       "now": "now",
@@ -819,7 +820,8 @@
       "pausedSince": "Paused since {when}: it does not run until you resume it.",
       "inNotebook": "It lives in the notebook {place}: you find it on its board too.",
       "when": "When: {schedule}",
-      "nextAt": "Next time: {when}"
+      "nextAt": "Next time: {when}",
+      "by": "by {name}"
     },
     "health": {
       "couldNotCheck": "Could not check {n} times in a row",
@@ -1542,6 +1544,21 @@
       "done": "Done",
       "move": "Move {name}: left and right arrows",
       "remove": "Remove {name} from the pages"
+    },
+    "wakes": {
+      "pillCount": "{n} wake-ups",
+      "pillWhen": "today",
+      "pillGo": "Check",
+      "title": "I'm waking up a lot",
+      "countLabel": "wake-ups in the last 24 hours",
+      "note": "Each wake-up is one run of the model.",
+      "noteOwn": "Almost all of them come from a single check: if you no longer need it, pause it.",
+      "noteYours": "Most of these you asked for: if that's fine, tell me and I won't ask again.",
+      "gone": "already fired",
+      "remove": "Remove",
+      "all": "All reminders",
+      "ok": "That's fine",
+      "close": "Close"
     }
   },
   "workshop": {

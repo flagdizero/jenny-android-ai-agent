@@ -1621,6 +1621,151 @@ body.home {
 
 .home-wire[hidden] { display: none; }
 
+/* ── «Troppi risvegli» (`home-wakes.js`) ──
+   La pastiglia sta dove sta lo stato del filo, ma a sinistra e stretta: a destra
+   c'e' Jenny. Il giallo e' quello degli avvisi, non l'accento: non e' un guasto. */
+.home-wakes {
+  flex: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin: 0 16px 6px;
+  padding: 0 14px 0 12px;
+  border: 1px solid color-mix(in oklab, var(--warning) 45%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklab, var(--warning) 12%, var(--bg));
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.home-wakes[hidden] { display: none; }
+.home-wakes:active { background: color-mix(in oklab, var(--warning) 22%, var(--bg)); }
+.home-wakes:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-wakes > .ti { color: var(--warning); font-size: 17px; }
+.home-wakes-text b { font-weight: 600; }
+.home-wakes-go { color: var(--text-muted); }
+.home-wakes-go::after { content: ' \203A'; }
+
+.home-wakes-count {
+  margin: 6px 4px 0;
+  font-family: var(--font-display);
+  font-size: 44px;
+  line-height: 1;
+  color: var(--heading);
+}
+.home-wakes-count small {
+  margin-left: 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.home-wakes-note { margin-top: 8px; }
+.home-wakes-list { display: flex; flex-direction: column; margin: 2px 0 4px; }
+.home-wakes-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 8px 4px;
+  border-top: .5px solid var(--border);
+}
+.home-wakes-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.home-wakes-row-text:active { opacity: .6; }
+.home-wakes-row-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-wakes-row-when { font-size: 12.5px; color: var(--text-muted); }
+.home-wakes-row.is-paused .home-wakes-row-name { color: var(--text-muted); }
+/* La firma di quel che Jenny si e' messa da sola: piccola, a mano. */
+.home-wakes-sign {
+  margin-left: 6px;
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: var(--flower);
+  white-space: nowrap;
+}
+.home-wakes-bar { height: 4px; border-radius: 2px; background: var(--overlay); overflow: hidden; }
+.home-wakes-bar i { display: block; height: 100%; border-radius: 2px; background: var(--text-muted); opacity: .55; }
+.home-wakes-bar.is-top i { background: var(--warning); opacity: 1; }
+.home-wakes-row-n {
+  flex: none;
+  width: 46px;
+  text-align: right;
+  font-size: 15px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.home-wakes-row-n.is-top { color: var(--text); font-weight: 600; }
+.home-wakes-act {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--overlay);
+  color: var(--text);
+  font-size: 19px;
+}
+.home-wakes-act.is-none { background: none; }
+button.home-wakes-act:active { background: var(--active); }
+.home-wakes-remove {
+  flex: 1 0 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--error) 14%, transparent);
+  color: var(--error);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.home-wakes-remove:active { background: color-mix(in oklab, var(--error) 26%, transparent); }
+.home-wakes-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.home-wakes-link {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13.5px;
+}
+.home-wakes-link:active { color: var(--text); }
+.home-wakes-ok {
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--bg);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.home-wakes-ok:active { opacity: .8; }
+
 /* ── Il composer ── */
 
 .home-composer {

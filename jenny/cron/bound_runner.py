@@ -436,6 +436,8 @@ async def _run_bound_cron_job(
     cron_token = None
     if isinstance(cron_tool, CronTool):
         cron_token = cron_tool.set_cron_context(True)
+    # Da qui parte un turno del modello: è un risveglio, e si conta.
+    cron.note_wake(job)
     try:
         outcome = await agent.submit_cron_turn(
             InboundMessage(

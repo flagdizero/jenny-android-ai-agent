@@ -182,6 +182,8 @@ def _job_payload(
         "paused_at_ms": job.paused_at_ms,
         "actions": _job_actions(job, now_ms),
         "mode": job.payload.mode,
+        # Se l'e' messo Jenny da sola, svegliata da un altro job: la firma piccola.
+        "autonomous": job.payload.autonomous,
         # Un singolo e' il suo ``schedule``: ``delete_after_run`` lo portano anche i
         # job di uno store vecchio che non lo avevano, e l'officina mostrava loro
         # una «prossima volta» che non c'e'.
@@ -227,9 +229,15 @@ class CronSnapshot:
     cosi' il payload non sa se ha in mano l'uno o l'altra.
     """
 
-    def __init__(self, status: dict[str, Any], jobs: list[CronJob]) -> None:
+    def __init__(self, status: dict[str, Any], jobs: list[CronJob],
+                 wakes: list[dict[str, Any]] | None = None) -> None:
         self._status = status
         self._jobs = jobs
+        self._wakes = wakes or []
+
+    def wakes(self, since_ms: int) -> list[dict[str, Any]]:
+        # La finestra e' quella della foto (``snapshot_cron``): *since_ms* non serve.
+        return self._wakes
 
     def status(self) -> dict[str, Any]:
         return self._status
@@ -250,7 +258,43 @@ def snapshot_cron(cron: Any | None) -> CronSnapshot | None:
     return CronSnapshot(
         status=dict(cron.status()),
         jobs=copy.deepcopy(cron.list_jobs(include_disabled=True)),
+        wakes=_read_wakes(cron, _now_ms()),
     )
+
+
+# I risvegli: quante volte, nelle ultime 24 ore, un job ha svegliato il modello.
+# Sopra ``WAKES_ALERT`` la casa lo dice (una pastiglia sopra il campo): Jenny e
+# l'utente sono liberi di programmare quel che vogliono, e questo e' il solo
+# freno — un avviso, non un blocco.
+WAKES_WINDOW_MS = 24 * 60 * 60 * 1000
+WAKES_ALERT = 50
+
+
+def _read_wakes(cron: Any, now_ms: int) -> list[dict[str, Any]]:
+    reader = getattr(cron, "wakes", None)
+    if reader is None:
+        return []
+    try:
+        return list(reader(now_ms - WAKES_WINDOW_MS))
+    except Exception:  # noqa: BLE001 — il conto e' contorno: l'elenco esce lo stesso
+        return []
+
+
+def _wakes_payload(cron: Any, now_ms: int) -> dict[str, Any]:
+    rows = _read_wakes(cron, now_ms)
+    return {
+        "window_ms": WAKES_WINDOW_MS,
+        "threshold": WAKES_ALERT,
+        "total": sum(int(r.get("count") or 0) for r in rows),
+        # Per job, dal piu' frequente. ``id`` puo' non essere piu' nell'elenco
+        # dei job: un singolo scattato se n'e' andato, e resta qui col suo nome.
+        "jobs": [
+            {"id": r.get("job_id"), "name": r.get("name") or "",
+             "autonomous": bool(r.get("autonomous")), "count": int(r.get("count") or 0),
+             "last_ms": r.get("last_ms")}
+            for r in rows
+        ],
+    }
 
 
 def webui_cron_payload(
@@ -304,4 +348,5 @@ def webui_cron_payload(
             "broken": sum(1 for j in jobs if j["health"]["consecutive_could_not_check"]),
         },
         "jobs": jobs,
+        "wakes": _wakes_payload(cron, stamp),
     }
