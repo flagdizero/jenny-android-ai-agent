@@ -249,9 +249,20 @@ async def test_the_job_survives_the_connection_dropping(tmp_path):
             f"printf 'before\\n'; while [ ! -f {gate} ]; do sleep 0.05; done; "
             "printf 'after\\n'",
         )
-        await _drain(env, job.job_id, until=lambda text, _j: "before" in text)
+        # «before» consegnato E contato: un poll può dare il testo un giro prima
+        # di far avanzare il cursore (legge la dimensione prima del delta, v.
+        # ``_poll_command``), e allora il poll dopo lo ridà, per scelta. Senza
+        # aspettare il cursore la prova lasciava cadere la connessione con il
+        # cursore ancora a zero, e «before» tornava per quella ragione, non per
+        # la connessione: rosso a caso sotto ``pytest -n`` (11/11/2026).
+        await _drain(
+            env, job.job_id, until=lambda text, j: "before" in text and j.cursor > 0
+        )
+        counted = env.store.get(job.job_id).cursor
+        assert counted == len(b"before\n")
 
         await env.backend.close_all()  # come un passaggio wifi -> dati
+        assert env.store.get(job.job_id).cursor == counted
 
         gate.write_text("go")
         rest = await _drain(

@@ -262,9 +262,13 @@ await toNotebook();
 card().querySelector('[data-step-id="s1"] .home-plan-box').click();
 rpcAnswers['plan.approve'] = () => { current = plan({ version: 3 }); return rpcFailed('conflict', 'newer'); };
 action('approve').click();
-await tick(40);
+// Si aspetta l'effetto, non un tempo. Dopo il tocco i giri sono due: il rifiuto
+// di `plan.approve`, poi la risposta alla rilettura (`plan.get`). Sotto carico
+// i 40 ms di un `tick` scadevano mentre node era fermo, e il suo timer partiva
+// nello stesso giro del rifiuto, prima della seconda risposta: l'avviso c'era
+// gia', la scheda mostrava ancora la v1 (rosso sulla CI l'11/11/2026).
+await until(() => { assert.match(text(card().querySelector('.home-plan-ver')), /v3/); return true; });
 assert.ok(toasts().includes(P.error.conflict), toasts());
-assert.match(text(card().querySelector('.home-plan-ver')), /v3/);
 assert.equal(card().querySelectorAll('.is-off').length, 0, 'la versione nuova ha la sua lista');
 assert.equal(text(action('approve')), P.approve);
 """)
