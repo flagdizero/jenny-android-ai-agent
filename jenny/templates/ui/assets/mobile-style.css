@@ -5324,6 +5324,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* La firma di un job che Jenny si e' messa da sola: piccola, a mano. */
+.cron-row-sign { margin-left: 8px; font-family: var(--font-hand); font-size: 14px; color: var(--flower); }
 .cron-row-under {
   display: flex;
   align-items: center;

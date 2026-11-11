@@ -784,7 +784,8 @@
       "monthly": "il {days} di ogni mese alle {time}",
       "zone": "quando arrivi a {place}",
       "zoneUntil": "quando arrivi a {place}, fino a {until}",
-      "zonePlace": "un posto"
+      "zonePlace": "un posto",
+      "until": "{schedule} · fino a {until}"
     },
     "when": {
       "now": "adesso",
@@ -819,7 +820,8 @@
       "pausedSince": "In pausa dal {when}: non gira finché non lo riprendi.",
       "inNotebook": "Sta nel quaderno {place}: lo trovi anche sulla sua bacheca.",
       "when": "Quando: {schedule}",
-      "nextAt": "Prossima volta: {when}"
+      "nextAt": "Prossima volta: {when}",
+      "by": "da {name}"
     },
     "health": {
       "couldNotCheck": "Non ha potuto controllare {n} volte di fila",
@@ -1542,6 +1544,21 @@
       "done": "Fatto",
       "move": "Sposta {name}: frecce sinistra e destra",
       "remove": "Togli {name} dalle pagine"
+    },
+    "wakes": {
+      "pillCount": "{n} risvegli",
+      "pillWhen": "oggi",
+      "pillGo": "Controlla",
+      "title": "Mi sto svegliando spesso",
+      "countLabel": "risvegli nelle ultime 24 ore",
+      "note": "Ogni risveglio è un giro del modello.",
+      "noteOwn": "Quasi tutti vengono da un controllo solo: se non ti serve più, mettilo in pausa.",
+      "noteYours": "Qui il grosso l'hai chiesto tu: se va bene così, dimmelo e non te lo chiedo più.",
+      "gone": "già scattato",
+      "remove": "Togli",
+      "all": "Tutti i promemoria",
+      "ok": "Va bene così",
+      "close": "Chiudi"
     }
   },
   "workshop": {

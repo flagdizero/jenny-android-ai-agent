@@ -251,6 +251,7 @@ _UI_MANIFEST = [
     "assets/home-over.js",
     "assets/home-you.js",
     "assets/home-updates.js",
+    "assets/home-wakes.js",
     "assets/home-who.js",
     "assets/i18n/en.json",
     "assets/i18n/it.json",

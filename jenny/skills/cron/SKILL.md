@@ -98,6 +98,25 @@ cron(action="remove", job_id="abc123")
 `action="list"` reports each job's last status. `silenced` there means a monitor
 ran fine and had nothing to say — it is a success, not an error.
 
+## From a scheduled run: prepare what comes next
+
+When a job wakes you, you may set whatever the rest of the day needs, with the same
+`cron` call: an alert for the 14:20 train, a check on a delayed flight, an arrival
+at today's stops. A morning job that reads the day's plan and sets its alerts is the
+normal use. The user sees these jobs marked as yours, and how often you wake up, so:
+
+- Set only what the job you are running, or the page it reads, calls for. Take
+  times and places from there: never invent one.
+- Give a recurring check an end with `until_date` (and `until_time`) whenever the
+  thing ends: a flight that leaves, a queue that matters until tonight. It goes
+  away by itself.
+- Prefer one quiet `mode="monitor"` check with an end over many one-time alerts.
+- Do not set again what `action="list"` already shows.
+
+```
+cron(action="add", name="Flight to Osaka", message="Check delays and the gate of the flight to Osaka; say only what changed", every_seconds=900, mode="monitor", until_date="2026-04-12", until_time="10:35")
+```
+
 ## On arrival at a place
 
 A `zone` fires when the phone **arrives** at a place, instead of at a time: "when I
@@ -113,8 +132,6 @@ woken only on arrival.
 - If the phone is already there when you arm it, it fires on the next arrival, after
   leaving: say so.
 - Not with `every_seconds`, `cron_expr`, `date`, `condition` or `mode="monitor"`.
-- From a scheduled run (a morning job planning the day) you may arm only one-time
-  zones ending within 7 days.
 
 ```
 cron(action="add", message="Tell me which platform my train leaves from", zone={"name": "Central Station", "latitude": 45.4861, "longitude": 9.2042, "radius_m": 300})

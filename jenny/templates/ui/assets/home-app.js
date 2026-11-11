@@ -35,6 +35,7 @@ import { HomeAudit, reportMessage } from './home-audit.js';
 import { HomeJenny } from './home-jenny.js';
 import { HomeModel } from './home-model.js';
 import { HomeUpdates } from './home-updates.js';
+import { HomeWakes } from './home-wakes.js';
 import { HomeBackup } from './home-backup.js';
 import { prepareExtensions, mountExtensions } from './shared/extensions.js';
 import { HomeYou } from './home-you.js';
@@ -307,6 +308,11 @@ class HomeApp {
     this.updatesRoom = new HomeUpdates({
       onVersion: (version) => this._keepVersion(version),
     });
+    /* «Troppi risvegli»: la pastiglia sopra il campo e il foglio di chi sveglia
+       Jenny di piu'. L'elenco intero sta in officina, nel cassetto Mani. */
+    this.wakes = new HomeWakes({
+      onAll: () => api.navigate('/html-mobile/workshop.html?mode=hands'),
+    });
     /* Il backup. La terza vista di `shared/backup-flow.js`; l'unica cosa nuova
        e' la data, che prima non esisteva da nessuna parte. */
     this.backupRoom = new HomeBackup({
@@ -540,6 +546,8 @@ class HomeApp {
        prima vorrebbe dire scriverci dentro le chiavi grezze. */
     prepareExtensions();
     await i18n.load(i18n.locale);
+    /* Dopo le traduzioni: la pastiglia dei risvegli si scrive con quelle. */
+    this.wakes.refresh();
     this._applyTranslations();
     /* Le estensioni di questa build (`shared/extensions.js`): il gancio che la
        casa offre e' la pagina Backup. I loro dialoghi Indietro li chiude da se',

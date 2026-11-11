@@ -54,7 +54,7 @@ Everything Jenny does for you later is one of **two kinds of job**, and both liv
 | Kind | How you'd phrase it | Behavior |
 |---|---|---|
 | One-time (`date`, and `time` if you said one) | "remind me at 6pm", "in 20 minutes", "on 3 March", "around March" | Fires once, then the job deletes itself. With a time, it fires at that time; with only a day it rings at **09:00** that day, and with only a month at 09:00 on the 1st. The workshop shows a day-only job as a date with no time, and a month-only one as "March 2027". Cannot be a monitor (see below). |
-| Recurring, by interval (`every_seconds`) | "every 30 minutes", "every 6 hours" | Repeats forever at a fixed interval, counted from when the job was (re)armed — not from a fixed clock time. |
+| Recurring, by interval (`every_seconds`) | "every 30 minutes", "every 6 hours" | Repeats at a fixed interval, counted from when the job was (re)armed — not from a fixed clock time. Forever, unless you gave it an end ("every 15 minutes until 10:35", "every hour until Friday"): after its end the job goes away by itself. |
 | Recurring, by clock (`cron_expr`) | "every day at 9am", "every Monday at 8" | Standard 5-field cron syntax (e.g. `0 9 * * *`); accepts an optional IANA timezone (e.g. `America/Vancouver`) for that one job. |
 
 The timezone used when you don't specify one is your **device's timezone**, resolved once when the app starts (falls back to UTC if the device timezone can't be determined). A timezone override only applies to cron-expression schedules — one-time and interval schedules always use the device timezone.
@@ -111,9 +111,21 @@ Some things are about *where*, not *when*: "when I get to the station, tell me t
 - **How often it looks.** The cadence follows the distance: rarely when the nearest zone is far (at most every 30 minutes), every 2 minutes when you are close. While the phone lies still, it looks less and less, and the phone's motion sensor wakes it as soon as you move. It reads the position from the network first (Wi-Fi and cell towers, cheap) and switches the GPS on only when that is not precise enough. Expect an arrival to be noticed within a couple of minutes; indoors, where the GPS does not reach, it can take longer.
 - **No network on arrival.** If the message cannot go out (no connection, the model not answering), it is tried again every 5 minutes for an hour, and the message says how late it is. After that the zone stays armed for the next arrival.
 - **On hold after a restart.** Android lets Jenny read the position with the screen off only after the app has been opened once since the phone (or Jenny) restarted. Until then zones are on hold: the workshop and the board say so, and after 30 minutes a notification asks you to open Jenny. Opening it is enough.
-- **Limits.** At most 20 zones at a time. A morning job may arm the day's zones itself, but only one-time zones ending within a week. The board shows a one-time zone as a sticky-note line ("on arrival at…"), an "every time" zone as an automation; from the board you can change its text, while its place is changed by asking Jenny. An older version of the app opening the same data drops the zones' circles.
+- **Limits.** At most 20 zones at a time. A morning job may arm the day's zones itself (see [What Jenny sets on her own](#what-jenny-sets-on-her-own)). The board shows a one-time zone as a sticky-note line ("on arrival at…"), an "every time" zone as an automation; from the board you can change its text, while its place is changed by asking Jenny. An older version of the app opening the same data drops the zones' circles.
 
 Zones use the location permission Jenny already has: nothing new to grant. See [Location](location.md).
+
+### What Jenny sets on her own
+
+When a job wakes her, Jenny may set other jobs herself: a morning job that reads the day's plan can set the alert for the afternoon train, a check on a flight every fifteen minutes until it leaves, an arrival at each of the day's stops. Nothing stops her and nothing asks you first — the same freedom you have when you ask in chat for a job every minute.
+
+What you get instead is that it shows:
+
+- **A signature.** A job Jenny set on her own is marked "by Jenny" wherever jobs are listed (the workshop's **Hands → When she acts on her own**, a notebook's automations). You pause or remove it like any other.
+- **An end.** A recurring job can carry one, and Jenny is told to give it whenever the thing ends by itself, so a flight check does not outlive the flight.
+- **A count of wake-ups.** Every time a job starts a run of the model, it is counted. When the last 24 hours hold 50 or more, a pill appears above the message field: **"N wake-ups today · Check"**. Tapping it opens a sheet with the jobs that wake Jenny most, in order, each with a pause button (tap a row to remove it instead). **That's fine** closes the pill until the count doubles; it comes back by itself the next time the count climbs past 50 after having dropped below.
+
+The count covers your jobs and hers alike, and it is a notice, not a limit: a job that runs every minute because you asked for it keeps running. What the notice cannot do is stop a mistake while you sleep — it tells you the next time you look.
 
 ### Notebook crons
 

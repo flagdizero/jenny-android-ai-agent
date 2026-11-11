@@ -196,6 +196,10 @@
       <!-- Gli allegati in attesa di partire. Vuoto non occupa spazio. -->
       <div class="home-pending" id="home-pending" hidden></div>
 
+      <!-- «Troppi risvegli»: compare solo quando i job hanno svegliato Jenny
+           piu' della soglia nelle ultime 24 ore (`home-wakes.js`). -->
+      <button class="home-wakes" id="home-wakes" type="button" hidden></button>
+
       <div class="home-composer">
         <!-- Un `<div>`, non una `<label>`: una label che avvolge anche la
              graffetta dava al campo il nome del bottone («Allega», per
@@ -704,6 +708,11 @@
 <!-- Ferma o annulla una mini-me (`home-work.js`): la stessa forma del Ferma del
      piano, quindi le stesse classi del suo foglio. -->
 <dialog class="oc-sheet home-plan-sheet home-work-sheet" id="home-work-sheet">
+  <div class="oc-sheet-inner home-plan-sheet-inner"></div>
+</dialog>
+
+<!-- Chi sveglia Jenny di piu' (`home-wakes.js`): la forma dei fogli del piano. -->
+<dialog class="oc-sheet home-plan-sheet home-wakes-sheet" id="home-wakes-sheet">
   <div class="oc-sheet-inner home-plan-sheet-inner"></div>
 </dialog>
 

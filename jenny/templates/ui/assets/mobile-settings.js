@@ -2886,7 +2886,8 @@ export class SettingsController {
       <button class="cron-row cron-card-${row.health}" type="button" data-cron-job="${escapeHtml(row.id)}">
         <span class="cron-row-text">
           <span class="cron-row-name">${escapeHtml(row.name)}${badgeHtml}</span>
-          <span class="cron-row-sched">${escapeHtml(row.schedule)}</span>
+          <span class="cron-row-sched">${escapeHtml(row.schedule)}${row.autonomous
+    ? `<span class="cron-row-sign">${escapeHtml(i18n.t('cron.job.by', { name: botName.get() }))}</span>` : ''}</span>
           <span class="cron-row-under">${last}</span>
           ${cnc}
         </span>

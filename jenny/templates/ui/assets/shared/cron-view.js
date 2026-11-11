@@ -129,13 +129,21 @@ function unit(tr, locale, name, n) {
  *  non ha chiesto. */
 export function describeSchedule(schedule, { tr, locale, timeZone } = {}) {
   const kind = schedule?.kind;
+  /* Un ricorrente puo' avere una fine («ogni 15 minuti · fino a…»): dopo, il job
+     se ne va da solo. */
+  const ending = (text) => {
+    if (!Number.isFinite(schedule.until_ms)) return text;
+    const until = formatAbsolute(schedule.until_ms, { locale, timeZone, precision: 'exact' });
+    return tr('cron.schedule.until', { schedule: text, until });
+  };
   if (kind === 'every' && schedule.every_ms) {
-    return tr('cron.schedule.every', {
+    return ending(tr('cron.schedule.every', {
       every: humanizeDuration(schedule.every_ms, { tr, locale }),
-    });
+    }));
   }
   if (kind === 'cron' && schedule.expr) {
-    return describeShape(schedule.shape, { tr, locale }) || tr('cron.schedule.expr', { expr: schedule.expr });
+    return ending(describeShape(schedule.shape, { tr, locale })
+      || tr('cron.schedule.expr', { expr: schedule.expr }));
   }
   if (kind === 'at' && schedule.at_ms) {
     const when = formatAbsolute(schedule.at_ms, { locale, timeZone, precision: schedule.precision });
@@ -352,6 +360,8 @@ export function buildCronView(payload, { nowMs, tr, locale, keep } = {}) {
       protected: job.protected,
       health: jobHealth(job),
       monitor: job.mode === 'monitor',
+      /* Se l'e' messo Jenny da sola, svegliata da un altro job: la firma. */
+      autonomous: Boolean(job.autonomous),
       oneShot: job.one_shot,
       /* Una zona non ha un prossimo giro: al suo posto, se aspetta o è ferma. */
       zoneWatch: job.schedule?.kind === 'zone' ? (job.watch || 'ok') : null,
