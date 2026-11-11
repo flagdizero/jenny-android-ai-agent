@@ -24,6 +24,7 @@ from jenny.cron.types import (
     CronRunRecord,
     CronSchedule,
     CronStore,
+    job_display_name,
 )
 
 # Modulo, non simboli: i test sostituiscono ``power.schedule_wake`` &co. per
@@ -115,16 +116,17 @@ def _parse_schedule(raw: dict[str, Any]) -> CronSchedule:
         tz=raw.get("tz"),
         precision=_load_precision(raw.get("precision")),
     )
+    # La scadenza vale per una zona e per un ricorrente («fino a»).
+    until = raw.get("untilMs")
+    schedule.until_ms = until if isinstance(until, int) and not isinstance(until, bool) else None
     if kind != "zone":
         return schedule
     lat, lng, radius = (_load_number(raw.get(k)) for k in ("lat", "lng", "radiusM"))
     if lat is None or lng is None or radius is None:
         raise ValueError("zone schedule without its circle")
-    until = raw.get("untilMs")
     name = raw.get("zoneName")
     schedule.lat, schedule.lng, schedule.radius_m = lat, lng, radius
     schedule.zone_name = name if isinstance(name, str) and name.strip() else None
-    schedule.until_ms = until if isinstance(until, int) and not isinstance(until, bool) else None
     return schedule
 
 
@@ -205,7 +207,20 @@ def _schedule_tzinfo(schedule: CronSchedule):
 
 
 def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
-    """Compute next run time in ms."""
+    """Compute next run time in ms.
+
+    Un ricorrente con un «fino a» (``until_ms``) non ha una prossima esecuzione
+    oltre la sua scadenza: torna ``None``, e chi chiama lo toglie
+    (``_execute_job``, ``drop_expired``).
+    """
+    nxt = _next_run_unbounded(schedule, now_ms)
+    if (nxt is not None and schedule.kind in ("every", "cron")
+            and schedule.until_ms is not None and nxt > schedule.until_ms):
+        return None
+    return nxt
+
+
+def _next_run_unbounded(schedule: CronSchedule, now_ms: int) -> int | None:
     if schedule.kind == "at":
         return schedule.at_ms if schedule.at_ms and schedule.at_ms > now_ms else None
 
@@ -307,7 +322,10 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
     if schedule.kind == "zone":
         _validate_zone(schedule)
     elif schedule.until_ms is not None:
-        raise ValueError("an end date (until) is only for a zone")
+        if schedule.kind == "at":
+            raise ValueError("an end (until) is for a recurring job or a zone, not a one-time one")
+        if _compute_next_run(schedule, _now_ms()) is None:
+            raise ValueError("the end (until) comes before the first run: nothing would ever fire")
 
 
 def _validate_zone(schedule: CronSchedule) -> None:
@@ -529,6 +547,7 @@ class CronService:
                 board=_load_board_link(j["payload"].get("board")),
                 why=j["payload"].get("why") or None,
                 condition=_load_condition(j["payload"].get("condition")),
+                autonomous=j["payload"].get("autonomous") is True,
             ),
             state=CronJobState(
                 next_run_at_ms=j.get("state", {}).get("nextRunAtMs"),
@@ -628,6 +647,9 @@ class CronService:
                     "zoneName": j.schedule.zone_name,
                     "untilMs": j.schedule.until_ms,
                 } if j.schedule.kind == "zone" else {}),
+                # Il «fino a» di un ricorrente, solo se c'è.
+                **({"untilMs": j.schedule.until_ms}
+                   if j.schedule.kind != "zone" and j.schedule.until_ms is not None else {}),
             },
             "payload": {
                 "kind": j.payload.kind,
@@ -642,6 +664,7 @@ class CronService:
                 **({"board": j.payload.board} if j.payload.board else {}),
                 **({"why": j.payload.why} if j.payload.why else {}),
                 **({"condition": j.payload.condition} if j.payload.condition else {}),
+                **({"autonomous": True} if j.payload.autonomous else {}),
             },
             "state": {
                 "nextRunAtMs": j.state.next_run_at_ms,
@@ -692,6 +715,29 @@ class CronService:
         payload = {**record, "run_id": run_id, "updated_at_ms": now}
         cron_store.write_run(self._db, run_id, str(record.get("job_id") or ""), now, payload)
 
+    # ── i risvegli ──────────────────────────────────────────────────────────
+
+    def note_wake(self, job: CronJob) -> None:
+        """Segna che *job* sta per svegliare il modello (un turno d'agente).
+
+        Lo chiama il runner un attimo prima del turno (``cron/bound_runner``): i
+        giri che non arrivano al modello — una condizione falsa, niente rete —
+        non contano. È il conto che la casa mostra quando i risvegli sono
+        troppi (``wakes``). Non può far fallire il job.
+        """
+        with suppress(Exception):
+            cron_store.add_wake(self._db, _now_ms(), job.id, job_display_name(job),
+                                job.payload.autonomous)
+
+    def wakes(self, since_ms: int) -> list[dict[str, Any]]:
+        """I risvegli da *since_ms*, per job, dal più frequente.
+
+        ``[{job_id, name, autonomous, count, last_ms}]``: nome e firma sono
+        quelli dell'ultimo risveglio, così un singolo già scattato (e tolto)
+        si legge ancora.
+        """
+        return cron_store.read_wakes(self._db, since_ms)
+
     async def start(self) -> None:
         """Start the cron service."""
         self._running = True
@@ -703,10 +749,15 @@ class CronService:
         self._load_store()
         self._recompute_next_runs()
         self._save_store()
+        # Un ricorrente scaduto a telefono spento non ha più una prossima
+        # esecuzione: va tolto, o resterebbe acceso e muto per sempre.
+        with suppress(Exception):
+            await self.drop_expired_recurring(_now_ms())
         self._arm_timer()
         # Una volta per avvio, che su Android vuol dire spesso: non puo' fallire il boot.
         with suppress(Exception):
             self._prune_run_records()
+            cron_store.prune_wakes(self._db, _now_ms())
         logger.info("Cron service started with {} jobs", len(self._store.jobs if self._store else []))
 
     def stop(self) -> None:
@@ -961,7 +1012,14 @@ class CronService:
                 # promemoria ``at`` gia' consegnato.
                 self._save_store()
 
-            if not due_jobs:
+            # I ricorrenti il cui «fino a» è passato senza un ultimo giro (in
+            # pausa, o a telefono spento). Qui e non con ``drop_expired_recurring``:
+            # dentro il giro lo store non si ricarica.
+            expired = self._expired_jobs(self._store, _now_ms(), zones=False)
+            for job in expired:
+                logger.info("Cron: job '{}' ({}) expired", job.name, job.id)
+                await self._drop_job(job)
+            if expired or not due_jobs:
                 self._save_store()
         finally:
             self._timer_active = False
@@ -1080,6 +1138,11 @@ class CronService:
         elif job.paused_at_ms is None:
             # Compute next run
             job.state.next_run_at_ms = _compute_next_run(job.schedule, _now_ms())
+            if job.state.next_run_at_ms is None and job.schedule.until_ms is not None:
+                # Era l'ultimo giro prima del suo «fino a»: il job se ne va, come
+                # un singolo che ha suonato.
+                logger.info("Cron: job '{}' ({}) reached its end", job.name, job.id)
+                await self._drop_job(job)
         # Altrimenti la pausa e' arrivata mentre il job stesso girava:
         # ``set_paused`` ha gia' tolto la prossima esecuzione, e ricalcolarla qui
         # lasciava un job «in pausa» con una scadenza armata nello store.
@@ -1198,6 +1261,7 @@ class CronService:
         board: dict | None = None,
         why: str | None = None,
         condition: dict | None = None,
+        autonomous: bool = False,
     ) -> CronJob:
         """Add a new job.
 
@@ -1247,6 +1311,7 @@ class CronService:
                 board=link,
                 why=why,
                 condition=condition,
+                autonomous=bool(autonomous),
             ),
             state=CronJobState(next_run_at_ms=_next_run_with_catch_up(schedule, now)),
             created_at_ms=now,
@@ -1508,18 +1573,34 @@ class CronService:
 
     async def drop_expired_zones(self, now_ms: int) -> list[str]:
         """Toglie le zone (accese o in pausa) la cui scadenza è passata; ritorna gli id."""
-        store = self._load_store()
-        expired = [
+        return await self._drop_expired(now_ms, zones=True)
+
+    async def drop_expired_recurring(self, now_ms: int) -> list[str]:
+        """Toglie i ricorrenti il cui «fino a» è passato (a telefono spento, o in pausa).
+
+        Quello che scade mentre gira lo toglie già ``_execute_job``; questo è per
+        chi è scaduto senza un ultimo giro: senza, resterebbe acceso con la
+        prossima esecuzione a ``None``, per sempre.
+        """
+        return await self._drop_expired(now_ms, zones=False)
+
+    @staticmethod
+    def _expired_jobs(store: CronStore, now_ms: int, *, zones: bool) -> list[CronJob]:
+        return [
             j for j in store.jobs
-            if j.schedule.kind == "zone"
+            if (j.schedule.kind == "zone") == zones and j.schedule.kind != "at"
             and j.schedule.until_ms is not None and j.schedule.until_ms <= now_ms
-            # Un arrivo ancora da consegnare si consegna: scade al giro dopo.
+            # Un arrivo (o un giro) ancora da consegnare si consegna: scade al giro dopo.
             and not (j.enabled and j.state.next_run_at_ms is not None)
         ]
+
+    async def _drop_expired(self, now_ms: int, *, zones: bool) -> list[str]:
+        store = self._load_store()
+        expired = self._expired_jobs(store, now_ms, zones=zones)
         if not expired:
             return []
         for job in expired:
-            logger.info("Cron: zone '{}' ({}) expired", job.name, job.id)
+            logger.info("Cron: job '{}' ({}) expired", job.name, job.id)
             await self._drop_job(job)
         self._save_store()
         self._arm_timer()

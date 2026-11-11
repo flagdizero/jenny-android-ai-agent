@@ -133,6 +133,10 @@ class CronPayload:
     # confronta; il turno parte solo quando la condizione diventa vera (v.
     # :mod:`jenny.cron.condition`). Mai su un ``at``.
     condition: dict[str, Any] | None = None
+    # Il job se l'è messo Jenny da sola, svegliata da un altro job (il tool
+    # ``cron`` dentro un turno di cron), e non l'utente in chat. Non cambia come
+    # gira: è la firma «da Jenny» nell'elenco e nel conto dei risvegli.
+    autonomous: bool = False
 
 
 @dataclass
@@ -315,6 +319,9 @@ def schedule_payload(schedule: CronSchedule) -> dict[str, Any]:
                 "lng": schedule.lng,
                 "radiusM": schedule.radius_m,
             },
-            "until_ms": schedule.until_ms,
         } if schedule.kind == "zone" else {}),
+        # La scadenza: di una zona, o di un ricorrente con un «fino a». Assente
+        # dove non c'è, così le altre forme restano identiche a prima.
+        **({"until_ms": schedule.until_ms}
+           if schedule.kind == "zone" or schedule.until_ms is not None else {}),
     }

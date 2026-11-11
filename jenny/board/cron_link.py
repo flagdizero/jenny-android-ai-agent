@@ -66,6 +66,7 @@ def add_notebook_job(
     condition: dict[str, Any] | None = None,
     origin_metadata: dict[str, Any] | None = None,
     delete_after_run: bool = False,
+    autonomous: bool = False,
 ) -> Any:
     """Un job nuovo del quaderno *notebook*, su una scheda (*scope*) o sul quaderno intero.
 
@@ -83,6 +84,7 @@ def add_notebook_job(
         condition=condition,
         origin_metadata=origin_metadata or {},
         delete_after_run=delete_after_run,
+        autonomous=autonomous,
         **notebook_delivery(notebook),
     )
 
@@ -394,6 +396,8 @@ def job_snapshot(job: Any) -> dict[str, Any]:
         # Solo per una zona: «una volta» (un post-it) o «ogni arrivo» (un'etichetta),
         # dove si è, e se la sentinella ci vede (``zone_watch.STATES``).
         **(zone_snapshot(job) if job.schedule.kind == "zone" else {}),
+        # Solo se se l'è messo Jenny da sola: la firma piccola sulla riga.
+        **({"autonomous": True} if job.payload.autonomous else {}),
     }
 
 

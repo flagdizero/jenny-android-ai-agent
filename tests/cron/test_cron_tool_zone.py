@@ -96,27 +96,11 @@ def test_a_zone_mixes_with_no_other_when(tool, extra, needle) -> None:
     assert any(needle in e for e in errors), errors
 
 
-def test_until_without_a_zone_is_an_error(tool) -> None:
-    assert any("go with a zone" in e for e in _errors(tool, date="2099-01-01",
+def test_until_on_a_one_time_job_is_an_error(tool) -> None:
+    assert any("ends by itself" in e for e in _errors(tool, date="2099-01-01",
                                                      until_date="2099-01-02"))
-
-
-async def test_from_a_cron_turn_only_a_short_one_time_zone(tool, service) -> None:
-    token = tool.set_cron_context(True)
-    try:
-        timed = await tool.execute(action="add", message="x", every_seconds=600)
-        forever = await tool.execute(action="add", message="x", zone=dict(_STATION),
-                                     every_arrival=True)
-        far = await tool.execute(action="add", message="x", zone=dict(_STATION),
-                                 until_date=_in_days(30))
-        ok = await tool.execute(action="add", message="la storia del santuario",
-                                zone=dict(_STATION))
-    finally:
-        tool.reset_cron_context(token)
-    assert timed.startswith("Error:") and "only arm a one-time zone" in timed
-    assert forever.startswith("Error:") and far.startswith("Error:")
-    assert ok.startswith("Created job")
-    assert [j.schedule.kind for j in service.list_jobs()] == ["zone"]
+    assert any("every_arrival goes with a zone" in e
+               for e in _errors(tool, every_seconds=600, every_arrival=True))
 
 
 async def test_no_position_no_zone(service, monkeypatch) -> None:

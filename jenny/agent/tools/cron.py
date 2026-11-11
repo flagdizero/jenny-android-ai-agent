@@ -30,10 +30,8 @@ from jenny.utils.helpers import safe_zoneinfo, validate_timezone_name
 # Modi accettati da action='add'. Vive qui e non in cron/types.py perché è la
 # lista che il tool valida e mostra all'LLM; il tipo canonico resta CronPayload.
 _JOB_MODES = ("reminder", "monitor")
-# Una zona resta armata al massimo un anno; armata da un turno di cron, una
-# settimana (v. ``CronTool._cron_turn_zone_refusal``).
+# Una zona resta armata al massimo un anno.
 _MAX_ZONE_DAYS = 366
-_CRON_TURN_ZONE_DAYS = 7
 _DEFAULT_JOB_MODE = "reminder"
 
 # Il «dove» di un job decide solo il recinto e la chat in cui consegna, non come
@@ -141,9 +139,11 @@ _CRON_PARAMETERS = tool_parameters_schema(
         ),
     ),
     until_date=StringSchema(
-        "Only with `zone`: the last day it is armed, 'YYYY-MM-DD' (the whole day counts). "
-        "Default for a one-time zone: tonight (tomorrow night if it is already late). An "
-        "every-arrival zone without it never expires."
+        "With `zone`, every_seconds or cron_expr: the last day the job stays on, 'YYYY-MM-DD' "
+        "(the whole day counts); after it the job goes away. Give it whenever the thing has "
+        "a natural end (a flight that leaves, a trip that ends). Default for a one-time zone: "
+        "tonight (tomorrow night if it is already late). Without it a recurring job or an "
+        "every-arrival zone never expires. Not with date."
     ),
     until_time=StringSchema(
         "Only with until_date, and only if the user said an hour: 'HH:MM', 24-hour."
@@ -314,9 +314,17 @@ class CronTool(Tool, ContextAware):
         zone = params.get("zone")
         until_day = str(params.get("until_date") or "").strip()
         if not zone:
-            if until_day or str(params.get("until_time") or "").strip() \
-                    or params.get("every_arrival"):
-                errors.append("until_date, until_time and every_arrival go with a zone")
+            if params.get("every_arrival"):
+                errors.append("every_arrival goes with a zone")
+            until_time = str(params.get("until_time") or "").strip()
+            recurring = params.get("every_seconds") or params.get("cron_expr")
+            if (until_day or until_time) and not recurring:
+                errors.append(
+                    "until_date and until_time end a recurring job (every_seconds, cron_expr) "
+                    "or a zone: a one-time job ends by itself"
+                )
+            if until_time and not until_day:
+                errors.append("until_time needs until_date")
             return errors
         clash = [k for k in ("every_seconds", "cron_expr", "date", "time", "condition")
                  if params.get(k)]
@@ -377,31 +385,40 @@ class CronTool(Tool, ContextAware):
                                                kwargs.get("until_time"), every_arrival)
             except ValueError as exc:
                 return f"Error: {exc}"
-            if self._in_cron_context.get() and (refusal := self._cron_turn_zone_refusal(
-                    schedule, every_arrival)):
-                return refusal
-        elif self._in_cron_context.get():
-            return (
-                "Error: cannot schedule new timed jobs from within a cron job execution; "
-                "from here you can only arm a one-time zone (zone, ending within "
-                f"{_CRON_TURN_ZONE_DAYS} days)"
-            )
         else:
             try:
                 schedule = self._schedule(every_seconds, cron_expr, tz, date, time, mode)
+                self._end_recurring(schedule, kwargs.get("until_date"), kwargs.get("until_time"))
             except ValueError as exc:
                 return f"Error: {exc}"
         condition = kwargs.get("condition") or None
         why = str(kwargs.get("why") or "").strip() or None
         once = schedule.kind == "zone" and not every_arrival
+        # Svegliata da un job, Jenny si mette quel che le serve (dall'11/11/2026
+        # senza limiti: prima da lì passava solo una zona «una volta»). Il job
+        # nasce firmato, così l'utente vede cosa si è messa da sola.
+        autonomous = self._in_cron_context.get()
         if notebook is None:
             if why:
                 return "Error: `why` is a page of a notebook's wiki; it needs `notebook`."
             return self._add_personal_job(name, message, schedule, mode, condition=condition,
-                                          once=once)
+                                          once=once, autonomous=autonomous)
         return await self._add_notebook_job(notebook, root, kwargs.get("card"), name, message,
                                             schedule, mode, condition=condition, why=why,
-                                            once=once)
+                                            once=once, autonomous=autonomous)
+
+    def _end_recurring(self, schedule: CronSchedule, until_date: Any, until_time: Any) -> None:
+        """Mette il «fino a» su un ricorrente. Solleva ``ValueError`` col testo per il modello."""
+        from jenny.cron.dates import zone_until
+
+        day = str(until_date or "").strip()
+        if not day:
+            return
+        if schedule.kind == "at":
+            raise ValueError("until_date ends a recurring job or a zone: a one-time job "
+                             "ends by itself")
+        schedule.until_ms = zone_until(day, self._default_timezone,
+                                       str(until_time or "").strip() or None)
 
     # ── zone ────────────────────────────────────────────────────────────────
 
@@ -457,24 +474,6 @@ class CronTool(Tool, ContextAware):
             raise ValueError(f"a zone can stay armed at most {_MAX_ZONE_DAYS} days")
         return CronSchedule(kind="zone", lat=lat, lng=lng, radius_m=radius,
                             zone_name=str(zone.get("name") or "").strip(), until_ms=until)
-
-    @staticmethod
-    def _cron_turn_zone_refusal(schedule: CronSchedule, every_arrival: bool) -> str | None:
-        """Da un turno di cron si arma solo una zona «una volta» che finisce presto.
-
-        Una sveglia del mattino che arma le zone delle tappe del giorno: sì. Una
-        catena di job che si generano a vicenda, o una zona che resta per
-        sempre, no: quelle le arma l'utente, in chat.
-        """
-        from jenny.utils.clock import now_ms
-
-        limit = _CRON_TURN_ZONE_DAYS * 86_400_000
-        if every_arrival or schedule.until_ms is None or schedule.until_ms - now_ms() > limit:
-            return (
-                "Error: from a scheduled run you can arm only a one-time zone ending within "
-                f"{_CRON_TURN_ZONE_DAYS} days (every_arrival false, until_date close)"
-            )
-        return None
 
     def _target_notebook(self, requested: Any) -> tuple[str | None, Any, str | None]:
         """Il quaderno del job: ``(nome, cartella, errore)``; tutto ``None`` = personale.
@@ -544,7 +543,8 @@ class CronTool(Tool, ContextAware):
 
     async def _add_notebook_job(self, notebook: str, root: Any, card_ref: Any, name: str | None,
                                 message: str, schedule: CronSchedule, mode: str | None, *,
-                                condition: Any, why: str | None, once: bool = False) -> str:
+                                condition: Any, why: str | None, once: bool = False,
+                                autonomous: bool = False) -> str:
         """Un job del quaderno: su una scheda o sul quaderno intero, da qualunque chat."""
         from jenny.board.cron_link import add_notebook_job
         from jenny.board.model import NOTEBOOK
@@ -569,7 +569,7 @@ class CronTool(Tool, ContextAware):
             job = add_notebook_job(
                 self._cron, notebook, card["id"] if card else NOTEBOOK,
                 name=(name or "").strip(), message=message, schedule=schedule, mode=job_mode,
-                why=why, condition=condition, delete_after_run=once,
+                why=why, condition=condition, delete_after_run=once, autonomous=autonomous,
             )
         except ValueError as exc:
             return f"Error: {exc}"
@@ -600,6 +600,7 @@ class CronTool(Tool, ContextAware):
         *,
         condition: Any = None,
         once: bool = False,
+        autonomous: bool = False,
     ) -> str:
         if not message:
             return (
@@ -635,6 +636,7 @@ class CronTool(Tool, ContextAware):
                 origin_metadata=origin_metadata,
                 condition=condition,
                 delete_after_run=once,
+                autonomous=autonomous,
             )
         except ValueError as exc:
             # Il rifiuto del servizio (un'espressione che non si legge o non
@@ -654,6 +656,8 @@ class CronTool(Tool, ContextAware):
         if job.schedule.kind == "zone":
             return f"{head}, {self._format_timing(job.schedule)}. {self._zone_now(job)}"
         if job.schedule.kind != "at":
+            if job.schedule.until_ms is not None:
+                return f"{head}, {self._format_timing(job.schedule)}"
             return head
         if job.schedule.precision in ("day", "month"):
             return f"{head}, {self._format_timing(job.schedule)} (no time: it rings at 09:00)"
@@ -661,18 +665,21 @@ class CronTool(Tool, ContextAware):
 
     def _format_timing(self, schedule: CronSchedule) -> str:
         """Format schedule as a human-readable timing string."""
+        # Il «fino a» di un ricorrente: dopo, il job se ne va da solo.
+        until = (f", until {self._format_timestamp(schedule.until_ms, self._default_timezone)}"
+                 if schedule.until_ms and schedule.kind in ("cron", "every") else "")
         if schedule.kind == "cron":
             tz = f" ({schedule.tz})" if schedule.tz else ""
-            return f"cron: {schedule.expr}{tz}"
+            return f"cron: {schedule.expr}{tz}{until}"
         if schedule.kind == "every" and schedule.every_ms:
             ms = schedule.every_ms
             if ms % 3_600_000 == 0:
-                return f"every {ms // 3_600_000}h"
+                return f"every {ms // 3_600_000}h{until}"
             if ms % 60_000 == 0:
-                return f"every {ms // 60_000}m"
+                return f"every {ms // 60_000}m{until}"
             if ms % 1000 == 0:
-                return f"every {ms // 1000}s"
-            return f"every {ms}ms"
+                return f"every {ms // 1000}s{until}"
+            return f"every {ms}ms{until}"
         if schedule.kind == "zone":
             until = (f", until {self._format_timestamp(schedule.until_ms, self._default_timezone)}"
                      if schedule.until_ms else ", no end date")
@@ -787,7 +794,9 @@ class CronTool(Tool, ContextAware):
                 if mode == "monitor"
                 else ""
             )
-            parts = [f"- {job_display_name(j)} (id: {j.id}, {timing}{mode_note})"]
+            # Quel che si è messa da sola, svegliata da un altro job: lo sa dire.
+            own = ", set by you during a scheduled run" if j.payload.autonomous else ""
+            parts = [f"- {job_display_name(j)} (id: {j.id}, {timing}{mode_note}{own})"]
             if j.payload.board:
                 parts.append(
                     f"  In the notebook {j.notebook}, "

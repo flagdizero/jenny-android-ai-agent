@@ -204,6 +204,9 @@ def piante(tmp_path, monkeypatch):
 
 
 class _Recorder:
+    def note_wake(self, job):
+        pass
+
     def write_run_record(self, run_id, record):
         pass
 

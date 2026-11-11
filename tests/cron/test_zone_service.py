@@ -86,7 +86,8 @@ def test_a_zone_without_its_circle_is_not_loaded(tmp_path) -> None:
         (CronSchedule(kind="zone", lat=45.0, lng=9.0, radius_m=200, zone_name=" "), "name"),
         (CronSchedule(kind="zone", lat=45.0, lng=9.0, radius_m=200, zone_name="x",
                       until_ms=1), "already past"),
-        (CronSchedule(kind="every", every_ms=1000, until_ms=_now_ms() + 10_000), "only for a zone"),
+        (CronSchedule(kind="at", at_ms=_now_ms() + 5_000, until_ms=_now_ms() + 10_000),
+         "not a one-time"),
     ],
 )
 def test_bad_zones_are_refused(tmp_path, schedule, match) -> None:
