@@ -64,6 +64,7 @@ def _bare_container(order: list[str], *, fail_shutdown: bool = False) -> Gateway
     # un bus e non serve: ``bind_native_input`` lo dice e prosegue.
     container.bus = None
     container.cron = SimpleNamespace(start=AsyncMock(), stop=MagicMock())
+    container.zone_watch = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
     container.snapshot = _RecordingSnapshot(order, fail_shutdown=fail_shutdown)
     container.channels = _FakeChannels()
     container._agent = _FakeAgent(order)
