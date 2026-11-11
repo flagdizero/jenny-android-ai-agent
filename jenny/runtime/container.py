@@ -86,6 +86,41 @@ class GatewayContainer:
             return stripped or None
         return None
 
+    def follow_timezone(self, tz_id: str | None = None) -> None:
+        """Il telefono ha cambiato fuso: chi ne tiene uno prende quello nuovo.
+
+        La chiama ``timezone_follow.on_timezone_changed`` (Kotlin, su
+        ``ACTION_TIMEZONE_CHANGED``), sul loop. *tz_id* è il fuso dell'intent;
+        senza, o se non è un nome che si legge, si richiede al telefono.
+
+        Il fuso dell'utente resta ``agents.defaults.timezone``: se è «auto» segue
+        il telefono, se nel file ne è scritto uno a mano resta quello, e qui non
+        cambia niente. Chi lo rilegge a ogni uso (``user_timezone``, il pannello)
+        vede quello nuovo da sé; qui si aggiornano le tre copie prese all'avvio —
+        il prompt, gli aiutanti, lo scheduler — e lo scheduler sposta i job.
+        """
+        try:
+            from jenny.config.loader import load_config
+            from jenny.runtime.context import get_runtime_context
+            from jenny.utils.device_timezone import detect_device_timezone
+            from jenny.utils.helpers import validate_timezone_name
+
+            named = tz_id if tz_id and not validate_timezone_name(tz_id) else None
+            detected = named or detect_device_timezone()
+            if detected:
+                get_runtime_context().device_timezone = detected
+            name = load_config().agents.defaults.timezone
+            agent = self._agent
+            if agent is not None:
+                agent.context.timezone = name
+                subagents = getattr(agent, "subagents", None)
+                if subagents is not None:
+                    subagents.timezone = name
+            moved = self.cron.follow_timezone(name) if self.cron is not None else 0
+            logger.info("Timezone is now {} ({} job(s) moved)", name, moved)
+        except Exception:
+            logger.exception("Failed to follow the timezone change")
+
     def _on_jobs_changed(self, worker: str) -> None:
         """Ri-arma il job periodico di un lavoratore dopo un cambio in Impostazioni.
 
@@ -584,6 +619,9 @@ class GatewayContainer:
         self._wire_ui_events()
 
         self.cron = CronService(config.workspace_path)
+        # Il fuso dell'utente: lo scheduler lo confronta all'avvio con quello in
+        # cui i job sono scritti, e lo segue quando cambia (``follow_timezone``).
+        self.cron.timezone = config.agents.defaults.timezone
         # La sentinella delle zone («quando arrivi lì»): legge la posizione solo
         # se ci sono zone accese, e a un arrivo rende dovuto il job. Parte dopo
         # lo scheduler (``run``), che è quello che poi esegue gli arrivi.
@@ -959,6 +997,10 @@ class GatewayContainer:
             # processo, e nessun altro la consuma.
             from jenny.runtime.gap_history import record_startup_gap
             await record_startup_gap()
+            # Prima dello scheduler: da qui un cambio di fuso del telefono
+            # trova chi lo ascolta (v. ``runtime/timezone_follow.py``).
+            from jenny.runtime import timezone_follow
+            timezone_follow.bind(self.follow_timezone)
             await self.cron.start()
             if self.zone_watch is not None:
                 await self.zone_watch.start()
@@ -976,6 +1018,8 @@ class GatewayContainer:
             logger.opt(exception=True).error("Gateway crashed unexpectedly")
             raise
         finally:
+            from jenny.runtime import timezone_follow
+            timezone_follow.reset_timezone_follow()
             if self.zone_watch is not None:
                 await self.zone_watch.stop()
             self.cron.stop()

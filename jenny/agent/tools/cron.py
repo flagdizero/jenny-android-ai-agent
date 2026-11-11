@@ -187,7 +187,7 @@ class CronTool(Tool, ContextAware):
 
     def __init__(self, cron_service: CronService, default_timezone: str = "UTC"):
         self._cron = cron_service
-        self._default_timezone = default_timezone
+        self._fallback_timezone = default_timezone
         self._session_key: ContextVar[str] = ContextVar("cron_session_key", default="")
         self._origin_channel: ContextVar[str] = ContextVar("cron_origin_channel", default="")
         self._origin_chat_id: ContextVar[str] = ContextVar("cron_origin_chat_id", default="")
@@ -196,6 +196,17 @@ class CronTool(Tool, ContextAware):
             default=None,
         )
         self._in_cron_context: ContextVar[bool] = ContextVar("cron_in_context", default=False)
+
+    @property
+    def _default_timezone(self) -> str:
+        """Il fuso dell'utente adesso: quello che il servizio segue, non una copia dell'avvio.
+
+        Il telefono cambia fuso a gateway acceso (``CronService.follow_timezone``):
+        un'ora detta dopo l'atterraggio va letta nel fuso nuovo. Fuori dal gateway
+        il servizio non ne ha uno, e vale quello passato alla costruzione.
+        """
+        live = getattr(self._cron, "timezone", None)
+        return live if isinstance(live, str) and live else self._fallback_timezone
 
     @classmethod
     def enabled(cls, ctx: Any) -> bool:

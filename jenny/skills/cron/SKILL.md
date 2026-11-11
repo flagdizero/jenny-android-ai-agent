@@ -163,3 +163,5 @@ in its chat.
 ## Timezone
 
 Use `tz` with `cron_expr` to schedule in a specific IANA timezone. Without `tz`, the server's local timezone is used.
+
+Every time on a job is a time on the user's clock. When the phone changes timezone, all jobs move with it and keep their clock time: "every day at 7" rings at 7 in the new place, and so does a job created with `tz`. Do not promise a job pinned to another place's time across a trip.
