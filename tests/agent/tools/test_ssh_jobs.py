@@ -17,6 +17,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
+import shutil
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -25,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from jenny.agent.tools.ssh_backends.base import SshTarget
+from jenny.agent.tools.ssh_backends.base import SshExecResult, SshTarget
 from jenny.agent.tools.ssh_backends.dev import DevSshBackend
 from jenny.agent.tools.ssh_jobs import (
     STATUS_FINISHED,
@@ -202,14 +204,11 @@ async def test_poll_returns_only_the_new_output_then_the_exit_code(tmp_path):
             "printf 'beta\\n'; exit 7",
         )
 
-        # Anche il cursore, non solo il testo: un poll può consegnare «alpha»
-        # prima di averlo contato (v. ``test_jobs_and_cursors_survive_a_new_store``),
-        # e allora il poll dopo lo ridà, per scelta. Qui si prova il caso in cui
-        # è stato contato.
-        first = await _drain(
-            env, job.job_id, until=lambda text, j: "alpha" in text and j.cursor > 0
-        )
+        first = await _drain(env, job.job_id, until=lambda text, _j: "alpha" in text)
         assert "beta" not in first
+        # Consegnato vuol dire contato: il delta si ferma alla dimensione letta
+        # prima di lui (v. ``_poll_command``).
+        assert env.store.get(job.job_id).cursor == len(b"alpha\n")
 
         gate.write_text("go")
         second = await _drain(
@@ -249,15 +248,11 @@ async def test_the_job_survives_the_connection_dropping(tmp_path):
             f"printf 'before\\n'; while [ ! -f {gate} ]; do sleep 0.05; done; "
             "printf 'after\\n'",
         )
-        # «before» consegnato E contato: un poll può dare il testo un giro prima
-        # di far avanzare il cursore (legge la dimensione prima del delta, v.
-        # ``_poll_command``), e allora il poll dopo lo ridà, per scelta. Senza
-        # aspettare il cursore la prova lasciava cadere la connessione con il
-        # cursore ancora a zero, e «before» tornava per quella ragione, non per
-        # la connessione: rosso a caso sotto ``pytest -n`` (11/11/2026).
-        await _drain(
-            env, job.job_id, until=lambda text, j: "before" in text and j.cursor > 0
-        )
+        await _drain(env, job.job_id, until=lambda text, _j: "before" in text)
+        # Consegnato vuol dire contato (v. ``_poll_command``). Fino all'11/11/2026
+        # un poll poteva dare «before» un giro prima di contarlo: la connessione
+        # cadeva col cursore a zero, «before» tornava per quella ragione e non
+        # per la connessione, e la prova era rossa a caso sotto ``pytest -n``.
         counted = env.store.get(job.job_id).cursor
         assert counted == len(b"before\n")
 
@@ -269,6 +264,224 @@ async def test_the_job_survives_the_connection_dropping(tmp_path):
             env, job.job_id, until=lambda text, j: "after" in text and j.status == STATUS_FINISHED
         )
         assert "before" not in rest  # il cursore non si è azzerato con la connessione
+
+
+# -- il delta è esattamente quello contato ----------------------------------
+
+
+async def test_a_job_that_keeps_writing_is_delivered_once_byte_for_byte(tmp_path):
+    """Un log che cresce mentre lo si legge: la somma dei delta è il file.
+
+    Il poll legge la dimensione e poi il delta. Un job che scrive in mezzo
+    faceva consegnare quei byte in questo poll senza contarli, e il poll dopo li
+    ridava: a ogni confine fra due poll un pezzo doppio, che il modello legge
+    come output vero.
+    """
+    async with shell_env(tmp_path) as env:
+        stop = tmp_path / "stop"
+        job = await _start(
+            env,
+            f"i=0; while [ ! -f {stop} ]; do printf 'line %06d\\n' $i; i=$((i+1)); "
+            "sleep 0.01; done",
+        )
+        delivered = ""
+        with_output = 0
+        while with_output < 12:
+            poll = await _poll(env, job.job_id)
+            delivered += poll.output
+            with_output += bool(poll.output)
+
+        stop.write_text("stop")
+        delivered += await _drain(
+            env, job.job_id, until=lambda _t, j: j.status == STATUS_FINISHED
+        )
+        written = Path(job.log_path).read_text()
+        assert written.count("\n") > 12
+        assert delivered == written
+
+
+@dataclass(slots=True)
+class _LocalShell:
+    """Un backend che esegue il comando in una shell di questa macchina.
+
+    Come ``sshd``, che passa il comando alla shell di login dell'utente con
+    ``-c``: qui la shell la sceglie il test, perché sul server di un utente può
+    essere ``dash``, ``bash``, ``zsh``, ``ksh`` o quella di busybox.
+    ``preamble`` va davanti al comando: è lì che un test definisce un comando
+    finto, come funzione di shell.
+    """
+
+    argv: list[str]
+    preamble: str = ""
+
+    async def exec(self, target, command, *, timeout_s, max_output_chars):
+        proc = await asyncio.create_subprocess_exec(
+            *self.argv,
+            "-c",
+            self.preamble + command,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout_s)
+        return SshExecResult(
+            exit_code=proc.returncode or 0,
+            stdout=out.decode(errors="replace"),
+            stderr=err.decode(errors="replace"),
+        )
+
+
+def _shells() -> list:
+    """Le shell che un server può avere, ognuna saltata se qui non c'è."""
+    params = []
+    for name, argv in (
+        ("sh", ["sh"]),
+        ("dash", ["dash"]),
+        ("bash", ["bash"]),
+        ("zsh", ["zsh"]),
+        ("ksh", ["ksh"]),
+        ("busybox", ["busybox", "sh"]),
+    ):
+        found = shutil.which(argv[0])
+        params.append(
+            pytest.param(
+                [found, *argv[1:]] if found else [],
+                id=name,
+                marks=pytest.mark.skipif(not found, reason=f"{argv[0]} is not installed"),
+            )
+        )
+    return params
+
+
+_LOCAL_TARGET = SshTarget(
+    host="127.0.0.1",
+    port=22,
+    username=TEST_USER,
+    key_path=Path("/nonexistent/id"),
+    known_hosts_path=Path("/nonexistent/known_hosts"),
+)
+
+
+def _finished_job(
+    tmp_path: Path, content: bytes | None, *, cursor: int = 0
+) -> tuple[SshJobStore, SshJob]:
+    """Un job già finito (c'è il codice di uscita) con *content* nel log, o senza log."""
+    log = tmp_path / "job.log"
+    rc = tmp_path / "job.rc"
+    if content is not None:
+        log.write_bytes(content)
+    rc.write_text("0")
+    store = SshJobStore(path=tmp_path / "registry.json")
+    job = SshJob(
+        job_id="lab-0000cafe",
+        alias="lab",
+        command="true",
+        pid=999_999,
+        log_path=str(log),
+        rc_path=str(rc),
+        started_at=datetime.now().isoformat(),
+        cursor=cursor,
+    )
+    store._load()[job.job_id] = job
+    return store, job
+
+
+async def _local_poll(store: SshJobStore, job: SshJob, shell: _LocalShell, max_bytes: int):
+    return await store.poll(
+        job.job_id, backend=shell, target=_LOCAL_TARGET, max_bytes=max_bytes, timeout_s=10
+    )
+
+
+def _shell_with_wc_then(tmp_path: Path, argv: list[str], then: str) -> tuple[_LocalShell, Path]:
+    """Una shell il cui ``wc`` misura e poi, una volta sola, esegue *then*.
+
+    È la finestra fra la dimensione e quel che il poll fa dopo, aperta a
+    comando: niente fortuna, niente tempi. Ritorna la shell e il file che arma
+    il colpo, che sparisce quando è partito.
+
+    Il ``wc`` finto è una funzione di shell, non un file davanti nel ``PATH``:
+    una funzione vince in ogni shell POSIX, mentre busybox esegue ``wc`` come
+    applet suo senza guardare il ``PATH`` (così il file era ignorato, e la
+    prova falliva solo sulla CI, l'unica macchina con busybox).
+    """
+    trigger = shlex.quote(str(tmp_path / "armed"))
+    (tmp_path / "armed").write_text("armed")
+    preamble = (
+        'wc() { command wc "$@"; _rc=$?; '
+        f"if [ -f {trigger} ]; then rm -f {trigger}; {then}; fi; "
+        "return $_rc; }; "
+    )
+    return _LocalShell(argv, preamble=preamble), tmp_path / "armed"
+
+
+@pytest.mark.parametrize("argv", _shells())
+async def test_a_write_between_the_size_and_the_delta_is_delivered_once(tmp_path, argv):
+    """Il caso sopra con la scrittura esattamente fra ``wc`` e ``tail``."""
+    store, job = _finished_job(tmp_path, b"first\n")
+    shell, trigger = _shell_with_wc_then(
+        tmp_path, argv, f"printf 'late\\n' >> {shlex.quote(job.log_path)}"
+    )
+
+    first = await _local_poll(store, job, shell, POLL_BYTES)
+    assert not trigger.exists(), "il wc finto non è stato chiamato"
+    assert first.output == "first\n"
+    assert first.job.cursor == len(b"first\n")
+
+    second = await _local_poll(store, job, shell, POLL_BYTES)
+    assert second.output == "late\n"
+    assert first.output + second.output == Path(job.log_path).read_text()
+
+
+@pytest.mark.parametrize("argv", _shells())
+async def test_the_poll_that_says_finished_has_delivered_everything(tmp_path, argv):
+    """Un job che scrive l'ultima riga ed esce mentre lo si interroga.
+
+    Il modello smette di chiedere quando legge «finito» senza byte in attesa:
+    se quel poll avesse misurato il log prima che il job finisse, l'ultima riga
+    resterebbe oltre la fine annunciata, e nessuno la leggerebbe mai.
+    """
+    store, job = _finished_job(tmp_path, b"first\n")
+    Path(job.rc_path).unlink()
+    job.pid = os.getpid()  # vivo, finché il colpo non scrive il codice di uscita
+    shell, trigger = _shell_with_wc_then(
+        tmp_path,
+        argv,
+        f"printf 'last\\n' >> {shlex.quote(job.log_path)}; "
+        f"printf 0 > {shlex.quote(job.rc_path)}",
+    )
+
+    delivered = ""
+    for _ in range(5):
+        poll = await _local_poll(store, job, shell, POLL_BYTES)
+        delivered += poll.output
+        if poll.job.status == STATUS_FINISHED and not poll.pending_bytes:
+            break
+    assert not trigger.exists(), "il wc finto non è stato chiamato"
+    assert poll.job.status == STATUS_FINISHED
+    assert delivered == "first\nlast\n"
+
+
+@pytest.mark.parametrize("argv", _shells())
+@pytest.mark.parametrize(
+    ("content", "cursor", "max_bytes", "output", "new_cursor"),
+    [
+        pytest.param(b"0123456789", 0, POLL_BYTES, "0123456789", 10, id="all"),
+        pytest.param(b"0123456789", 4, POLL_BYTES, "456789", 10, id="from-the-cursor"),
+        pytest.param(b"0123456789", 2, 3, "234", 5, id="capped"),
+        pytest.param(b"0123456789", 10, POLL_BYTES, "", 10, id="nothing-new"),
+        # Log troncato o ruotato: il delta chiesto è vuoto e si riparte da zero.
+        pytest.param(b"0123", 10, POLL_BYTES, "", 0, id="truncated"),
+        pytest.param(None, 0, POLL_BYTES, "", 0, id="no-log-yet"),
+    ],
+)
+async def test_the_poll_command_reads_exactly_what_it_counts_in_every_shell(
+    tmp_path, argv, content, cursor, max_bytes, output, new_cursor
+):
+    store, job = _finished_job(tmp_path, content, cursor=cursor)
+    poll = await _local_poll(store, job, _LocalShell(argv), max_bytes)
+    assert poll.output == output
+    assert poll.job.cursor == new_cursor
+    assert poll.job.status == STATUS_FINISHED
 
 
 async def test_unknown_job_id_lists_the_known_ones(tmp_path):
@@ -371,13 +584,17 @@ async def test_jobs_and_cursors_survive_a_new_store(tmp_path):
     """Su Android il gateway viene ucciso di routine: il cursore deve restare."""
     async with shell_env(tmp_path) as env:
         job = await _start(env, "printf 'hello\\n'")
-        # «hello» può arrivare prima del cursore: il poll legge la dimensione
-        # del log prima del delta, apposta (v. ``_poll_command``), e se il file
-        # cresce in mezzo il delta c'è già mentre il cursore resta indietro di
-        # un giro. Sotto carico (``pytest -n``) succede: si aspetta il cursore.
-        await _drain(env, job.job_id, until=lambda text, j: "hello" in text and j.cursor > 0)
+        # Si aspetta anche la fine: è lo stato che il registro riletto deve
+        # ridare. «hello» può arrivare quando il job non ha ancora scritto il
+        # suo codice di uscita.
+        await _drain(
+            env,
+            job.job_id,
+            until=lambda text, j: "hello" in text and j.status == STATUS_FINISHED,
+        )
+        # Consegnato vuol dire contato (v. ``_poll_command``).
         cursor = env.store.get(job.job_id).cursor
-        assert cursor > 0
+        assert cursor == len(b"hello\n")
 
         reloaded = SshJobStore(path=env.store.path)
         restored = reloaded.get(job.job_id)
