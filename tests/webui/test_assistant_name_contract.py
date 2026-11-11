@@ -46,7 +46,7 @@ assert.equal(botName.get(), 'Ada');
 
 
 def test_the_home_field_invites_to_write_to_her_by_name() -> None:
-    for locale in ("en", "it"):
+    for locale in ("en", "it", "zh"):
         home = json.loads((ASSETS / "i18n" / f"{locale}.json").read_text(encoding="utf-8"))["home"]
         for key in ("placeholder", "placeholderNotebook"):
             assert "{name}" in home[key] and "Jenny" not in home[key], (locale, key)
@@ -81,7 +81,7 @@ def test_the_workshop_reads_her_name_where_it_names_her() -> None:
 
 def test_the_app_keeps_its_own_name() -> None:
     """La pillola «⌂ Jenny» porta alla casa, cioè all'app: quella resta Jenny."""
-    for locale in ("en", "it"):
+    for locale in ("en", "it", "zh"):
         data = json.loads((ASSETS / "i18n" / f"{locale}.json").read_text(encoding="utf-8"))
         assert "Jenny" in data["workshop"]["homePill"]
 
@@ -91,7 +91,7 @@ def test_what_speaks_of_her_carries_her_name_too() -> None:
     Impostazioni, il titolo della sua stanza, il testo della finestra
     flottante e quello della posizione parlano di lei. Il titolo delle
     notifiche resta «Jenny»: e' l'app che avvisa."""
-    for locale in ("en", "it"):
+    for locale in ("en", "it", "zh"):
         data = json.loads((ASSETS / "i18n" / f"{locale}.json").read_text(encoding="utf-8"))
         assert data["home"]["jenny"]["title"] == "{name}"
         for text in (data["settings"]["floatingHint"], data["settings"]["location"]["hint"]):
