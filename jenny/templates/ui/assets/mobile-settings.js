@@ -15,7 +15,7 @@ import {
   BatteryExemptionCard,
   batteryExemptionSupported,
 } from './shared/battery-exemption.js';
-import { buildCronView } from './shared/cron-view.js';
+import { buildCronView, zoneWatchText } from './shared/cron-view.js';
 import { dayAndTime, whenText } from './shared/when.js';
 import {
   controllable, splitSkill, blockReason, skillBlurb, skillsSummary,
@@ -2868,9 +2868,11 @@ export class SettingsController {
     if (row.health === 'inert') badges.push(i18n.t('cron.job.inert'));
     const badgeHtml = badges
       .map(b => `<span class="cron-badge">${escapeHtml(b)}</span>`).join('');
-    const when = row.next
-      ? `<span class="cron-row-when${row.next.overdue ? ' is-late' : ''}">${escapeHtml(row.next.relative)}${this._cronTz(row.next)}</span>`
-      : `<span class="cron-row-when is-mute">${escapeHtml(i18n.t('cron.job.noNext'))}</span>`;
+    const when = row.zoneWatch && !row.next
+      ? `<span class="cron-row-when${row.zoneWatch === 'ok' ? ' is-mute' : ' is-late'}">${escapeHtml(zoneWatchText(row.zoneWatch, (k, p) => i18n.t(k, p)))}</span>`
+      : row.next
+        ? `<span class="cron-row-when${row.next.overdue ? ' is-late' : ''}">${escapeHtml(row.next.relative)}${this._cronTz(row.next)}</span>`
+        : `<span class="cron-row-when is-mute">${escapeHtml(i18n.t('cron.job.noNext'))}</span>`;
     const last = row.last
       ? `<span class="cron-dot cron-dot-${row.lastTone}"></span>${escapeHtml(row.last.relative)} · ${escapeHtml(this._cronStatusText(row.lastStatus))}`
       : escapeHtml(i18n.t('cron.job.neverRun'));

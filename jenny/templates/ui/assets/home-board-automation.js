@@ -8,7 +8,7 @@
  */
 
 import { i18n, tr } from './shared/i18n.js';
-import { describeSchedule } from './shared/cron-view.js';
+import { describeSchedule, zoneWatchText } from './shared/cron-view.js';
 import { button, el } from './shared/dom.js';
 
 
@@ -40,6 +40,8 @@ export function automationRow(job, { stamp, onPause, onChange, onRemove }) {
   /* Lavora Jenny, quindi costa: lo dice la firma, accanto a ogni quanto. */
   const sign = [rhythmLabel(job)];
   if (job.paused) sign.push(i18n.t('board.cron.paused'));
+  /* Una zona «ogni arrivo» non ha un prossimo giro: aspetta, o è ferma. */
+  else if (job.schedule?.kind === 'zone') sign.push(zoneWatchText(job.watch, tr));
   else if (job.nextRunAtMs) {
     sign.push(i18n.t('board.cron.next', { when: stamp(new Date(job.nextRunAtMs).toISOString()) }));
   }

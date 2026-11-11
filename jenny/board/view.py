@@ -237,7 +237,8 @@ def _recurring(
     from jenny.board.cron_link import is_note
 
     return [a for a in automations(board, cron_jobs, scope)
-            if not is_note((a.get("schedule") or {}).get("kind"), a.get("condition"))]
+            if not is_note((a.get("schedule") or {}).get("kind"), a.get("condition"),
+                           a.get("once"))]
 
 
 def build_board_view(

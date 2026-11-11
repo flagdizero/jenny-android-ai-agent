@@ -391,6 +391,20 @@ def job_snapshot(job: Any) -> dict[str, Any]:
         "scope": scope_of(job.payload.board) if job.payload.board else None,
         "why": job.payload.why,
         "condition": job.payload.condition,
+        # Solo per una zona: «una volta» (un post-it) o «ogni arrivo» (un'etichetta),
+        # dove si è, e se la sentinella ci vede (``zone_watch.STATES``).
+        **(zone_snapshot(job) if job.schedule.kind == "zone" else {}),
+    }
+
+
+def zone_snapshot(job: Any) -> dict[str, Any]:
+    """I campi in più di una zona nell'istantanea: ``once``, ``zoneInside``, ``watch``."""
+    from jenny.cron.zone_watch import current_state
+
+    return {
+        "once": bool(job.delete_after_run),
+        "zoneInside": job.state.zone_inside,
+        "watch": current_state(),
     }
 
 
@@ -415,14 +429,18 @@ def user_timezone() -> str | None:
         return None
 
 
-def is_note(kind: Any, condition: Any) -> bool:
-    """Se un job è una riga del post-it: un singolo, o un ricorrente con un filtro."""
-    return kind == "at" or (isinstance(condition, dict) and bool(condition))
+def is_note(kind: Any, condition: Any, once: Any = False) -> bool:
+    """Se un job è una riga del post-it: un singolo, un ricorrente con un filtro, o una
+    zona «una volta» (scatta all'arrivo e se ne va). Una zona «ogni arrivo» è
+    un'etichetta, come un ricorrente."""
+    return (kind == "at" or (kind == "zone" and bool(once))
+            or (isinstance(condition, dict) and bool(condition)))
 
 
 def snapshot_is_note(snap: dict[str, Any]) -> bool:
     """:func:`is_note` su un'istantanea di :func:`job_snapshot`."""
-    return is_note((snap.get("schedule") or {}).get("kind"), snap.get("condition"))
+    return is_note((snap.get("schedule") or {}).get("kind"), snap.get("condition"),
+                   snap.get("once"))
 
 
 def note_of(
@@ -437,6 +455,10 @@ def note_of(
     every_ms: Any = None,
     tz_name: str | None = None,
     paused: bool = False,
+    zone: Any = None,
+    until_ms: Any = None,
+    once: Any = False,
+    watch: Any = None,
 ) -> dict[str, Any] | None:
     """La riga ``{id, card, text, when}`` di un job, o ``None`` se non è un promemoria.
 
@@ -455,6 +477,10 @@ def note_of(
                                 "params": dict(condition.get("params") or {}),
                                 "field": condition.get("field"), "op": condition.get("op"),
                                 "value": condition.get("value"), "every_ms": every_ms}
+    elif kind == "zone" and once and isinstance(zone, dict):
+        # «Quando arrivi a…»: non ha un giorno, ha un posto (e forse una fine).
+        when = {"kind": "zone", "name": zone.get("name"), "radiusM": zone.get("radiusM"),
+                "untilMs": until_ms, "watch": watch}
     elif kind == "at" and isinstance(at_ms, (int, float)) and at_ms:
         from jenny.utils.clock import zone
 
@@ -493,7 +519,9 @@ def notes_from_jobs(cron_jobs: Any, tz_name: str | None = None) -> list[dict[str
                        text=snap.get("name") or "", kind=sched.get("kind"),
                        at_ms=sched.get("at_ms"), precision=sched.get("precision"),
                        condition=snap.get("condition"), every_ms=sched.get("every_ms"),
-                       tz_name=tz_name, paused=bool(snap.get("paused")))
+                       tz_name=tz_name, paused=bool(snap.get("paused")),
+                       zone=sched.get("zone"), until_ms=sched.get("until_ms"),
+                       once=snap.get("once"), watch=snap.get("watch"))
         if note is not None:
             out.append(note)
     return model.sorted_notes(out)
@@ -521,6 +549,8 @@ def note_words(note: dict[str, Any]) -> str:
     """Il «quando» di una riga in parole, per un prompt: ``2026-11-12``, ``2026-03``,
     ``2026-10-21 09:00``, o ``when umidita < 15 (checked every 6 h)``."""
     when = note.get("when") or {}
+    if when.get("kind") == "zone":
+        return f"on arrival at {when.get('name') or 'a place'}"
     if when.get("kind") == "date":
         day = str(when.get("date") or "")
         if when.get("precision") == "month":

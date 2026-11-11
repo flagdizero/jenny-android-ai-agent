@@ -637,3 +637,30 @@ def test_the_row_carries_the_actions_the_server_allows_and_the_pause() -> None:
     visto = json.loads(out)
     assert visto["acqua"] == [["resume", "remove"], True]
     assert visto["vecchio"] == [[], None]
+
+
+def test_a_zone_says_its_place_and_its_end() -> None:
+    """Una zona non ha un'ora: «quando arrivi a…», con la fine se ce l'ha."""
+    out = _run_js("""
+      const say = (s) => describeSchedule(s, { tr, locale: 'it', timeZone: 'Europe/Rome' });
+      const zone = { name: 'Stazione', lat: 45, lng: 9, radiusM: 200 };
+      console.log(JSON.stringify({
+        forever: say({ kind: 'zone', zone }),
+        until: say({ kind: 'zone', zone, until_ms: NOW }),
+        nameless: say({ kind: 'zone', zone: { ...zone, name: null } }),
+        waiting: zoneWatchText('ok', tr),
+        blind: zoneWatchText('blind', tr),
+        rows: buildCronView({ available: true, now_ms: NOW, jobs: [
+          { id: 'z', name: 'binario', kind: 'user', schedule: { kind: 'zone', zone }, watch: 'blind' },
+          { id: 'c', name: 'ogni ora', kind: 'user', schedule: { kind: 'every', every_ms: 3_600_000 } },
+        ] }, { nowMs: NOW, tr, locale: 'it' }).rows.map((r) => [r.id, r.zoneWatch]),
+      }));
+    """)
+    said = json.loads(out)
+
+    assert said["forever"] == 'cron.schedule.zone:{"place":"Stazione"}'
+    assert said["until"].startswith('cron.schedule.zoneUntil:{"place":"Stazione","until":')
+    assert "cron.schedule.zonePlace" in said["nameless"]
+    assert said["waiting"] == "cron.zone.waiting"
+    assert said["blind"] == "cron.zone.blind"
+    assert dict(said["rows"]) == {"z": "blind", "c": None}

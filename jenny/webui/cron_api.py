@@ -141,6 +141,12 @@ def _effective(job: CronJob, *, config: Any) -> str:
     return "active"
 
 
+def _zone_watch_state() -> str | None:
+    from jenny.cron.zone_watch import current_state
+
+    return current_state()
+
+
 def _job_actions(job: CronJob, now_ms: int) -> list[str]:
     """Cosa l'officina puo' fare di questo job: le route di ``cron_routes``.
 
@@ -197,6 +203,8 @@ def _job_payload(
         # Il filtro di un ricorrente su un'app: il turno parte solo quando e' vero.
         "condition": _condition_payload(job),
         "next_run_at_ms": job.state.next_run_at_ms,
+        # Solo per una zona: se la sentinella ci vede (``zone_watch.STATES``).
+        **({"watch": _zone_watch_state()} if job.schedule.kind == "zone" else {}),
         "last_run_at_ms": job.state.last_run_at_ms,
         "last_status": job.state.last_status,
         "last_error": job.state.last_error,
