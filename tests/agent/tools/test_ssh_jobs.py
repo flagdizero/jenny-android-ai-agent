@@ -306,22 +306,22 @@ class _LocalShell:
 
     Come ``sshd``, che passa il comando alla shell di login dell'utente con
     ``-c``: qui la shell la sceglie il test, perché sul server di un utente può
-    essere ``dash``, ``bash``, ``zsh``, ``ksh`` o quella di busybox. ``env``
-    serve a mettere davanti nel ``PATH`` un comando finto.
+    essere ``dash``, ``bash``, ``zsh``, ``ksh`` o quella di busybox.
+    ``preamble`` va davanti al comando: è lì che un test definisce un comando
+    finto, come funzione di shell.
     """
 
     argv: list[str]
-    env: dict[str, str] | None = None
+    preamble: str = ""
 
     async def exec(self, target, command, *, timeout_s, max_output_chars):
         proc = await asyncio.create_subprocess_exec(
             *self.argv,
             "-c",
-            command,
+            self.preamble + command,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=self.env,
         )
         out, err = await asyncio.wait_for(proc.communicate(), timeout_s)
         return SshExecResult(
@@ -398,27 +398,20 @@ def _shell_with_wc_then(tmp_path: Path, argv: list[str], then: str) -> tuple[_Lo
     È la finestra fra la dimensione e quel che il poll fa dopo, aperta a
     comando: niente fortuna, niente tempi. Ritorna la shell e il file che arma
     il colpo, che sparisce quando è partito.
+
+    Il ``wc`` finto è una funzione di shell, non un file davanti nel ``PATH``:
+    una funzione vince in ogni shell POSIX, mentre busybox esegue ``wc`` come
+    applet suo senza guardare il ``PATH`` (così il file era ignorato, e la
+    prova falliva solo sulla CI, l'unica macchina con busybox).
     """
-    trigger = tmp_path / "armed"
-    trigger.write_text("armed")
-    real_wc = shutil.which("wc")
-    assert real_wc
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fake_wc = bin_dir / "wc"
-    fake_wc.write_text(
-        "#!/bin/sh\n"
-        f'{shlex.quote(real_wc)} "$@"\n'
-        "rc=$?\n"
-        f"if [ -f {shlex.quote(str(trigger))} ]; then\n"
-        f"  rm -f {shlex.quote(str(trigger))}\n"
-        f"  {then}\n"
-        "fi\n"
-        "exit $rc\n"
+    trigger = shlex.quote(str(tmp_path / "armed"))
+    (tmp_path / "armed").write_text("armed")
+    preamble = (
+        'wc() { command wc "$@"; _rc=$?; '
+        f"if [ -f {trigger} ]; then rm -f {trigger}; {then}; fi; "
+        "return $_rc; }; "
     )
-    fake_wc.chmod(0o755)
-    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
-    return _LocalShell(argv, env=env), trigger
+    return _LocalShell(argv, preamble=preamble), tmp_path / "armed"
 
 
 @pytest.mark.parametrize("argv", _shells())
