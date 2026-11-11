@@ -128,6 +128,7 @@ class JennyApplication : Application() {
     private fun registerForegroundTrigger() {
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
+                recoverLocationType()
                 onOpportunisticTrigger("app-foreground")
             }
 
@@ -138,6 +139,24 @@ class JennyApplication : Application() {
             override fun onActivitySaveInstanceState(activity: Activity, out: Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
+    }
+
+    /**
+     * Il service gira senza il tipo `location`: è partito dal background (boot,
+     * aggiornamento, sveglia, watchdog), dove Android 14+ non concede la
+     * posizione «mentre è in uso», e da allora ogni lettura a schermo spento
+     * fallisce — le zone sono cieche (v. `GatewayService.locationTypeHeld`).
+     * Adesso l'app è in primo piano: un nuovo `startForegroundService` porta
+     * `startForegroundCompat` a richiedere il tipo da uno stato che lo ottiene.
+     *
+     * Fuori dal freno di `onOpportunisticTrigger`, e senza `ensureUpIfDown` (che
+     * col gateway vivo non fa niente, ed era proprio il buco): costa un intent
+     * solo quando il tipo manca davvero, e manca di rado.
+     */
+    private fun recoverLocationType() {
+        if (!GatewayService.isRunning || GatewayService.locationTypeHeld) return
+        if (!LocationBridge.hasPermission(this)) return
+        GatewayStarter.ensureUp(this, reason = "recover-location")
     }
 
     private fun onOpportunisticTrigger(reason: String) {
