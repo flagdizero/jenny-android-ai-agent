@@ -18,7 +18,7 @@ pytestmark = requires_jsdom
 
 _HEAD = """
 import assert from 'node:assert/strict';
-import { boot, tick, frame, sent, rpcAnswers, rpcFailed, toasts, locales, routes, thread as shown, $ } from './boot.mjs';
+import { boot, tick, until, frame, sent, rpcAnswers, rpcFailed, toasts, locales, routes, thread as shown, $ } from './boot.mjs';
 const P = locales.en.home.plan;
 const step = (id, title, over = {}) => ({ id, title, detail: `detail of ${title}`, kind: 'research',
   status: 'pending', tag: null, started_at: null, ended_at: null, note: null, ...over });
@@ -1342,25 +1342,27 @@ await tick(40);
 const lists = rpcs('staged.list').length;
 rpcAnswers['staged.install'] = () => { pending = [draftItem({ target_sha256: 'new', diff: '+changed again' })]; return rpcFailed('conflict', 'x'); };
 action('draft-install-d1').click();
-await tick(60);
+// Si aspetta l'effetto, non un tempo: sul runner della CI, sotto carico, 40-60
+// ms non bastavano alla rilettura dell'elenco, e la scheda mostrava ancora la
+// bozza di prima (rosso solo su 3.12, il 04/11 e il 10/11/2026).
+await until(() => action('draft-install-d1')?.dataset.sha === 'new',
+  { msg: 'il bottone porta lo sha nuovo' });
 assert.ok(toasts().includes(S.conflict), toasts());
 assert.ok(rpcs('staged.list').length > lists, 'si rilegge la diff nuova');
 assert.ok(card().querySelector('.home-plan-drafts'), 'la bozza resta da decidere');
-assert.equal(action('draft-install-d1').dataset.sha, 'new', 'il bottone porta lo sha nuovo');
 // Scarta.
 rpcAnswers['staged.discard'] = () => { pending = []; return { ok: true }; };
 action('draft-discard-d1').click();
-await tick(40);
-assert.deepEqual(rpcs('staged.discard')[0].params, { id: 'd1' });
 // Una bozza che l'elenco non ha piu': gia' decisa.
-assert.equal(text(card().querySelector('.home-plan-draft-why')), P.drafts.gone);
+await until(() => text(card().querySelector('.home-plan-draft-why')) === P.drafts.gone,
+  { msg: 'la bozza scartata si dice gia\\' decisa' });
+assert.deepEqual(rpcs('staged.discard')[0].params, { id: 'd1' });
 // Fuori dalla chat del quaderno la scheda del piano non c'e': la bozza torna
 // nella scheda delle bozze, dove si puo' decidere lo stesso.
 pending = [draftItem()];
 await app.staged.refresh();
 await app.switchConversation('unified:default');
-await tick(40);
-assert.ok(stagedCard(), 'nelle altre chat la bozza resta visibile');
+await until(() => stagedCard(), { msg: 'nelle altre chat la bozza resta visibile' });
 assert.match(text(stagedCard()), /AGENTS\\.md/);
 """)
 
