@@ -20,8 +20,8 @@ class I18n {
   }
 
   detectLocale() {
-    const nav = navigator.language;
-    const supported = ['it', 'en'];
+    const nav = (navigator.language || '').toLowerCase();
+    const supported = ['it', 'en', 'zh'];
     return supported.find(s => s === nav) || supported.find(s => nav.startsWith(s)) || 'en';
   }
 
