@@ -59,6 +59,10 @@ Releases before 1.0 are described only on their
 
 ### Fixed
 
+- **Reminders follow you when you change timezone.** Jenny read the phone's timezone only when the app
+  started, and a recurring reminder kept the one it was created in: after a flight, "every day at 7"
+  still rang at 7 at home. Now every reminder keeps its clock time wherever the phone is, from the
+  moment Android switches timezone — one-time reminders set weeks before included.
 - Asked to change what a helper just finished (a title for the poem it wrote), Jenny sends
   the change back to that same helper, which still has its work at hand, instead of starting a
   new one.

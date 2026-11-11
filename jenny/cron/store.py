@@ -54,6 +54,14 @@ SCHEMA = Schema(
         );
         CREATE INDEX cron_wakes_at ON cron_wakes(at_ms);
         """,
+        # Due cose da ricordare sull'insieme dei job, non su uno: oggi una sola,
+        # il fuso in cui sono scritte le loro ore (``META_TIMEZONE``).
+        """
+        CREATE TABLE cron_meta (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
+        """,
     ),
     # Negli snapshot i record di un giorno stanno insieme: quelli dei giorni
     # passati non cambiano più, e restano lo stesso blob.
@@ -89,14 +97,24 @@ def load_rows(database) -> list[dict[str, Any]]:
     return out
 
 
-def save_rows(database, jobs: list[dict[str, Any]], removed: Iterable[str] = ()) -> None:
+def save_rows(database, jobs: list[dict[str, Any]], removed: Iterable[str] = (),
+              meta: dict[str, str] | None = None) -> None:
     """Salva *jobs* e toglie gli id *removed*, in una transazione.
 
     Un job che c'è nel database ma non in *jobs* né in *removed* resta: l'ha
     aggiunto qualcun altro dopo l'ultima lettura di chi salva (lo scheduler,
     a metà di un giro, tiene la sua copia in memoria), e non va perso.
+
+    *meta* scrive nella stessa transazione le sue chiavi di ``cron_meta``: i
+    job spostati in un fuso e il nome di quel fuso si salvano insieme, o un
+    arresto nel mezzo li sposterebbe due volte.
     """
     with database.write() as conn:
+        conn.executemany(
+            "INSERT INTO cron_meta(key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            list((meta or {}).items()),
+        )
         conn.executemany("DELETE FROM cron_jobs WHERE id = ?", [(i,) for i in removed])
         conn.executemany(
             "INSERT INTO cron_jobs(id, pos, data) VALUES (?, ?, ?) "
@@ -104,6 +122,16 @@ def save_rows(database, jobs: list[dict[str, Any]], removed: Iterable[str] = ())
             [(str(j["id"]), pos, json.dumps(j, ensure_ascii=False, sort_keys=True))
              for pos, j in enumerate(jobs)],
         )
+
+
+# Il fuso in cui sono scritte le ore dei job (v. ``CronService.follow_timezone``).
+META_TIMEZONE = "timezone"
+
+
+def read_meta(database, key: str) -> str | None:
+    """Il valore di *key* in ``cron_meta``, o ``None``."""
+    rows = database.read("SELECT value FROM cron_meta WHERE key = ?", (key,))
+    return str(rows[0]["value"]) if rows else None
 
 
 def write_run(database, run_id: str, job_id: str, at_ms: int, record: dict[str, Any]) -> None:

@@ -45,6 +45,9 @@ class JennyApplication : Application() {
         super.onCreate()
         registerNetworkTrigger()
         registerForegroundTrigger()
+        // Non è un trigger che rimette su il gateway: è l'ascolto del cambio di
+        // fuso, che vale finché vive il processo (v. `TimezoneWatch`).
+        TimezoneWatch.register(this)
         // Il lavoro periodico si mette in coda da QUI e da nessun altro posto.
         // Due ragioni. La prima è di correttezza: l'auto-init di
         // `androidx.startup` gira in un ContentProvider, cioè PRIMA di questo

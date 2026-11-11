@@ -206,6 +206,39 @@ def _schedule_tzinfo(schedule: CronSchedule):
     return safe_zoneinfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
 
 
+def _same_wall_clock(ms: int, old_tz: str, new_tz: str) -> int:
+    """L'istante che nel fuso *new_tz* segna la stessa ora che *ms* segna in *old_tz*.
+
+    «Le 9 del 14 aprile» scritte a Roma restano le 9 del 14 aprile a Tokyo.
+    """
+    from jenny.utils.helpers import safe_zoneinfo
+
+    wall = datetime.fromtimestamp(ms / 1000, tz=safe_zoneinfo(old_tz)).replace(tzinfo=None)
+    return int(wall.replace(tzinfo=safe_zoneinfo(new_tz)).timestamp() * 1000)
+
+
+def _move_to_timezone(schedule: CronSchedule, old_tz: str, new_tz: str) -> bool:
+    """Porta le ore di *schedule* da *old_tz* a *new_tz*; ``True`` se qualcosa è cambiato.
+
+    Tre cose portano un'ora d'orologio: il fuso di un'espressione cron, l'istante
+    di un singolo e il «fino a» di un ricorrente o di una zona. Un «ogni N minuti»
+    è un intervallo e non ne ha.
+    """
+    changed = False
+    if schedule.kind == "cron" and schedule.tz != new_tz:
+        schedule.tz = new_tz
+        changed = True
+    if schedule.kind == "at" and schedule.at_ms:
+        moved = _same_wall_clock(schedule.at_ms, old_tz, new_tz)
+        changed = changed or moved != schedule.at_ms
+        schedule.at_ms = moved
+    if schedule.until_ms is not None:
+        moved = _same_wall_clock(schedule.until_ms, old_tz, new_tz)
+        changed = changed or moved != schedule.until_ms
+        schedule.until_ms = moved
+    return changed
+
+
 def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
     """Compute next run time in ms.
 
@@ -483,6 +516,11 @@ class CronService:
         # scaduta): la sentinella (``zone_watch.ZoneWatcher.poke``) rilegge
         # subito invece di aspettare il suo giro. ``None`` fuori dal gateway.
         self.on_zones_changed: Callable[[], None] | None = None
+        # Il fuso dell'utente adesso (``agents.defaults.timezone``): lo mette il
+        # gateway alla costruzione e a ogni cambio di fuso del telefono
+        # (:meth:`follow_timezone`); il tool ``cron`` lo legge da qui, così non
+        # ne tiene una copia ferma all'avvio. ``None`` fuori dal gateway.
+        self.timezone: str | None = None
 
     def _zones_changed(self) -> None:
         if self.on_zones_changed is None:
@@ -612,7 +650,7 @@ class CronService:
 
         return self._store
 
-    def _save_store(self) -> None:
+    def _save_store(self, meta: dict[str, str] | None = None) -> None:
         """I job in memoria nel database, in una transazione.
 
         Si tolgono solo i job che c'erano all'ultima lettura e non ci sono più:
@@ -622,8 +660,48 @@ class CronService:
             return
         current = {j.id for j in self._store.jobs}
         cron_store.save_rows(self._db, [self._job_to_dict(j) for j in self._store.jobs],
-                             removed=self._saved_ids - current)
+                             removed=self._saved_ids - current, meta=meta)
         self._saved_ids = current
+
+    def follow_timezone(self, tz_name: str | None) -> int:
+        """Porta le ore dei job nel fuso *tz_name*; torna quanti ne ha spostati.
+
+        Ogni ora scritta su un job è un'ora dell'orologio dell'utente: «ogni
+        giorno alle 7» e «il 14 aprile alle 9» valgono dove l'utente si trova,
+        non dove li ha detti. Quando il telefono cambia fuso, tutti lo seguono,
+        senza eccezioni: l'espressione cron prende il fuso nuovo, il singolo e
+        i «fino a» tengono la stessa ora d'orologio. Un singolo che così finisce
+        nel passato scatta subito, in ritardo (``_recompute_next_runs``).
+
+        Il fuso in cui le ore sono scritte sta nel database
+        (``cron_store.META_TIMEZONE``), non in memoria: il confronto vale anche
+        dopo un riavvio, e una fotografia ripristinata riporta i job insieme al
+        fuso in cui erano scritti. La prima volta non c'è niente da confrontare:
+        si prende nota del fuso di ora e non si sposta nulla.
+        """
+        name = (tz_name or "").strip()
+        if not name:
+            return 0
+        self.timezone = name
+        written_in = cron_store.read_meta(self._db, cron_store.META_TIMEZONE)
+        if written_in == name:
+            return 0
+        store = self._load_store()
+        moved = 0
+        if written_in:
+            now = _now_ms()
+            for job in store.jobs:
+                if _move_to_timezone(job.schedule, written_in, name):
+                    job.updated_at_ms = now
+                    moved += 1
+            self._recompute_next_runs()
+        self._save_store(meta={cron_store.META_TIMEZONE: name})
+        if self._running:
+            self._arm_timer()
+        if moved:
+            self._zones_changed()
+        logger.info("Cron: timezone {} -> {}, {} job(s) moved", written_in or "unset", name, moved)
+        return moved
 
     @staticmethod
     def _job_to_dict(j: CronJob) -> dict[str, Any]:
@@ -747,6 +825,12 @@ class CronService:
         # gira sicuramente là dentro (vedi ``power.bind_wake_loop``).
         self._wake_event = power.bind_wake_loop() if power.alarm_driven_cron_enabled() else None
         self._load_store()
+        # Il telefono può aver cambiato fuso a gateway spento (un volo a
+        # telefono spento): prima di ricalcolare, le ore seguono quello di ora.
+        try:
+            self.follow_timezone(self.timezone)
+        except Exception:  # noqa: BLE001 — non può fallire l'avvio dello scheduler
+            logger.opt(exception=True).error("Cron: could not follow the timezone")
         self._recompute_next_runs()
         self._save_store()
         # Un ricorrente scaduto a telefono spento non ha più una prossima
