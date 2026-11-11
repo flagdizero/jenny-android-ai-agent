@@ -26,7 +26,8 @@ Releases before 1.0 are described only on their
   hour until Friday". After its end it goes away by itself.
 - **A notice when Jenny wakes up too often.** With 50 or more wake-ups in 24 hours, a pill
   above the message field says how many; tapping it shows which jobs wake her most, with a
-  pause button next to each. It is a notice, not a limit: nothing is stopped for you.
+  pause button next to each. Only jobs still on count: once you remove or pause them, the pill
+  goes away. It is a notice, not a limit: nothing is stopped for you.
 
 ### Changed
 
