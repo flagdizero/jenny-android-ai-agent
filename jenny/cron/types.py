@@ -84,7 +84,7 @@ CronPrecision = Literal["exact", "day", "month"]
 @dataclass
 class CronSchedule:
     """Schedule definition for a cron job."""
-    kind: Literal["at", "every", "cron"]
+    kind: Literal["at", "every", "cron", "zone"]
     # For "at": timestamp in ms
     at_ms: int | None = None
     # For "every": interval in ms
@@ -96,6 +96,15 @@ class CronSchedule:
     # Solo per un ``at``: come mostrare la data (v. ``CronPrecision``). ``None``
     # vale ``exact``.
     precision: CronPrecision | None = None
+    # Solo per una ``zone`` («quando arrivi lì», v. :mod:`jenny.cron.zones`): il
+    # centro, il raggio in metri, il nome del posto (per dirlo all'utente e al
+    # modello) e la scadenza, dopo la quale la zona sparisce da sola. ``None``
+    # vale «non scade», ammesso solo per una zona «ogni arrivo».
+    lat: float | None = None
+    lng: float | None = None
+    radius_m: float | None = None
+    zone_name: str | None = None
+    until_ms: int | None = None
 
 
 @dataclass
@@ -173,6 +182,16 @@ class CronJobState:
     # diventata vera, e non riparla finché non torna falsa. Una lettura falsa
     # lo riarma.
     condition_notified: bool = False
+
+    # ── zona: dove si è ──
+    # ``None`` = non si sa ancora (appena armata o ripresa: un fix che la trova
+    # già dentro non la fa scattare). Lo scrive solo la sentinella, via
+    # ``CronService.set_zone_inside`` / ``fire_zone``.
+    zone_inside: bool | None = None
+    # L'ultimo arrivo: quando, e il fix che l'ha visto (``zones.fix_record``).
+    # Il turno li racconta; la finestra dei tentativi si conta dal primo.
+    zone_entered_at_ms: int | None = None
+    zone_fix: dict[str, Any] | None = None
 
 
 @dataclass
@@ -287,4 +306,15 @@ def schedule_payload(schedule: CronSchedule) -> dict[str, Any]:
         # Solo su un ``at``: ``day`` (un giorno, senza ora) o ``month`` («marzo
         # 2027»); ``None`` vale l'ora esatta. Il client la dice nella sua lingua.
         "precision": schedule.precision if schedule.kind == "at" else None,
+        # Solo su una zona: il posto e la scadenza. Le altre forme restano
+        # identiche a prima, chiave per chiave.
+        **({
+            "zone": {
+                "name": schedule.zone_name,
+                "lat": schedule.lat,
+                "lng": schedule.lng,
+                "radiusM": schedule.radius_m,
+            },
+            "until_ms": schedule.until_ms,
+        } if schedule.kind == "zone" else {}),
     }

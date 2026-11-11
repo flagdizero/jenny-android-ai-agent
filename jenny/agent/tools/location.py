@@ -20,7 +20,6 @@ il modello.
 from __future__ import annotations
 
 import json
-import math
 from typing import Any
 
 from jenny.agent.tools.base import Tool, tool_parameters
@@ -186,7 +185,7 @@ class FindPlaceTool(Tool):
         return True
 
     async def execute(self, query: str = "", label: str = "", **kwargs: Any) -> str:
-        from jenny.runtime.location import cached_location, find_places
+        from jenny.runtime.location import cached_location, distance_m, find_places
 
         query = str(kwargs.pop("query", query) or "").strip()
         label = _link_text(str(kwargs.pop("label", label) or ""))
@@ -215,23 +214,11 @@ class FindPlaceTool(Tool):
             }
             if here is not None:
                 item["distanceMeters"] = round(
-                    _distance_m(here.latitude, here.longitude, m.latitude, m.longitude)
+                    distance_m(here.latitude, here.longitude, m.latitude, m.longitude)
                 )
             item["chatLink"] = chat_link(name, m.address, m.latitude, m.longitude)
             results.append(item)
         return json.dumps({"places": results}, ensure_ascii=False)
-
-
-def _distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """Distanza in metri (haversine): la stessa formula della scheda in chat."""
-    rad = math.pi / 180
-    d_lat = (lat2 - lat1) * rad
-    d_lng = (lng2 - lng1) * rad
-    s = (
-        math.sin(d_lat / 2) ** 2
-        + math.cos(lat1 * rad) * math.cos(lat2 * rad) * math.sin(d_lng / 2) ** 2
-    )
-    return 2 * 6371008.8 * math.asin(min(1.0, math.sqrt(s)))
 
 
 # Registrazione esplicita dei tool di questo modulo (letta da loader.py).

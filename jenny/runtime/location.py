@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -75,6 +76,22 @@ class LocationFix:
 
     def age_seconds(self) -> float:
         return max(0.0, time.time() - self.time_ms / 1000.0)
+
+
+def distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Distanza in metri (haversine): la stessa formula della scheda in chat.
+
+    Pubblica perché la usano il tool ``find_place`` e la sentinella delle zone
+    (``jenny/cron/zones.py``): una formula sola per «a quanto sei da lì».
+    """
+    rad = math.pi / 180
+    d_lat = (lat2 - lat1) * rad
+    d_lng = (lng2 - lng1) * rad
+    s = (
+        math.sin(d_lat / 2) ** 2
+        + math.cos(lat1 * rad) * math.cos(lat2 * rad) * math.sin(d_lng / 2) ** 2
+    )
+    return 2 * 6371008.8 * math.asin(min(1.0, math.sqrt(s)))
 
 
 def reset_location_state() -> None:

@@ -32,7 +32,7 @@ from dataclasses import asdict
 from typing import Any
 
 from jenny.cron.purposes import system_job_purpose
-from jenny.cron.service import next_run_on_resume
+from jenny.cron.service import can_resume
 from jenny.cron.types import CronJob, job_display_name, schedule_payload
 from jenny.utils.clock import now_ms as _now_ms
 
@@ -152,7 +152,7 @@ def _job_actions(job: CronJob, now_ms: int) -> list[str]:
     if _job_kind(job) != "user":
         return []
     if job.paused_at_ms is not None:
-        return ["resume", "remove"] if next_run_on_resume(job, now_ms) is not None else ["remove"]
+        return ["resume", "remove"] if can_resume(job, now_ms) else ["remove"]
     if job.enabled:
         return ["pause", "remove"]
     return ["remove"]
