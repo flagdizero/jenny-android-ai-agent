@@ -3070,6 +3070,14 @@ class AgentLoop(
         l'avviso consegnato a sessione occupata. Lo chiedono ``project.rename`` e
         ``project.delete``: spostare o cancellare una sessione mentre uno di
         questi ci scrive lascia una chat sotto il nome vecchio, senza cartella.
+
+        In coda, chi tiene o aspetta il **lock di sessione**
+        (``SessionLocks.busy_keys``): e' la regola per scrivere una sessione,
+        quindi copre anche lo scrittore che nessuno ha messo in questo elenco —
+        un turno entrato da ``process_direct``, che non passa da
+        ``_pending_queues``. Non sostituisce le voci sopra: un subagent e una
+        passata non tengono quel lock mentre lavorano, e un lavoro staccato e'
+        gia' uno scrittore prima di averlo chiesto.
         """
         from jenny.agent.gardener import passes_in_flight
 
@@ -3078,6 +3086,7 @@ class AgentLoop(
         keys.update(dict.fromkeys(project_session_key(n) for n in sorted(passes_in_flight())))
         keys.update(dict.fromkeys(self.auto_compact.busy_session_keys()))
         keys.update(dict.fromkeys(self._detached_session_writes))
+        keys.update(dict.fromkeys(self._session_locks.busy_keys()))
         return tuple(keys)
 
     async def process_direct(

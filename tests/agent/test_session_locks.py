@@ -114,3 +114,74 @@ class TestRotate:
     async def test_rotate_noop_when_absent(self):
         locks = SessionLocks()
         assert locks.rotate("missing") is False
+
+
+# ── Chi ha in mano una sessione: ``busy_keys`` ───────────────────────────────
+
+
+async def test_busy_keys_are_the_locks_held_now() -> None:
+    locks = SessionLocks()
+    locks.get("ferma")
+    assert locks.busy_keys() == ()
+    async with locks.get("project:orto"):
+        assert locks.busy_keys() == ("project:orto",)
+    assert locks.busy_keys() == ()
+
+
+async def test_a_lock_handed_to_a_waiter_never_looks_free() -> None:
+    """Il giro fra il rilascio e la ripresa di chi aspettava.
+
+    ``asyncio.Lock.release`` libera il lock e sveglia il primo in attesa, che lo
+    prende solo quando il loop gli ridà il passo: in mezzo ``locked()`` è falso.
+    Chi chiede «qualcuno ha in mano questa sessione?» in quel giro non deve
+    sentirsi dire di no — chi aspettava sta per scriverci.
+    """
+    locks = SessionLocks()
+    lock = locks.get("project:orto")
+    inside, leave = asyncio.Event(), asyncio.Event()
+
+    async def waiter() -> None:
+        async with lock:
+            inside.set()
+            await leave.wait()
+
+    async with lock:
+        task = asyncio.create_task(waiter())
+        await asyncio.sleep(0)  # il secondo è in coda sul lock
+        assert locks.busy_keys() == ("project:orto",)
+    # Rilasciato, e chi aspettava non ha ancora ripreso.
+    assert not lock.locked()
+    assert not inside.is_set()
+    assert locks.busy_keys() == ("project:orto",)
+
+    await inside.wait()
+    assert locks.busy_keys() == ("project:orto",)
+    leave.set()
+    await task
+    assert locks.busy_keys() == ()
+
+
+async def test_a_waiter_cancelled_in_the_queue_does_not_stay_busy() -> None:
+    locks = SessionLocks()
+    lock = locks.get("project:orto")
+
+    async def waiter() -> None:
+        async with lock:
+            pass
+
+    async with lock:
+        task = asyncio.create_task(waiter())
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    assert locks.busy_keys() == ()
+
+
+async def test_a_rotated_lock_is_not_busy_for_its_zombie() -> None:
+    """Il turno abbandonato tiene il lock vecchio, che non è più nel registro:
+    la sessione non resta occupata per sempre dietro di lui."""
+    locks = SessionLocks()
+    async with locks.get("project:orto"):
+        assert locks.rotate("project:orto") is True
+        assert locks.busy_keys() == ()
+

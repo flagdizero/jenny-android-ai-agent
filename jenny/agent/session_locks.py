@@ -30,13 +30,19 @@ class ReentrantSessionLock:
         self._lock = asyncio.Lock()
         self._owner: asyncio.Task | None = None
         self._depth = 0
+        # Quanti task sono dentro ``acquire()``: v. :meth:`busy`.
+        self._waiting = 0
 
     async def __aenter__(self) -> "ReentrantSessionLock":
         current = asyncio.current_task()
         if self._depth > 0 and self._owner is current and current is not None:
             self._depth += 1
             return self
-        await self._lock.acquire()
+        self._waiting += 1
+        try:
+            await self._lock.acquire()
+        finally:
+            self._waiting -= 1
         self._owner = current
         self._depth = 1
         return self
@@ -51,6 +57,16 @@ class ReentrantSessionLock:
 
     def locked(self) -> bool:
         return self._lock.locked()
+
+    def busy(self) -> bool:
+        """Tenuto, **o atteso**: qualcuno ha in mano la sessione o sta per averla.
+
+        ``locked()`` da solo ha un giro cieco: ``asyncio.Lock.release`` libera il
+        lock e sveglia il primo in attesa, che lo prende solo quando il loop gli
+        ridà il passo. In mezzo il lock risulta libero, e chi aspettava sta per
+        scrivere. Il conto di chi è dentro ``acquire()`` copre quel giro.
+        """
+        return self._lock.locked() or self._waiting > 0
 
 
 class SessionLocks:
@@ -71,6 +87,16 @@ class SessionLocks:
         """True se esiste un lock per *key* ed è attualmente tenuto."""
         lock = self._locks.get(key)
         return lock is not None and lock.locked()
+
+    def busy_keys(self) -> tuple[str, ...]:
+        """Le chiavi il cui lock è tenuto o atteso **adesso** (v. ``busy``).
+
+        È la domanda di ``AgentLoop.busy_session_keys``: il lock di sessione è
+        la regola per scrivere una sessione, quindi chi lo tiene è uno
+        scrittore da qualunque porta sia entrato. Un lock ruotato non conta: lo
+        zombie tiene quello vecchio, che non è più nel registro.
+        """
+        return tuple(key for key, lock in self._locks.items() if lock.busy())
 
     def evict(self, key: str) -> None:
         """Rimuove il lock per *key* se non è tenuto (no-op altrimenti)."""
