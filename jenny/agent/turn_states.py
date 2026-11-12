@@ -147,7 +147,7 @@ class StateHandlersMixin:
             *,
             turn_latency_ms: int | None = None,
         ) -> None: ...
-        def _schedule_background(self, coro) -> None: ...
+        def _schedule_session_write(self, session_key: str, start) -> None: ...
 
     async def _state_restore(self, ctx: TurnContext) -> TurnState:
         """Restore checkpoint / pending user turn; extract documents."""
@@ -286,11 +286,15 @@ class StateHandlersMixin:
             session.enforce_file_cap(
                 on_archive=partial(self.context.memory.raw_archive, session_key=session_key)
             )
-            self._schedule_background(
-                self.consolidator.maybe_consolidate_by_tokens(
+            # Staccata, e salva la sessione dopo una chiamata LLM: chi cancella o
+            # rinomina il quaderno deve vederla (``busy_session_keys``).
+            self._schedule_session_write(
+                session.key,
+                partial(
+                    self.consolidator.maybe_consolidate_by_tokens,
                     session,
                     replay_max_messages=self._max_messages,
-                )
+                ),
             )
         if clear_pending:
             self._clear_pending_user_turn(session)

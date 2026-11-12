@@ -14,11 +14,14 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 if TYPE_CHECKING:
+    from collections import Counter
+    from collections.abc import Awaitable, Callable
+
     from jenny.agent.cron_turns import CronTurnCoordinator
     from jenny.agent.session_locks import SessionLocks
     from jenny.agent.subagent import SubagentManager
@@ -43,6 +46,7 @@ class LoopTasksMixin:
         _active_tasks: dict[str, list[asyncio.Task]]
         _background_tasks: list[asyncio.Task]
         _cron_turns: CronTurnCoordinator
+        _detached_session_writes: Counter[str]
         _file_state_store: FileStateStore
         _pending_queues: dict[str, asyncio.Queue]
         _running: bool
@@ -263,6 +267,50 @@ class LoopTasksMixin:
         task = asyncio.create_task(coro)
         self._background_tasks.append(task)
         task.add_done_callback(partial(self._on_background_task_done, label=label))
+
+    def _schedule_session_write(
+        self, session_key: str, start: Callable[[], Awaitable[Any]]
+    ) -> None:
+        """Come ``_schedule_background``, per un lavoro che alla fine **salva** *session_key*.
+
+        Sono i lavori che restano quando il turno e' gia' finito: la
+        consolidazione di fine turno, che salva la sessione dopo una chiamata
+        LLM, e l'avviso consegnato a sessione occupata, che si scrive quando il
+        lock si libera. Per ``busy_session_keys`` un turno finito non e' piu' in
+        volo, e chi cancellava o rinominava il quaderno in quella finestra —
+        diciotto secondi, nel log del 12/11/2026 — passava la guardia: il
+        salvataggio arrivava dopo e rimetteva al mondo la chat, senza cartella.
+
+        La sessione si segna **qui, in modo sincrono**, e non al primo passo del
+        task: fra le due cose il turno esce da ``_pending_queues``, e un registro
+        riempito dal task avrebbe li' la sua finestra. Stesso disegno di
+        ``AutoCompact.check_expired``, che aggiunge a ``_archiving`` prima di
+        schedulare. E' un conto e non un insieme: due turni di fila lasciano due
+        consolidazioni sulla stessa sessione, e la prima che finisce non deve
+        liberare la seconda.
+
+        Si libera nel ``finally`` del lavoro, quindi anche se fallisce o viene
+        cancellato a meta'. Un task cancellato prima del primo passo non ci
+        arriva: succede solo allo spegnimento (``close_background_tasks``), dove
+        il conto muore col processo.
+
+        *start* e' la chiamata che fa partire il lavoro, non la sua coroutine:
+        la coroutine nasce al primo passo del task, cosi' un task chiuso prima
+        di partire non ne lascia una mai attesa.
+        """
+        self._detached_session_writes[session_key] += 1
+        self._schedule_background(self._run_session_write(session_key, start))
+
+    async def _run_session_write(
+        self, session_key: str, start: Callable[[], Awaitable[Any]]
+    ) -> None:
+        try:
+            await start()
+        finally:
+            writes = self._detached_session_writes
+            writes[session_key] -= 1
+            if writes[session_key] <= 0:
+                del writes[session_key]
 
     def _on_background_task_done(self, task: asyncio.Task, label: str) -> None:
         """Drop a finished background task and log it if it failed silently."""
