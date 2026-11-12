@@ -9,6 +9,7 @@ import json
 import time
 import uuid
 import weakref
+from collections import Counter
 from collections.abc import Mapping
 from contextlib import nullcontext
 from pathlib import Path
@@ -440,6 +441,9 @@ class AgentLoop(
         self._last_ttl_check = 0.0
         self._active_tasks: dict[str, list[asyncio.Task]] = {}  # session_key -> tasks
         self._background_tasks: list[asyncio.Task] = []
+        # Le sessioni che un lavoro staccato deve ancora salvare, e quanti sono
+        # (v. ``_schedule_session_write``): le legge ``busy_session_keys``.
+        self._detached_session_writes: Counter[str] = Counter()
         # Dominio di lock per-sessione UNICO, condiviso col Consolidator (sotto):
         # turno e consolidation acquisiscono lo stesso lock rientrante per key,
         # quindi non possono mutare session.messages in concorrenza.
@@ -2989,8 +2993,13 @@ class AgentLoop(
             "Channel delivery for session {} deferred: session busy",
             session_key,
         )
-        self._schedule_background(
-            self._record_channel_delivery_locked(session_key, content, media)
+        # Scrive e salva la sessione quando il lock si libera, cioe' dopo la fine
+        # di chi lo tiene: per ``busy_session_keys`` la sessione resta occupata.
+        self._schedule_session_write(
+            session_key,
+            functools.partial(
+                self._record_channel_delivery_locked, session_key, content, media
+            ),
         )
 
     def _release_job_python_globals(self, session_key: str) -> None:
@@ -3050,12 +3059,15 @@ class AgentLoop(
 
         Piu' largo di :meth:`active_session_keys`, che resta com'e' perche'
         l'autocompact e il giardiniere la leggono con quel significato. Qui si
-        aggiungono gli altri tre scrittori che portano il nome di una
+        aggiungono gli altri scrittori che portano il nome di una
         conversazione di progetto: un subagent lanciato da li', che sopravvive al
         turno e a fine lavoro scrive record e annuncio sotto la chiave d'origine;
-        una passata del giardiniere, che scrive nella cartella della wiki; e
+        una passata del giardiniere, che scrive nella cartella della wiki;
         l'autocompact, che compattando o raccogliendo il diario rilegge e salva la
-        sessione dopo una chiamata LLM. Lo chiedono ``project.rename`` e
+        sessione dopo una chiamata LLM; e i lavori staccati che un turno lascia
+        dietro di se' (``_schedule_session_write``): la consolidazione di fine
+        turno, che salva la sessione secondi dopo che il turno e' finito, e
+        l'avviso consegnato a sessione occupata. Lo chiedono ``project.rename`` e
         ``project.delete``: spostare o cancellare una sessione mentre uno di
         questi ci scrive lascia una chat sotto il nome vecchio, senza cartella.
         """
@@ -3065,6 +3077,7 @@ class AgentLoop(
         keys.update(dict.fromkeys(self.subagents.active_origin_session_keys()))
         keys.update(dict.fromkeys(project_session_key(n) for n in sorted(passes_in_flight())))
         keys.update(dict.fromkeys(self.auto_compact.busy_session_keys()))
+        keys.update(dict.fromkeys(self._detached_session_writes))
         return tuple(keys)
 
     async def process_direct(
