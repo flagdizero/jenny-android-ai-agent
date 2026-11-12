@@ -21,6 +21,11 @@ chiamata LLM, cioe' quando il turno non e' piu' in volo da secondi. Con lei sta
 ogni altro lavoro staccato che salva una sessione (un avviso consegnato a
 sessione occupata): il loop li conta tutti nello stesso registro.
 
+E, per non contare gli scrittori uno a uno: **chi tiene o aspetta il lock di
+sessione**. E' la regola dichiarata per scrivere una sessione, quindi vale per
+ogni turno da qualunque porta entri — anche da ``process_direct``, che non passa
+da ``_pending_queues``.
+
 ``active_session_keys`` resta com'era: l'autocompact e il giardiniere la leggono
 con il significato «un turno di chat sta usando la sessione».
 """
@@ -37,6 +42,7 @@ import pytest
 from jenny.agent import gardener
 from jenny.agent.autocompact import AutoCompact
 from jenny.agent.loop import AgentLoop
+from jenny.agent.session_locks import SessionLocks
 from jenny.agent.subagent import SubagentManager
 from jenny.runtime.container import GatewayContainer
 
@@ -80,6 +86,7 @@ def _loop(
     loop.subagents = SimpleNamespace(active_origin_session_keys=lambda: subagent_origins)
     loop.auto_compact = auto_compact or _autocompact()
     loop._detached_session_writes = Counter()
+    loop._session_locks = SessionLocks()
     return loop
 
 
@@ -150,6 +157,56 @@ async def test_a_diary_harvest_keeps_its_project_busy_until_it_saves(tmp_path) -
     release.set()
     await asyncio.wait_for(tasks[0], timeout=5.0)
     await wait_until(lambda: compact.busy_session_keys() == (), timeout=5.0)
+
+
+# ── Il lock di sessione: un turno da qualunque porta ────────────────────────
+
+
+async def test_a_direct_turn_keeps_its_session_busy(tmp_path: Path, monkeypatch) -> None:
+    """Un turno entrato da ``process_direct`` non e' in ``_pending_queues``.
+
+    Oggi lo usano solo le passate interne, con chiavi loro; il giorno in cui un
+    turno diretto girasse sotto la chiave di un quaderno, la guardia di
+    ``project.delete`` non lo vedrebbe. Lo vede dal lock, che quel turno tiene
+    per tutta la sua durata.
+    """
+    from jenny.config.paths import get_wikis_path
+    from jenny.providers.base import LLMResponse
+    from tests.support.agent import make_loop, make_provider
+
+    monkeypatch.setattr(gardener, "_PASSES_IN_FLIGHT", set())
+    (get_wikis_path(tmp_path) / "orto" / "wiki").mkdir(parents=True)
+    asked, answer = asyncio.Event(), asyncio.Event()
+
+    async def _held_chat(*args, **kwargs) -> LLMResponse:
+        asked.set()
+        await answer.wait()
+        return LLMResponse(content="Fatto", tool_calls=[])
+
+    provider = make_provider(bare=True)
+    provider.generation = SimpleNamespace(max_tokens=4096)
+    provider.chat_with_retry = _held_chat
+    loop = make_loop(tmp_path, context_window_tokens=None, provider=provider)
+    loop.tools.get_definitions = lambda *a, **k: []  # type: ignore[method-assign]
+
+    turn = asyncio.create_task(loop.process_direct(
+        "annaffia", session_key="project:orto", channel="websocket", chat_id="orto"))
+    await asyncio.wait_for(asked.wait(), timeout=5.0)
+
+    assert loop.active_session_keys() == ()
+    assert "project:orto" in loop.busy_session_keys()
+
+    answer.set()
+    await asyncio.wait_for(turn, timeout=5.0)
+    await loop.close_background_tasks()
+    assert loop.busy_session_keys() == ()
+
+
+def test_busy_includes_the_sessions_whose_lock_is_held(monkeypatch) -> None:
+    monkeypatch.setattr(gardener, "_PASSES_IN_FLIGHT", set())
+    loop = _loop()
+    loop._session_locks = SimpleNamespace(busy_keys=lambda: ("project:orto",))
+    assert loop.busy_session_keys() == ("project:orto",)
 
 
 # ── La consolidazione staccata di fine turno ────────────────────────────────
