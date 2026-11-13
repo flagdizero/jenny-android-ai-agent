@@ -14,6 +14,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+from support.dates import day_ahead, month_ahead
 from support.sessions import FakeSessions
 
 from jenny.agent.tools.context import RequestContext
@@ -32,6 +33,7 @@ _COND = {"app": "serra", "params": {}, "field": "umidita", "op": "<", "value": 1
 
 
 def test_a_day_rings_at_nine_and_a_month_on_the_first() -> None:
+    # Date fisse: ``date_schedule`` legge soltanto, con oggi non le confronta nessuno.
     day = date_schedule("2026-11-12", _TZ)
     month = date_schedule("2027-03", _TZ)
     exact = date_schedule("2026-11-12T18:30", _TZ)
@@ -127,13 +129,13 @@ async def test_an_unreadable_app_skips_the_run_without_a_turn(tmp_path, monkeypa
 def test_a_condition_on_a_one_time_job_is_refused(tmp_path) -> None:
     service = CronService(tmp_path / "workspace")
     with pytest.raises(ValueError, match="recurring"):
-        _add(service, date_schedule("2026-11-12", _TZ), condition=_COND)
+        _add(service, date_schedule(day_ahead(), _TZ), condition=_COND)
 
 
 def test_the_label_survives_a_restart(tmp_path) -> None:
     service = CronService(tmp_path / "workspace")
     job = _add(service, CronSchedule(kind="every", every_ms=3_600_000), condition=_COND)
-    one = _add(service, date_schedule("2027-03", _TZ))
+    one = _add(service, date_schedule(month_ahead(), _TZ))
 
     reloaded = CronService(tmp_path / "workspace")
     assert reloaded.get_job(job.id).payload.condition == _COND
@@ -154,10 +156,10 @@ async def test_a_one_time_job_disappears_once_it_has_fired(tmp_path) -> None:
 
 def test_update_job_changes_text_and_when(tmp_path) -> None:
     service = CronService(tmp_path / "workspace")
-    job = _add(service, date_schedule("2026-11-12", _TZ))
+    job = _add(service, date_schedule(day_ahead(), _TZ))
 
     updated = service.update_job(job.id, name="ciliegio", message="dividi il ciliegio",
-                                 schedule=date_schedule("2026-12", _TZ))
+                                 schedule=date_schedule(month_ahead(), _TZ))
 
     assert updated is not None
     assert updated.name == "ciliegio"
@@ -189,7 +191,7 @@ async def test_a_notebook_job_from_the_personal_chat_runs_and_delivers_in_the_no
     tool = _tool(tmp_path)
 
     out = await tool.execute(action="add", notebook="casa", name="ciliegio",
-                             message="ricorda di dividere il ciliegio", date="2026-11-12")
+                             message="ricorda di dividere il ciliegio", date=day_ahead())
 
     assert out.startswith("Created job"), out
     job = tool._cron.list_jobs(include_disabled=True)[0]
@@ -234,16 +236,17 @@ def test_the_hour_is_a_field_of_its_own(tmp_path) -> None:
 
 async def test_a_day_without_time_is_a_day_and_with_time_is_exact(tmp_path) -> None:
     tool = _tool(tmp_path)
-    day = await tool.execute(action="add", message="bici", date="2026-11-20")
-    nine = await tool.execute(action="add", message="dentista", date="2026-11-20", time="09:00")
+    when = day_ahead()
+    day = await tool.execute(action="add", message="bici", date=when)
+    nine = await tool.execute(action="add", message="dentista", date=when, time="09:00")
     by_msg = {j.payload.message: j.schedule for j in tool._cron.list_jobs()}
     assert by_msg["bici"].precision == "day"
     # Chi dice davvero «alle 9» ha le 9: niente più tappo che le scambia per un giorno.
     assert by_msg["dentista"].precision == "exact"
     assert by_msg["bici"].at_ms == by_msg["dentista"].at_ms
     # La risposta dice quando, e che un giorno non ha un'ora.
-    assert "once, on 2026-11-20 (no time" in day
-    assert "at 2026-11-20T09:00" in nine
+    assert f"once, on {when} (no time" in day
+    assert f"at {when}T09:00" in nine
 
 
 @pytest.mark.parametrize(("params", "needle"), [
