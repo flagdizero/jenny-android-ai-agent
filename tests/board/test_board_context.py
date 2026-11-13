@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from support.dates import month_ahead
+
 from jenny.agent.context import ContextBuilder
 from jenny.board import model
 from jenny.board.context_block import (
@@ -53,9 +55,10 @@ def _at_ms(day: str) -> int:
 def test_a_full_wall_stays_under_the_ceiling(tmp_path, monkeypatch) -> None:
     root = _notebook(tmp_path)
     _cards(root, model.MAX_ITEMS)
+    month = month_ahead()
     _jobs(tmp_path, monkeypatch, [
         {"id": "aa11bb22", "name": "Travaso nel vaso 20", "enabled": True,
-         "schedule": {"kind": "at", "atMs": _at_ms("2027-03-01"), "precision": "month"},
+         "schedule": {"kind": "at", "atMs": _at_ms(f"{month}-01"), "precision": "month"},
          "payload": {"message": "Travaso nel vaso 20",
                      "board": {"notebook": "piante", "card": "pianta-0", "section": "@auto"}}},
     ])
@@ -66,7 +69,7 @@ def test_a_full_wall_stays_under_the_ceiling(tmp_path, monkeypatch) -> None:
     assert shown >= 12
     if shown < model.MAX_ITEMS:
         assert f"and {model.MAX_ITEMS - shown} more card(s)" in block
-    assert "[next: Travaso nel vaso 20, 2027-03]" in block
+    assert f"[next: Travaso nel vaso 20, {month}]" in block
     assert "Off the board: 1 page(s)" in block
 
 

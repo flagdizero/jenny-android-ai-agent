@@ -14,6 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from support.dates import month_ahead
 from support.js_harness import ASSETS
 
 from jenny.agent.board_pass import BoardPass, board_needs_pass, run_board_pass
@@ -201,11 +202,12 @@ async def test_reminders_are_not_added_twice(tmp_path, monkeypatch) -> None:
     _seed_board(root)
     async with _cron(ws, monkeypatch) as cron:
         tool = _tools(_state(root, ws), cron)["board_add_reminder"]
-        out = await tool.execute(card="acero", text="Travaso nel vaso 20", date="2027-03-01",
+        march = f"{month_ahead()}-01"
+        out = await tool.execute(card="acero", text="Travaso nel vaso 20", date=march,
                                  precision="month", why="travaso-acero.md",
                                  source="raw/journal/20261010.md#18:46")
         assert out.startswith("Reminder `")
-        again = await tool.execute(card="acero", text="travaso nel vaso 20 ", date="2027-03-01")
+        again = await tool.execute(card="acero", text="travaso nel vaso 20 ", date=march)
         assert again.startswith("Already")
         [job] = [cron.get_job(i) for i in notebook_jobs(cron, root.name)]
         assert job.name == "Travaso nel vaso 20" and scope_of(job.payload.board) == "acero"
@@ -216,7 +218,8 @@ async def test_reminders_are_not_added_twice(tmp_path, monkeypatch) -> None:
         bad = await tool.execute(card="acero", text="Potatura", date="a marzo")
         assert bad.startswith("Refused")
         # Una pagina che non c'è non diventa un ``why`` morto.
-        await tool.execute(card="acero", text="Concime", date="2027-04-01", why="sparita.md")
+        await tool.execute(card="acero", text="Concime", date=f"{month_ahead()}-28",
+                           why="sparita.md")
         concime = next(cron.get_job(i) for i, j in notebook_jobs(cron, root.name).items()
                        if j["name"] == "Concime")
         assert concime.payload.why is None
@@ -416,7 +419,8 @@ async def _first_board(ws: Path, root: Path, cron: Any) -> None:
         ("board_write_summary", {"card": "acero", "brief": "In vaso 14.", "sections": [
             {"title": "Acqua", "text": "Due cm.", "sources": ["irrigazione-acero.md"]},
         ]}),
-        ("board_add_reminder", {"card": "acero", "text": "Travaso", "date": "2027-03-01",
+        ("board_add_reminder", {"card": "acero", "text": "Travaso",
+                                "date": f"{month_ahead()}-01",
                                 "precision": "month", "source": "dormienza.md"}),
     ], cron_service=cron)
     outcome = await run_board_pass(agent, _Store(root, ws), session_key="gardener:piante-x-board")

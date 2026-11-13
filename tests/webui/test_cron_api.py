@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 from support.cron import disable_job
+from support.dates import ms_ahead
 
 from jenny.cron.service import CronService
 from jenny.cron.types import CronJob, CronPayload, CronSchedule
@@ -190,7 +191,7 @@ def test_the_precision_of_a_one_time_job_travels(cron, tmp_path, precision):
     che l'utente non ha chiesto. Il client sceglie la forma dalla precisione."""
     cron.add_job(
         "passaporto",
-        CronSchedule(kind="at", at_ms=1_803_970_800_000, precision=precision),
+        CronSchedule(kind="at", at_ms=ms_ahead(), precision=precision),
         "Rinnova il passaporto",
         delete_after_run=True,
     )
@@ -203,7 +204,7 @@ def test_the_precision_of_a_one_time_job_travels(cron, tmp_path, precision):
 
 def test_an_exact_one_time_job_has_no_precision(cron, tmp_path):
     cron.add_job(
-        "riunione", CronSchedule(kind="at", at_ms=1_803_970_800_000), _PILLS,
+        "riunione", CronSchedule(kind="at", at_ms=ms_ahead()), _PILLS,
         delete_after_run=True,
     )
 
