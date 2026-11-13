@@ -12,6 +12,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from support.dates import day_ahead, month_ahead
 
 from jenny.board import edit, model
 from jenny.board.store import (
@@ -257,7 +258,7 @@ async def test_a_reminder_is_a_notebook_job_and_done_takes_it_away(notebook: Pat
 
     _seed(notebook)
     rid = await edit.add_reminder(notebook, "acero", "Travaso",
-                                  {"kind": "date", "date": "2027-03-01", "precision": "month"},
+                                  {"kind": "date", "date": f"{month_ahead()}-01", "precision": "month"},
                                   cron=cron, timezone_name="Europe/Rome")
     job = cron.get_job(rid)
     assert job.name == "Travaso" and job.payload.message == "Travaso"
@@ -268,7 +269,7 @@ async def test_a_reminder_is_a_notebook_job_and_done_takes_it_away(notebook: Pat
     sections = model.card_by_id(read_board(notebook), "acero")["userSections"]
     assert not any(s.get("kind") == "reminder" for s in sections)
     whole = await edit.add_reminder(notebook, "", "Porta dentro le piante",
-                                    {"kind": "date", "date": "2026-12-01", "precision": "day"},
+                                    {"kind": "date", "date": day_ahead(), "precision": "day"},
                                     cron=cron)
     assert scope_of(cron.get_job(whole).payload.board) == model.NOTEBOOK
     assert await edit.close_reminder(notebook, rid, cron=cron) == "Travaso"
@@ -305,16 +306,17 @@ async def test_the_same_date_keeps_an_exact_time(notebook: Path, cron) -> None:
     from jenny.cron.dates import date_schedule
 
     _seed(notebook)
+    day, day_after = day_ahead(7), day_ahead(8)
     job = add_notebook_job(cron, "piante", "acero", name="Concime", message="Concime",
-                           schedule=date_schedule("2027-03-10T18:30", "Europe/Rome"))
+                           schedule=date_schedule(f"{day}T18:30", "Europe/Rome"))
     at = job.schedule.at_ms
     await edit.update_reminder(notebook, job.id, cron=cron, text="Concime liquido",
-                               when={"kind": "date", "date": "2027-03-10", "precision": "day"},
+                               when={"kind": "date", "date": day, "precision": "day"},
                                timezone_name="Europe/Rome")
     assert cron.get_job(job.id).schedule.at_ms == at
     assert cron.get_job(job.id).name == "Concime liquido"
     await edit.update_reminder(notebook, job.id, cron=cron,
-                               when={"kind": "date", "date": "2027-03-11", "precision": "day"},
+                               when={"kind": "date", "date": day_after, "precision": "day"},
                                timezone_name="Europe/Rome")
     moved = cron.get_job(job.id).schedule
     assert moved.at_ms != at and moved.precision == "day"
