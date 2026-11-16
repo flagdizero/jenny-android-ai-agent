@@ -30,8 +30,9 @@
   // La lingua della pagina, con la regola di `i18n.detectLocale()`: quella del
   // telefono, italiano o inglese. Non piu' `localStorage.locale`, che solo il
   // selettore tolto dall'officina scriveva (v. shared/i18n.js).
-  var nav = navigator.language || '';
-  document.documentElement.lang = nav.indexOf('it') === 0 ? 'it' : 'en';
+  var nav = (navigator.language || '').toLowerCase();
+  document.documentElement.lang = nav.indexOf('zh') === 0 ? 'zh-CN'
+    : (nav.indexOf('it') === 0 ? 'it' : 'en');
 
   // Mascotte, taglia: anti-flash come il tema. Il default CSS vale solo per
   // 'sm', quindi senza questo chi ha scelto un'altra taglia vedrebbe Jenny
