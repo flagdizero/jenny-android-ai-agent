@@ -157,6 +157,7 @@ class WebSocketChannel(OutboundSenderMixin):
         *,
         gateway: GatewayServices,
         ui_query: Any | None = None,
+        peer_link: Any | None = None,
     ):
         if isinstance(config, dict):
             config = WebSocketConfig.model_validate(config)
@@ -190,6 +191,15 @@ class WebSocketChannel(OutboundSenderMixin):
             serve=self._serve_remote, port=self.config.port, revive=revive_tailscale
         )
         self._serve_kwargs: dict[str, Any] = {}
+        # Le altre Jenny (``jenny.peers``): parlano sul secondo ascoltatore, al
+        # percorso ``/peer``. Le connessioni ammesse lì aspettano qui, con
+        # l'indirizzo da cui arrivano, fra l'handshake HTTP e il loro handler.
+        self._peer_link = peer_link
+        self._peer_conns: dict[Any, str | None] = {}
+        if peer_link is not None:
+            peer_link.self_address = self._peer_self_address
+            peer_link.on_change = self.apply_remote_access
+            self._remote.on_listening = peer_link.wake
         # Attività fine dei subagent: chi guarda cosa, e l'unico task che la
         # spinge. Il registro nasce vuoto e il task non esiste finché nessuno
         # guarda — il costo aggiunto con il pannello chiuso è zero.
@@ -432,6 +442,8 @@ class WebSocketChannel(OutboundSenderMixin):
 
         async def runner() -> None:
             server = await open_server()
+            if self._peer_link is not None:
+                self._peer_link.start()
             try:
                 await self.apply_remote_access()
                 assert self._stop_event is not None
@@ -445,6 +457,8 @@ class WebSocketChannel(OutboundSenderMixin):
                         continue
                     server = await self._rebind_listener(server, open_server)
             finally:
+                if self._peer_link is not None:
+                    await self._peer_link.stop()
                 await self._remote.stop()
                 server.close()
                 await server.wait_closed()
@@ -505,11 +519,22 @@ class WebSocketChannel(OutboundSenderMixin):
         remote = self._remote
 
         async def process_request(connection: ServerConnection, request: WsRequest) -> Any:
+            if self._is_peer_request(request):
+                ip = remote.admit_peer(connection) if self._peer_link is not None else None
+                if ip is None:
+                    return connection.respond(403, "Forbidden\n")
+                self._peer_conns[connection] = ip
+                return None
             if remote.admit(connection) is None:
                 return connection.respond(403, "Forbidden\n")
             return await self._dispatch_http(connection, request)
 
         async def handler(connection: ServerConnection) -> None:
+            if connection in self._peer_conns:
+                ip = self._peer_conns.pop(connection)
+                assert self._peer_link is not None
+                await self._peer_link.serve(connection, ip)
+                return
             remote.track(connection)
             try:
                 await self._connection_loop(connection)
@@ -527,7 +552,7 @@ class WebSocketChannel(OutboundSenderMixin):
         )
 
     async def apply_remote_access(self) -> None:
-        """Porta l'ascoltatore Tailscale allo stato di ``gateway.remoteAccess``.
+        """Porta l'ascoltatore Tailscale allo stato di ``gateway.remoteAccess`` e ``peers``.
 
         Non solleva: un config illeggibile lascia l'ascoltatore com'era, e il
         server della WebView non deve mai cadere per colpa sua.
@@ -535,10 +560,35 @@ class WebSocketChannel(OutboundSenderMixin):
         from jenny.config.loader import load_config
 
         try:
-            remote = (await asyncio.to_thread(load_config)).gateway.remote_access
-            await self._remote.apply(enabled=remote.enabled, key=remote.key)
+            config = await asyncio.to_thread(load_config)
+            remote = config.gateway.remote_access
+            await self._remote.apply(
+                enabled=remote.enabled,
+                key=remote.key,
+                peers=self._peer_link is not None and config.peers.enabled,
+            )
         except Exception:
             self.logger.opt(exception=True).warning("remote access: could not apply config")
+
+    @property
+    def peer_link(self) -> Any | None:
+        """Il collegamento con le altre Jenny (``jenny.peers``), se c'è."""
+        return self._peer_link
+
+    @staticmethod
+    def _is_peer_request(request: WsRequest) -> bool:
+        from jenny.peers.model import PEER_PATH
+
+        got, _query = _parse_request_path(request.path)
+        return got == PEER_PATH
+
+    async def _peer_self_address(self) -> tuple[str | None, str | None]:
+        """Come questa Jenny si presenta a un'altra: nome MagicDNS e ``100.x``."""
+        try:
+            status = await self._remote.status()
+        except Exception:
+            return None, None
+        return status.get("name"), status.get("address")
 
     async def _connection_loop(self, connection: Any) -> None:
         request = connection.request
@@ -967,6 +1017,9 @@ class WebSocketChannel(OutboundSenderMixin):
         if method.startswith("remote."):
             await self._handle_remote_rpc(connection, rpc_id, method, params)
             return
+        if method.startswith("peer."):
+            await self._handle_peer_rpc(connection, rpc_id, method, params)
+            return
 
         try:
             result = await ws_rpc.run_rpc(
@@ -1018,7 +1071,7 @@ class WebSocketChannel(OutboundSenderMixin):
             result = await self._remote.status()
             # La chiave serve al pannello per comporre link e QR; solo a
             # opzione accesa, quando un link ha senso.
-            result["key"] = self._remote.key if self._remote.enabled else None
+            result["key"] = self._remote.key if self._remote.webui_enabled else None
             result["here"] = self._remote.is_remote(connection)
         except CommandError as exc:
             await self._send_event(connection, "rpc_result", **ws_rpc.error_frame(rpc_id, exc))
@@ -1032,6 +1085,54 @@ class WebSocketChannel(OutboundSenderMixin):
             return
         # Dopo un `remote.rotate` chiesto da fuori questa connessione e' gia'
         # chiusa: la risposta non arriva (`_send_event` lo tollera), e va bene cosi'.
+        await self._send_event(connection, "rpc_result", **ws_rpc.result_frame(rpc_id, result))
+
+    async def _handle_peer_rpc(
+        self, connection: Any, rpc_id: str, method: str, params: dict[str, Any],
+    ) -> None:
+        """``peer.*``: le altre Jenny (``jenny.peers.rpc``).
+
+        Li serve il canale per la stessa ragione di ``remote.*``: il
+        collegamento vive sul secondo ascoltatore, che è suo. Stessa
+        autorizzazione degli altri RPC; da una finestra aperta da fuori no —
+        abbinare e scollegare si fa dal telefono.
+        """
+        from jenny.channels import ws_rpc
+        from jenny.peers import rpc as peer_rpc
+        from jenny.webui.commands import CommandError
+
+        try:
+            ws_rpc.authorize(
+                secret=self.config.token_issue_secret,
+                connection_authenticated=self._conn_authed.get(connection, False),
+            )
+            if self._peer_link is None:
+                raise CommandError("unavailable", "peers are not available")
+            if self._remote.is_remote(connection) and method != "peer.status":
+                raise CommandError("forbidden", "peers are managed from the phone")
+            remote = await self._remote.status()
+            result = await peer_rpc.handle(
+                self._peer_link,
+                method,
+                params,
+                self_address=(remote.get("name"), remote.get("address")),
+                tailscale={
+                    "state": remote.get("tailscale"),
+                    "address": remote.get("address"),
+                    "name": remote.get("name"),
+                    "listening": remote.get("listening"),
+                },
+            )
+        except CommandError as exc:
+            await self._send_event(connection, "rpc_result", **ws_rpc.error_frame(rpc_id, exc))
+            return
+        except Exception:
+            self.logger.opt(exception=True).warning("rpc {} failed", method)
+            await self._send_event(
+                connection, "rpc_result",
+                **ws_rpc.error_frame(rpc_id, CommandError("internal", "peers failed")),
+            )
+            return
         await self._send_event(connection, "rpc_result", **ws_rpc.result_frame(rpc_id, result))
 
     # -- Osservazione dell'attività di un subagent -------------------------

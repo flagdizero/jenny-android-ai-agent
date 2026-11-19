@@ -76,6 +76,14 @@ export const rpc = {
     return send(`remote.${method}`, params);
   },
 
+  /** Le altre Jenny (`peer.status`, `peer.set`, `peer.pair.start`,
+   *  `peer.pair.join`, `peer.rename`, `peer.remove`, `peer.ping`,
+   *  `peer.history`): le serve il canale, in
+   *  `jenny/channels/websocket.py::_handle_peer_rpc` (`jenny/peers/rpc.py`). */
+  peer(method, params = {}) {
+    return send(`peer.${method}`, params);
+  },
+
   /** Il cestino delle app (`apps.trash`, `apps.restore`, `apps.purge`):
    *  `jenny/webui/apps_commands.py`. */
   apps(method, params = {}) {

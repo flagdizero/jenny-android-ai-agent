@@ -99,6 +99,11 @@ class CronCapableAgent(BoundCronAgent, Protocol):
 # invece che all'utente (``agent/token_usage.py``).
 UPDATE_SESSION_KEY = "cron:update_check"
 
+# Il giro che sveglia la coda delle altre Jenny (``jenny.peers``). Un quarto
+# d'ora: l'asyncio del gateway non gira durante il Doze, il cron sì.
+PEERS_JOB_ID = "peers"
+PEERS_EVERY_MS = 15 * 60 * 1000
+
 # Una coda cortissima: il turno di annuncio è autosufficiente, e le versioni
 # annunciate in passato sono rumore che tornerebbe nel contesto a ogni release.
 _UPDATE_HISTORY_KEEP = 4
@@ -261,8 +266,12 @@ class CronDispatcher:
         # Instradati per id prima del controllo sull'agente, perché un giro di
         # un'estensione può non aver bisogno del modello.
         extension_jobs: dict[str, Callable[[], Awaitable[str | None]]] | None = None,
+        # La coda delle altre Jenny (``jenny.peers``): il giro ``peers`` la
+        # sveglia e basta. Niente modello, quindi instradato prima dell'agente.
+        wake_peers: Callable[[], None] | None = None,
     ) -> None:
         self._get_agent = get_agent
+        self._wake_peers = wake_peers
         self._extension_jobs = dict(extension_jobs or {})
         self._config = config
         self._cron = cron
@@ -312,6 +321,12 @@ class CronDispatcher:
         """
         if job.payload.kind == "system_event" and job.id in self._extension_jobs:
             return await self._extension_jobs[job.id]()
+        if job.payload.kind == "system_event" and job.id == PEERS_JOB_ID:
+            # Il cancello «acceso o spento» è nella coda stessa: a collegamento
+            # spento ``PeerLink`` non chiama nessuno.
+            if self._wake_peers is not None:
+                self._wake_peers()
+            return None
 
         agent = self._get_agent()
         if not agent:

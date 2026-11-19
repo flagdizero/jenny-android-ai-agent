@@ -76,6 +76,7 @@ import { HomeStaged } from './home-staged.js';
 import { HomePlan } from './home-plan.js';
 import { sessionManager } from './shared/session-manager.js';
 import { chatIdOf, wsManager } from './shared/ws-manager.js';
+import { stashPairLink, watchPairLinks } from './shared/peer-link.js';
 import './shared/theme.js';
 
 /* Quanto aspettare prima di dire che il filo e' interrotto. Il socket si riapre
@@ -554,6 +555,14 @@ class HomeApp {
        come ogni `<dialog>` aperto. */
     mountExtensions('home', {
       homeBackup: this.backupRoom,
+    });
+
+    /* Un QR d'abbinamento di un'altra Jenny, inquadrato con la fotocamera:
+       Android lo passa qui (`shared/peer-link.js`), e il modulo per collegarla
+       sta in officina. Il link viaggia in `sessionStorage`, non nell'URL. */
+    watchPairLinks((link) => {
+      stashPairLink(link);
+      api.navigate('/html-mobile/workshop.html?mode=hands');
     });
 
     // La barra di selezione che riappariva al rientro: v. `releaseSelectionOnBlur`.

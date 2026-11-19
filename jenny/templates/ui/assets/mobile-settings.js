@@ -8,6 +8,8 @@ import { i18n, tr } from './shared/i18n.js';
 import { confirmDialog, detailDialog, formDialog } from './shared/dialog.js';
 import { TelegramPairingWidget, telegramSummary } from './shared/telegram-pairing.js';
 import { RemoteAccessPanel, remoteSummary } from './mobile-remote-access.js';
+import { PeersPanel, peersSummary } from './mobile-peers.js';
+import { takeNativePairLink, takeStashedPairLink, watchPairLinks } from './shared/peer-link.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { botName } from './shared/bot-name.js';
 import { DEFAULT_API_BASE, NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
@@ -92,7 +94,7 @@ export const DRAWERS = {
     sections: ['whoThinks', 'parameters', 'battery', 'system'],
   },
   hands: {
-    sections: ['webSearch', 'position', 'ssh', 'telegram', 'remote', 'skill', 'scheduling'],
+    sections: ['webSearch', 'position', 'ssh', 'telegram', 'remote', 'peers', 'skill', 'scheduling'],
   },
   /* In Memoria «file» e' l'**ultima**, e non e' un dettaglio d'ordine: da
      quando quella scheda contiene l'esploratore vero la sua altezza dipende da
@@ -392,6 +394,7 @@ export class SettingsController {
       ssh: () => this._group('ssh', i18n.t('settings.ssh.title'), this._renderSsh()),
       telegram: () => this._group('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
       remote: () => this._group('remote', i18n.t('settings.remote.title'), this._renderRemote()),
+      peers: () => this._group('peers', i18n.t('settings.peers.title'), this._renderPeers()),
       skill: () => this._group('skill', i18n.t('workshop.groups.skill'), this._renderSkill()),
       scheduling: () => this._group('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
       // Memoria
@@ -859,6 +862,60 @@ export class SettingsController {
   _writeRemoteSummary(status) {
     const el = this.contentEl?.querySelector('#summary-remote');
     if (el) el.textContent = status ? remoteSummary(status) : '—';
+  }
+
+  // ── Altre Jenny ────────────────────────────────────────────────────
+
+  /** Come «Da altri dispositivi»: in cassetto una riga («Lavoro collegata»),
+   *  il pannello dietro il tocco (`mobile-peers.js`). */
+  _renderPeers() {
+    return this._summary('peers', i18n.t('settings.peers.rowName'), i18n.t('settings.loading'));
+  }
+
+  _openPeers(joinWith = null) {
+    const body = document.getElementById('drawer-peers-body');
+    if (!body) return;
+    this._peersPanel?.destroy();
+    this._peersPanel = new PeersPanel(body, {
+      onStatus: (status) => this._writePeersSummary(status),
+      joinWith,
+    });
+    this._peersPanel.refresh();
+  }
+
+  async _loadPeersSummary() {
+    if (!this.contentEl?.querySelector('#summary-peers')) return;
+    const gen = this._gen;
+    let status = null;
+    try {
+      status = await rpc.peer('status');
+    } catch {
+      status = null;
+    }
+    if (this._stale(gen)) return;
+    this._writePeersSummary(status);
+  }
+
+  _writePeersSummary(status) {
+    const el = this.contentEl?.querySelector('#summary-peers');
+    if (el) el.textContent = status ? peersSummary(status) : '—';
+  }
+
+  /** Il link d'abbinamento del QR: quello portato dalla casa, quello che
+   *  Android tiene da parte, e quelli che arrivano con l'officina aperta. */
+  _watchPairLinks() {
+    const open = (link) => {
+      if (!link) return;
+      window.mobileApp?.drawer?.open('peers');
+      this._openPeers(link);
+    };
+    if (!this._pairLinksWatched) {
+      this._pairLinksWatched = true;
+      open(takeStashedPairLink());
+      watchPairLinks(open);
+    } else {
+      takeNativePairLink().then(open);
+    }
   }
 
   // ── Models & Providers ─────────────────────────────────────────────
@@ -2317,6 +2374,7 @@ export class SettingsController {
       history: this._openHistory,
       telegram: this._openTelegram,
       remote: this._openRemote,
+      peers: this._openPeers,
       skill: this._openSkill,
       caps: this._openCaps,
     };
@@ -3036,6 +3094,11 @@ export class SettingsController {
 
     // Da altri dispositivi: stessa forma di Telegram.
     this._loadRemoteSummary();
+
+    // Le altre Jenny: stessa forma. Un link d'abbinamento arrivato dal QR
+    // (dalla casa, o adesso da Android) apre il pannello col modulo compilato.
+    this._loadPeersSummary();
+    this._watchPairLinks();
 
     // Skill: stessa forma: la riga si riempie da sé, il pannello all'apertura.
     this._loadSkillsSummary();

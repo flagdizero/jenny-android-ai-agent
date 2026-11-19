@@ -131,6 +131,20 @@
         <div class="drawer-body"><div id="drawer-remote-body"></div></div>
       </div>
 
+      <!-- DRAWER: le altre Jenny dell'utente. Interruttore, QR e codice per
+           abbinarne una, le Jenny collegate: il pannello lo disegna
+           `mobile-peers.js`. -->
+      <div class="drawer" id="drawer-peers">
+        <div class="drawer-header">
+          <div class="drawer-handle"></div>
+          <div class="drawer-header-row">
+            <span class="drawer-title" data-i18n="settings.peers.title">Altre Jenny</span>
+            <button class="drawer-close" data-close aria-label="Chiudi" data-i18n-aria="common.close"><i class="ti ti-x" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div class="drawer-body"><div id="drawer-peers-body"></div></div>
+      </div>
+
       <!-- DRAWER: un host SSH ─ tutto quel che si fa **a** un host.
            Genera/rigenera la chiave, la pubblica da copiare, verifica
            l'impronta, modifica, elimina. In cassetto resta la riga compatta,

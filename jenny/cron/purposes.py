@@ -37,6 +37,10 @@ SYSTEM_JOB_PURPOSES: dict[str, str] = {
     "update_check": (
         "Update check: looks for a newer Jenny app release and tells you once per version."
     ),
+    "peers": (
+        "Other Jennys: sends again the messages still waiting for your other Jenny "
+        "to be reachable."
+    ),
 }
 
 # Cosa si dice di un job di sistema che la tabella non conosce. Capita per un job

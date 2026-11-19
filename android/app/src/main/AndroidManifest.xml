@@ -182,6 +182,15 @@
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Il QR d'abbinamento fra due Jenny (jenny://pair?...): lo legge la
+                 fotocamera di sistema e Android lo apre qui. Apre solo il modulo
+                 già compilato in officina; abbinare resta un tocco dell'utente. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="jenny" android:host="pair" />
+            </intent-filter>
         </activity>
 
         <service

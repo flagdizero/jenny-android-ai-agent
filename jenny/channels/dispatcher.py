@@ -129,8 +129,13 @@ class WebSocketDispatcher:
             on_jobs_changed=self._on_jobs_changed,
             on_telegram_changed=self._schedule_telegram_reload,
         )
+        from jenny.peers.link import PeerLink
+
+        # Le altre Jenny dell'utente: il collegamento nasce sempre, acceso o no
+        # lo dice ``peers.enabled`` (letto a ogni uso, non qui).
+        peer_link = PeerLink(workspace, port=parsed.port)
         self.channels[WEBSOCKET_CHANNEL] = WebSocketChannel(
-            section, self.bus, gateway=gateway, ui_query=self._ui_query
+            section, self.bus, gateway=gateway, ui_query=self._ui_query, peer_link=peer_link
         )
         logger.info("WebSocket channel enabled")
 
