@@ -49,6 +49,10 @@ _REFUSALS = {
 class PeerAskTool(Tool):
     """Fa una domanda a un'altra Jenny dell'utente (sola lettura, risposta in arrivo)."""
 
+    # Anche ``orchestrator``: è la modalità di default della chat personale, e un
+    # tool che dichiara solo ``core`` lì il loader non lo carica affatto.
+    _scopes = {"core", "orchestrator"}
+
     def __init__(self) -> None:
         self._questions: Any | None = None
 
@@ -101,6 +105,10 @@ class PeerAskTool(Tool):
 )
 class PeerAttachTool(Tool):
     """Allega un file alla risposta per l'altra Jenny (solo nel turno di risposta)."""
+
+    # Il turno di risposta usa il registro dell'agente principale, che di default
+    # è quello dell'orchestratore: senza questo scope il tool non c'è.
+    _scopes = {"core", "orchestrator"}
 
     def __init__(self, workspace: Path) -> None:
         self._workspace = Path(workspace)
