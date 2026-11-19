@@ -550,7 +550,10 @@
         "disabled": "Il collegamento con altre Jenny è spento",
         "protocol": "L'altra Jenny ha risposto in un modo che non capisco: aggiornale tutte e due",
         "generic": "Non è riuscito: {error}",
-        "which_peer": "Scegli quale Jenny"
+        "which_peer": "Scegli quale Jenny",
+        "still_working": "Ci sono ancora aiutanti al lavoro: riprova quando hanno finito.",
+        "nothing_to_undo": "Non c'è niente da annullare per questa richiesta.",
+        "bad_level": "Livello non valido."
       },
       "canAsk": "Può farmi domande",
       "canAskHint": "Guardo le mie cose e rispondo. Non scrivo, non mando, non programmo niente.",
@@ -568,8 +571,39 @@
         "paired": "Collegate",
         "refused": "Rifiutato: {kind}",
         "removed": "Scollegate",
-        "removedByOther": "Scollegata dall'altra"
-      }
+        "removedByOther": "Scollegata dall'altra",
+        "confirmYes": "Hai consentito: {target}",
+        "confirmNo": "Non consentito: {target}",
+        "undo": "Annullata una richiesta. File: {files} · promemoria: {jobs}",
+        "undoAsked": "Chiesto di annullare una richiesta",
+        "undone": "Esito di un annulla ricevuto"
+      },
+      "act": {
+        "label": "Può chiedermi di fare cose",
+        "off": "No",
+        "confirm": "Sì, ma chiedimi prima di mandare fuori",
+        "free": "Sì, tutto",
+        "hint": {
+          "off": "Le sue richieste di fare vengono rifiutate. Le domande restano come sopra.",
+          "confirm": "Fa promemoria, note, file e lavoro con gli aiutanti su questo telefono, e ogni cosa si annulla. Prima di aprire una pagina o scaricare qualcosa ti chiede con una notifica.",
+          "free": "Fa tutto quello che chiede, anche aprire pagine e usare la rete, senza chiederti. Resta l'Annulla per quello che cambia su questo telefono."
+        }
+      },
+      "confirmYes": "Consenti",
+      "confirmNo": "No",
+      "actsTitle": "Richieste di fare",
+      "actState": {
+        "answering": "In corso",
+        "working": "Ci sta lavorando",
+        "answered": "Fatto · da annullare: {count}",
+        "refused": "Rifiutata",
+        "too_many": "Troppe richieste: rifiutata",
+        "unavailable": "Nessun modello per farla",
+        "failed": "Non riuscita",
+        "undone": "Annullata"
+      },
+      "undo": "Annulla",
+      "undone": "Annullata. File rimessi com'erano: {files} · promemoria tolti: {jobs}"
     },
     "whoThinksHint": "Ogni marca tiene i suoi modelli: un tocco su un modello lo fa rispondere.",
     "answersWith": "risponde con {model}",
@@ -1645,8 +1679,22 @@
         "too_many": "{name} ha ricevuto troppe domande nell'ultima ora: riprova più tardi.",
         "unavailable": "{name} non ha ancora un modello con cui rispondere.",
         "failed": "{name} non è riuscita a rispondere.",
-        "expired": "{name} è rimasta irraggiungibile: la domanda è scaduta senza risposta."
-      }
+        "expired": "{name} è rimasta irraggiungibile: la domanda è scaduta senza risposta.",
+        "undone": "{name} ha annullato. File rimessi com'erano: {files} · promemoria tolti: {jobs}.",
+        "undo_refused": "{name} non accetta più richieste da questo telefono: non ha annullato niente.",
+        "undo_still_working": "{name} ci sta ancora lavorando: chiedi di annullare quando ha finito.",
+        "undo_not_found": "{name} non ha trovato niente da annullare.",
+        "undo_failed": "{name} non è riuscita ad annullare.",
+        "refused_act": "{name} non accetta richieste di fare da questo telefono. Si accende sul telefono di {name}: Officina → Altre Jenny."
+      },
+      "didAt": "{name} ha fatto · {time}",
+      "workingAt": "{name} ci sta lavorando · {time}",
+      "denied": "non consentito",
+      "notUndoable": "non si annulla",
+      "askUndo": "Chiedi di annullare",
+      "undoAsked": "Chiesto a {name} di annullare",
+      "undoFailed": "Non sono riuscita a chiederlo",
+      "kept": "Lasciati com'erano perché cambiati nel frattempo: {count}."
     }
   },
   "workshop": {

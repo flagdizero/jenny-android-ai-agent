@@ -86,7 +86,8 @@ SCHEMA = Schema(
         # Le domande fra Jenny (``jenny.peers.questions``), nei due versi:
         # ``out`` quelle che questa ha fatto, ``in`` quelle che le hanno fatto.
         # ``state``: ``queued`` (in coda), ``answering`` (si sta rispondendo),
-        # ``answered``, ``refused``, ``failed``, ``expired``.
+        # ``answered``, ``refused``, ``failed``, ``expired``; per una richiesta
+        # di fare (passo dopo) anche ``working`` e ``undone``.
         """
         CREATE TABLE peer_questions (
           qid TEXT NOT NULL,
@@ -102,6 +103,18 @@ SCHEMA = Schema(
         );
         CREATE INDEX peer_questions_open ON peer_questions(direction, state, asked_ms);
         """,
+        # Le richieste di fare (``jenny.peers.acting``): ``mode`` è ``read`` o
+        # ``act``; per una richiesta di fare ``state`` può essere anche
+        # ``working`` (ci lavorano ancora degli aiutanti) e ``undone``.
+        # ``done``: l'elenco JSON di cosa ha toccato, scritto dal codice;
+        # ``journals``: i registri dell'annulla che la richiesta ha riempito.
+        # Un passo a sé, non colonne aggiunte al precedente: un telefono che ha
+        # già il passo delle domande non lo rifarebbe (visto su jenny_s22).
+        """
+        ALTER TABLE peer_questions ADD COLUMN mode TEXT NOT NULL DEFAULT 'read';
+        ALTER TABLE peer_questions ADD COLUMN done TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE peer_questions ADD COLUMN journals TEXT NOT NULL DEFAULT '[]';
+        """,
     ),
     shards={"peer_log": "at_ms / 86400000"},
 )
@@ -109,6 +122,21 @@ SCHEMA = Schema(
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _json_list(raw: Any) -> list[Any]:
+    try:
+        value = json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _question_row(row: Any) -> dict[str, Any]:
+    out = dict(row)
+    out["done"] = [d for d in _json_list(out.get("done")) if isinstance(d, dict)]
+    out["journals"] = [k for k in _json_list(out.get("journals")) if isinstance(k, str)]
+    return out
 
 
 def new_id() -> str:
@@ -324,15 +352,15 @@ class PeerStore:
 
     def add_question(
         self, peer: str, direction: str, qid: str, text: str, *, state: str,
-        outbox_id: str = "", at_ms: int | None = None,
+        outbox_id: str = "", at_ms: int | None = None, mode: str = "read",
     ) -> bool:
         """Una domanda nuova; falso se c'era già (un doppione dalla coda)."""
         with self._db().write() as conn:
             cur = conn.execute(
                 "INSERT OR IGNORE INTO peer_questions(qid, peer, direction, text, asked_ms, "
-                "state, outbox_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "state, outbox_id, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (qid, peer, direction, text, now_ms() if at_ms is None else at_ms, state,
-                 outbox_id),
+                 outbox_id, mode),
             )
             return cur.rowcount == 1
 
@@ -364,11 +392,59 @@ class PeerStore:
 
     def question(self, peer: str, direction: str, qid: str) -> dict[str, Any] | None:
         rows = self._db().read(
-            "SELECT qid, peer, direction, text, asked_ms, state, outbox_id, answered_ms, answer "
-            "FROM peer_questions WHERE peer = ? AND direction = ? AND qid = ?",
+            "SELECT qid, peer, direction, text, asked_ms, state, outbox_id, answered_ms, answer, "
+            "mode, done, journals FROM peer_questions WHERE peer = ? AND direction = ? "
+            "AND qid = ?",
             (peer, direction, qid),
         )
-        return dict(rows[0]) if rows else None
+        return _question_row(rows[0]) if rows else None
+
+    def set_done(self, peer: str, direction: str, qid: str, done: list[dict[str, Any]]) -> None:
+        """L'elenco di cosa ha toccato una richiesta di fare (lo scrive il codice)."""
+        with self._db().write() as conn:
+            conn.execute(
+                "UPDATE peer_questions SET done = ? WHERE peer = ? AND direction = ? AND qid = ?",
+                (json.dumps(done, ensure_ascii=False), peer, direction, qid),
+            )
+
+    def add_journal(self, peer: str, direction: str, qid: str, key: str) -> None:
+        """Un registro dell'annulla in più per la richiesta *qid* (quello di un aiutante)."""
+        with self._db().write() as conn:
+            rows = conn.execute(
+                "SELECT journals FROM peer_questions WHERE peer = ? AND direction = ? "
+                "AND qid = ?",
+                (peer, direction, qid),
+            ).fetchall()
+            if not rows:
+                return
+            keys = _json_list(rows[0][0])
+            if key in keys:
+                return
+            keys.append(key)
+            conn.execute(
+                "UPDATE peer_questions SET journals = ? WHERE peer = ? AND direction = ? "
+                "AND qid = ?",
+                (json.dumps(keys), peer, direction, qid),
+            )
+
+    def find_question(self, direction: str, qid: str) -> dict[str, Any] | None:
+        """La domanda *qid* in quel verso, di qualunque Jenny (gli id sono casuali)."""
+        rows = self._db().read(
+            "SELECT qid, peer, direction, text, asked_ms, state, outbox_id, answered_ms, answer, "
+            "mode, done, journals FROM peer_questions WHERE direction = ? AND qid = ? LIMIT 1",
+            (direction, qid),
+        )
+        return _question_row(rows[0]) if rows else None
+
+    def recent_acts(self, peer: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Le ultime richieste di fare arrivate da *peer*, dalla più nuova."""
+        rows = self._db().read(
+            "SELECT qid, peer, direction, text, asked_ms, state, outbox_id, answered_ms, answer, "
+            "mode, done, journals FROM peer_questions WHERE peer = ? AND direction = 'in' "
+            "AND mode = 'act' ORDER BY asked_ms DESC LIMIT ?",
+            (peer, limit),
+        )
+        return [_question_row(r) for r in rows]
 
     def open_questions_before(self, cutoff_ms: int) -> list[dict[str, Any]]:
         """Le domande fatte da qui, ancora senza risposta, più vecchie di *cutoff_ms*."""

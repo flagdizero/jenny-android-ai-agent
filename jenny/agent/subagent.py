@@ -836,6 +836,7 @@ class SubagentManager(
         # Chi vuole sapere in quale registro dell'annulla lavora un aiutante di un
         # passo (il driver dei piani). V. :meth:`set_journal_listener`.
         self._journal_listener: Callable[[str, str, str], None] | None = None
+        self._peer_act_listener: Callable[[dict[str, str], str, str], None] | None = None
         # Orologio del freno dei checkpoint; iniettabile dai test.
         self._clock: Callable[[], float] = time.monotonic
         # I registri delle scritture per l'annulla (``agent.write_journal``),
@@ -893,6 +894,17 @@ class SubagentManager(
         Come per :meth:`set_limit_provider`, il manager non sa cosa sia un piano.
         """
         self._stall_listener = fn
+
+    def set_peer_act_listener(
+        self, fn: Callable[[dict[str, str], str, str], None] | None
+    ) -> None:
+        """Inietta chi ascolta gli aiutanti delle richieste di un'altra Jenny.
+
+        ``fn(peer_act, journal_key, lineage)`` a ogni tentativo che parte per una
+        richiesta: il suo registro entra nell'annulla della richiesta, e la
+        richiesta sa di avere ancora un aiutante al lavoro (``PeerActs``).
+        """
+        self._peer_act_listener = fn
 
     def set_journal_listener(self, fn: Callable[[str, str, str], None] | None) -> None:
         """Inietta chi ascolta i registri degli aiutanti dei piani.
@@ -984,6 +996,13 @@ class SubagentManager(
             taint_seed=current_turn_taint(),
             steps=steps if steps and steps > 0 else None,
         )
+        # La richiesta di un'altra Jenny per cui lavora il turno che lancia: il
+        # cancello delle uscite e l'annulla valgono anche per l'aiutante.
+        from jenny.peers.gate import current_act
+
+        peer_act = current_act()
+        if peer_act is not None:
+            spec = replace(spec, peer_act=peer_act)
         plan_id, plan_step = _plan_metadata()
         if plan_id or plan_step:
             spec = replace(spec, plan_id=plan_id, plan_step=plan_step)
@@ -1365,11 +1384,21 @@ class SubagentManager(
                         logger.opt(exception=True).warning(
                             "Subagent [{}]: plan {} not told about its journal",
                             task_id, spec.plan_id)
+                if spec.peer_act and self._peer_act_listener is not None:
+                    try:
+                        self._peer_act_listener(
+                            spec.peer_act, journal.key, status.lineage_id or task_id)
+                    except Exception:  # noqa: BLE001 — il lavoro parte comunque
+                        logger.opt(exception=True).warning(
+                            "Subagent [{}]: peer request not told about its journal", task_id)
             self._run_policies[task_id] = policy
             initial.extend(messages)
             run_policy.append(policy)
+            from jenny.peers import gate as peer_gate
+
             with (enter_workspace_scope(workspace_scope), enter_subagent_policy(policy),
-                  bind_journal(journal, step=spec.plan_step)):
+                  bind_journal(journal, step=spec.plan_step),
+                  peer_gate.entered(spec.peer_act)):
                 result = await self.runner.run(AgentRunSpec(
                     initial_messages=messages,
                     tools=tools,

@@ -635,6 +635,16 @@ class CronTool(Tool, ContextAware):
         session_key = self._session_key.get()
         if not session_key:
             return "Error: scheduled cron jobs must be created from a chat session"
+        # Un promemoria chiesto da un'altra Jenny (``jenny.peers.acting``) suona
+        # nella chat personale di questo telefono, non nella sessione interna
+        # della richiesta (che è muta). I metadati d'origine portano ancora la
+        # richiesta: quando scatta, vale il suo cancello, e l'annulla lo toglie.
+        from jenny.peers.gate import act_of
+
+        if act_of(self._origin_metadata.get()) is not None:
+            from jenny.session.keys import UNIFIED_SESSION_KEY
+
+            session_key = UNIFIED_SESSION_KEY
         origin_channel = self._origin_channel.get()
         origin_chat_id = self._origin_chat_id.get()
         if not origin_channel or not origin_chat_id:

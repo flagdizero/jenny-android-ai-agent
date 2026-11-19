@@ -820,6 +820,11 @@ class PeerConfig(Base):
     # ``send_files``: le risposte a quella Jenny possono portare file. Spento
     # di default: è il punto in cui un documento lascia questo telefono.
     send_files: bool = False
+    # ``act``: le richieste di *fare* di quella Jenny (``jenny.peers.acting``).
+    # ``off`` le rifiuta; ``confirm`` le fa, ma ciò che manderebbe fuori dal
+    # telefono (una pagina da aprire, la rete dal codice) aspetta un «Consenti»
+    # dell'utente di qui; ``free`` fa tutto senza chiedere. Spento di default.
+    act: Literal["off", "confirm", "free"] = "off"
 
 
 class PeerPermissionsUpdate(Base):
@@ -827,6 +832,7 @@ class PeerPermissionsUpdate(Base):
 
     can_ask: bool | None = None
     send_files: bool | None = None
+    act: Literal["off", "confirm", "free"] | None = None
 
 
 class PeersConfig(Base):

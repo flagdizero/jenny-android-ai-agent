@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Log
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -58,6 +59,84 @@ class NotifierBridge(context: Context) {
          *  degli alert: non è un avviso di Jenny, è un guasto da riparare, e
          *  sostituirlo con l'avviso successivo lo farebbe sparire non letto. */
         internal const val FAILED_TAG = "reply-failed"
+
+        /** ID delle notifiche dell'altra Jenny (la conferma «Consenti»/«No» e il
+         *  «fatto» con «Annulla»). Sullo stesso canale degli alert ma con un ID
+         *  suo, ed è questo a tenerle fuori da [clearAlerts] e da
+         *  [refreshAlertTapIntents]: non sono messaggi che la chat a schermo
+         *  rende letti, sono una decisione da prendere o un'azione da poter
+         *  disfare, e cancellarle butterebbe i loro pulsanti. Non c'è nemmeno
+         *  la Rispondi: una frase scritta lì sotto non risponderebbe a niente. */
+        internal const val PEER_NOTICE_ID = 5
+
+        /** I due tipi di notifica dell'altra Jenny. Valori di protocollo,
+         *  gemelli di `PEER_NOTICE_KINDS` in `jenny/runtime/notifier.py`. */
+        internal const val PEER_KIND_CONFIRM = "confirm"
+        internal const val PEER_KIND_DONE = "done"
+
+        /** Il tag di una notifica dell'altra Jenny: il tipo e l'identificativo
+         *  (`cid` di una conferma, `qid` di una richiesta). Lo stesso tag
+         *  sostituisce, quindi ripostare lo stesso `qid` aggiorna e non impila. */
+        internal fun peerTag(kind: String, ident: String): String = "peer-$kind:$ident"
+
+        /** Toglie la notifica dell'altra Jenny di *kind* e *ident*. La chiamano il
+         *  bridge (da Python, a decisione presa o scaduta) e `PeerActionReceiver`
+         *  al tocco: i pulsanti d'azione non si auto-cancellano. */
+        internal fun cancelPeerNotice(context: Context, kind: String, ident: String) {
+            context.applicationContext.getSystemService(NotificationManager::class.java)
+                ?.cancel(peerTag(kind, ident), PEER_NOTICE_ID)
+        }
+
+        /**
+         * Il `PendingIntent` di un pulsante dell'altra Jenny.
+         *
+         * Immutabile, come il "Rimanda" di [postReplyFailure] e per la stessa
+         * ragione: azione e identificativo li mettiamo noi, e nessuno deve
+         * poterli cambiare. Non lo è invece **chi può premerlo**: un'app con
+         * l'accesso alle notifiche vede le azioni e può mandarle, «Consenti»
+         * compreso, e il suo `send()` non passa dallo sblocco che
+         * `setAuthenticationRequired` chiede al dito. Il confine vero è quindi
+         * l'accesso alle notifiche, come per `ReplyReceiver` (v. il suo KDoc).
+         *
+         * L'identità di un `PendingIntent` sono (requestCode, action, data,
+         * componente), **non** gli extra: due pulsanti con lo stesso codice si
+         * fonderebbero in uno solo, l'ultimo scritto. Per questo azione e
+         * identificativo stanno anche nella `data` dell'intent: con quella,
+         * nemmeno due hash che collidono possono scambiarsi il `cid`.
+         */
+        private fun peerActionIntent(context: Context, action: String, ident: String): PendingIntent {
+            val intent = Intent(context, PeerActionReceiver::class.java)
+                .setAction(action)
+                .setData(Uri.parse("jenny-peer://$action/$ident"))
+                .putExtra(PeerActionReceiver.EXTRA_ACTION, action)
+                .putExtra(PeerActionReceiver.EXTRA_IDENT, ident)
+            return PendingIntent.getBroadcast(
+                context,
+                "$action:$ident".hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        /** Un pulsante dell'altra Jenny. *needsUnlock* per «Consenti» e
+         *  «Annulla», che fanno qualcosa: la tendina la legge chiunque prenda il
+         *  telefono dal tavolo. «No» non lo chiede — rifiutare non fa uscire
+         *  niente. */
+        private fun peerAction(
+            context: Context,
+            label: Int,
+            action: String,
+            ident: String,
+            needsUnlock: Boolean,
+        ): NotificationCompat.Action =
+            NotificationCompat.Action.Builder(
+                R.drawable.ic_stat_jenny,
+                context.getString(label),
+                peerActionIntent(context, action, ident)
+            )
+                .setShowsUserInterface(false)
+                .setAuthenticationRequired(needsUnlock)
+                .build()
 
         /** Request code del PendingIntent di risposta.
          *
@@ -313,7 +392,10 @@ class NotifierBridge(context: Context) {
             try {
                 val manager = context.getSystemService(NotificationManager::class.java) ?: return
                 val tags = manager.activeNotifications
-                    .filter { it.notification.channelId == CHANNEL_ID && it.tag != FAILED_TAG }
+                    .filter {
+                        it.notification.channelId == CHANNEL_ID && it.id == ALERT_ID &&
+                            it.tag != FAILED_TAG
+                    }
                     .mapNotNull { it.tag }
                     .distinct()
                 tags.forEach { alertTapIntent(context, it) }
@@ -485,7 +567,10 @@ class NotifierBridge(context: Context) {
                 // rende obsoleta: cancellarla butterebbe l'unica copia di quelle
                 // parole. La toglie chi la usa (`ReplyReceiver`, sul "Rimanda")
                 // o il dito dell'utente.
-                it.notification.channelId == CHANNEL_ID && it.tag != FAILED_TAG
+                it.notification.channelId == CHANNEL_ID && it.tag != FAILED_TAG &&
+                // Le notifiche dell'altra Jenny restano anche loro, con un ID
+                // proprio: v. `PEER_NOTICE_ID`.
+                it.id == ALERT_ID
             }
             pending.forEach { manager.cancel(it.tag, it.id) }
             // Il *trigger* è il motivo per cui questa riga esiste. Postare logga
@@ -544,6 +629,106 @@ class NotifierBridge(context: Context) {
             return false
         }
         return post(title, body, tag)
+    }
+
+    /**
+     * Chiede all'utente se una richiesta dell'altra Jenny può far uscire
+     * qualcosa dal telefono: «No» e «Consenti» (in quest'ordine, il sì a destra
+     * come nei dialoghi di Android). Il tocco torna a Python da
+     * `PeerActionReceiver` (`allow`/`deny` con *cid*).
+     *
+     * Nessun gate di visibilità, a differenza di [postAlert]: la domanda non è
+     * in chat, quindi la chat a schermo non la mostra già.
+     */
+    fun postPeerConfirm(cid: String, title: String, body: String): Boolean =
+        postPeer(
+            PEER_KIND_CONFIRM, cid, title, body,
+            listOf(
+                peerAction(appContext, R.string.peer_deny_label,
+                    PeerActionReceiver.ACTION_DENY, cid, needsUnlock = false),
+                peerAction(appContext, R.string.peer_allow_label,
+                    PeerActionReceiver.ACTION_ALLOW, cid, needsUnlock = true),
+            ),
+        )
+
+    /** Dice che una richiesta dell'altra Jenny è fatta, con «Annulla». Lo
+     *  stesso *qid* sostituisce la notifica. Il tocco torna a Python da
+     *  `PeerActionReceiver` (`undo` con *qid*). */
+    fun postPeerDone(qid: String, title: String, body: String): Boolean =
+        postPeer(
+            PEER_KIND_DONE, qid, title, body,
+            listOf(
+                peerAction(appContext, R.string.peer_undo_label,
+                    PeerActionReceiver.ACTION_UNDO, qid, needsUnlock = true),
+            ),
+        )
+
+    /** Toglie la notifica di [postPeerConfirm] (*kind* `confirm`) o di
+     *  [postPeerDone] (`done`). `false` su un tipo o un identificativo
+     *  malformato. */
+    fun clearPeerNotice(kind: String, ident: String): Boolean {
+        if ((kind != PEER_KIND_CONFIRM && kind != PEER_KIND_DONE) ||
+            !PeerActionReceiver.isValidIdent(ident)
+        ) {
+            Log.w(TAG, "Peer notice not cleared: bad kind or ident")
+            return false
+        }
+        return try {
+            cancelPeerNotice(appContext, kind, ident)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not clear the peer notice", e)
+            false
+        }
+    }
+
+    private fun postPeer(
+        kind: String,
+        ident: String,
+        title: String,
+        body: String,
+        actions: List<NotificationCompat.Action>,
+    ): Boolean {
+        if (!PeerActionReceiver.isValidIdent(ident)) {
+            Log.w(TAG, "Peer notice not posted: malformed ident")
+            return false
+        }
+        if (!JennyChannels.canPostNotifications(appContext)) {
+            Log.w(TAG, "Peer notice not posted: POST_NOTIFICATIONS is denied")
+            return false
+        }
+        return try {
+            val tag = peerTag(kind, ident)
+            val builder = NotificationCompat.Builder(appContext, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_jenny)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                // Il tocco sul corpo apre la chat, ma la notifica resta: i suoi
+                // pulsanti sono l'unico posto da cui si risponde.
+                .setAutoCancel(false)
+                // Ripostare lo stesso tag (un «fatto» aggiornato) non risuona.
+                .setOnlyAlertOnce(true)
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        appContext,
+                        tag.hashCode(),
+                        MainActivity.openChatIntent(appContext, null),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                )
+            actions.forEach { builder.addAction(it) }
+            val manager = appContext.getSystemService(NotificationManager::class.java)
+                ?: return false
+            manager.notify(tag, PEER_NOTICE_ID, builder.build())
+            Log.i(TAG, "Peer notice posted (kind=$kind)")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to post the peer notice", e)
+            false
+        }
     }
 
     private fun post(title: String, body: String, tag: String): Boolean {

@@ -40,8 +40,15 @@ _REFUSALS = {
             nullable=True,
         ),
         question=StringSchema(
-            "The question, written for that Jenny: self-contained, with the names, dates "
-            "and details she needs, since she can't see this conversation."
+            "The question or request, written for that Jenny: self-contained, with the "
+            "names, dates and details she needs, since she can't see this conversation."
+        ),
+        mode=StringSchema(
+            "'read' (default): she looks and answers. 'act': she does it on her phone "
+            "(a reminder, a note, saving a file, a task for her helpers), if the user "
+            "allowed requests to act there.",
+            enum=("read", "act"),
+            nullable=True,
         ),
         required=["question"],
     )
@@ -67,32 +74,38 @@ class PeerAskTool(Tool):
     def description(self) -> str:
         return (
             "Ask the user's other Jenny (on another of their phones, e.g. the work phone) "
-            "something only she can see: her chats, notebooks, reminders and files. She "
-            "can only look and answer; she won't do things. The question is queued and "
-            "this returns at once: her answer shows up later in this chat as a separate "
-            "quoted card, by itself. Don't wait for it and never guess what she'll say."
+            "something only she can see: her chats, notebooks, reminders and files. With "
+            "mode='act' you ask her to do something on her phone instead; she may refuse "
+            "if the user hasn't allowed it there, and the user of that phone may have to "
+            "allow anything that leaves it. The request is queued and this returns at "
+            "once: her answer, with what she did, shows up later in this chat as a "
+            "separate card, by itself. Don't wait for it and never guess what she'll say."
         )
 
     @property
     def read_only(self) -> bool:
         return False
 
-    async def execute(self, peer: Any = None, question: Any = None, **kwargs: Any) -> str:
+    async def execute(
+        self, peer: Any = None, question: Any = None, mode: Any = None, **kwargs: Any
+    ) -> str:
         from jenny.peers.link import PeerError
 
         if self._questions is None:
             return _REFUSALS["no_peers"]
+        mode = "act" if mode == "act" else "read"
         try:
-            asked = await self._questions.ask(str(peer or ""), str(question or ""))
+            asked = await self._questions.ask(str(peer or ""), str(question or ""), mode)
         except PeerError as exc:
             if exc.code == "which_peer":
                 names = ", ".join(p.name for p in await self._questions.peers())
                 return f"Say which Jenny to ask: {names}."
             return _REFUSALS.get(exc.code, f"Could not ask: {exc.code}.")
         name = asked["peer"]
+        verb = "Asked" if mode == "read" else "Sent the request to"
         return (
-            f"Asked {name}. Her answer will appear in this chat as its own quoted card when "
-            f"it arrives: in seconds if {name} is reachable, otherwise when her phone is back "
+            f"{verb} {name}. Her answer will appear in this chat as its own card when it "
+            f"arrives: in seconds if {name} is reachable, otherwise when her phone is back "
             "online. Tell the user you asked; don't repeat or guess the answer."
         )
 

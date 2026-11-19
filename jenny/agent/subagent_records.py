@@ -257,6 +257,13 @@ def delete_session_records(workspace: Any, session_key: str) -> int:
 _CORRECTIVE_HEADER = "## Corrective note from the previous attempt"
 
 
+def _peer_act_from(raw: Any) -> dict[str, str] | None:
+    """La richiesta di un'altra Jenny salvata in una spec, validata."""
+    from jenny.peers.gate import PEER_ACT_META, act_of
+
+    return act_of({PEER_ACT_META: raw})
+
+
 def _coerce_str(value: Any, default: str = "") -> str:
     return value if isinstance(value, str) else default
 
@@ -328,6 +335,11 @@ class SubagentSpec:
     # I passi chiesti da chi ha lanciato (``spawn steps``); ``None`` = il default
     # del tipo. Nella spec perché un rilancio ha lo stesso budget.
     steps: int | None = None
+    # La richiesta di un'altra Jenny per cui lavora (``jenny.peers.gate``:
+    # ``{"peer", "qid"}``), ``None`` fuori da una richiesta. Nella spec perché
+    # un rilancio, una ripresa o un recupero al boot restano lavoro di quella
+    # richiesta: stesso cancello sulle uscite, stesso annulla.
+    peer_act: dict[str, str] | None = None
 
     def __post_init__(self) -> None:
         # Il tipo si valida qui, alla costruzione della spec, e non piu in la:
@@ -382,6 +394,7 @@ class SubagentSpec:
             "plan_id": self.plan_id,
             "plan_step": self.plan_step,
             "steps": self.steps,
+            "peer_act": dict(self.peer_act) if self.peer_act else None,
         }
 
     @classmethod
@@ -427,6 +440,8 @@ class SubagentSpec:
                 and raw["steps"] > 0
                 else None
             ),
+            # Dal 19/11/2026: un record precedente non la ha, e non lavora per nessuno.
+            peer_act=_peer_act_from(raw.get("peer_act")),
         )
 
 

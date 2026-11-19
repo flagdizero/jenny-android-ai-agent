@@ -56,6 +56,12 @@ HISTORY_KEEP = 6
 
 STATUSES = ("ok", "refused", "too_many", "unavailable", "failed", "expired")
 
+# ``read``: guarda e risponde (questo modulo); ``act``: fa (``jenny.peers.acting``).
+MODES = ("read", "act")
+# Le voci dell'elenco di cosa ha fatto una richiesta, come arrivano dall'altra.
+DONE_KINDS = ("file", "job", "egress")
+MAX_DONE_ITEMS = 40
+
 # Gli strumenti di un turno di risposta: solo guardare. Chi manca qui non è
 # nella lista che il modello vede, in tutte le domande di quella Jenny
 # (la lista resta la stessa da un turno all'altro: la cache del provider tiene).
@@ -98,6 +104,27 @@ def answer_tools(base: Any) -> Any:
     return ToolRegistryView(base, lambda name, _tool: name not in ANSWER_TOOLS)
 
 
+def _done_items(raw: Any) -> list[dict[str, Any]]:
+    """L'elenco di cosa ha fatto l'altra, ripulito: solo voci note, solo testo."""
+    out: list[dict[str, Any]] = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict) or item.get("kind") not in DONE_KINDS:
+            continue
+        label = item.get("label")
+        if not isinstance(label, str) or not label.strip():
+            continue
+        entry: dict[str, Any] = {
+            "kind": item["kind"], "label": " ".join(label.split())[:200],
+            "undoable": item.get("undoable") is True,
+        }
+        if isinstance(item.get("allowed"), bool):
+            entry["allowed"] = item["allowed"]
+        out.append(entry)
+        if len(out) >= MAX_DONE_ITEMS:
+            break
+    return out
+
+
 def _fence(text: str) -> str:
     """La domanda non può chiudere da sé il recinto in cui il prompt la mette."""
     return text.replace("END QUESTION", "END-QUESTION").replace("BEGIN QUESTION", "BEGIN-QUESTION")
@@ -121,6 +148,9 @@ class PeerQuestions:
         self._available = False
         self._tasks: set[asyncio.Task[Any]] = set()
         self._expire_task: asyncio.Task[None] | None = None
+        # Le richieste di fare (``jenny.peers.acting.PeerActs``), se il composition
+        # root le lega: senza, una richiesta di fare che arriva è rifiutata.
+        self.acts: Any = None
         link.register(KIND_ASK, self._on_ask)
         link.register(KIND_ANSWER, self._on_answer)
 
@@ -137,6 +167,8 @@ class PeerQuestions:
     async def refresh(self) -> None:
         cfg = await self._link._config()
         self._available = bool(cfg.enabled and cfg.peers)
+        if self.acts is not None:
+            await self.acts.refresh()
 
     def start(self) -> None:
         if self._expire_task is None or self._expire_task.done():
@@ -148,6 +180,8 @@ class PeerQuestions:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if self.acts is not None:
+            await self.acts.stop()
 
     def _spawn(self, coro: Awaitable[Any]) -> None:
         task = asyncio.ensure_future(coro)
@@ -178,19 +212,29 @@ class PeerQuestions:
             return partial[0]
         raise PeerError("which_peer" if partial else "not_found")
 
-    async def ask(self, peer_ref: str, text: str) -> dict[str, Any]:
-        """Mette in coda *text* per la Jenny *peer_ref*; non aspetta la risposta."""
+    async def ask(self, peer_ref: str, text: str, mode: str = "read") -> dict[str, Any]:
+        """Mette in coda *text* per la Jenny *peer_ref*; non aspetta la risposta.
+
+        *mode* ``act`` è una richiesta di fare: l'altra la fa se il suo utente
+        l'ha permesso, e risponde con l'elenco di cosa ha toccato.
+        """
         text = (text or "").strip()[:MAX_QUESTION_CHARS]
         if not text:
             raise PeerError("bad_question")
+        mode = mode if mode in MODES else "read"
         peer = await self.find_peer(peer_ref)
         qid = new_id()
         # Prima la riga, poi la coda: una risposta velocissima trova già la domanda.
-        await asyncio.to_thread(self.store.add_question, peer.id, "out", qid, text, state="queued")
-        outbox_id = await self._link.send(peer.id, KIND_ASK, {"qid": qid, "text": text})
+        await asyncio.to_thread(
+            self.store.add_question, peer.id, "out", qid, text, state="queued", mode=mode
+        )
+        outbox_id = await self._link.send(
+            peer.id, KIND_ASK, {"qid": qid, "text": text, "mode": mode}
+        )
         await asyncio.to_thread(self.store.set_outbox, peer.id, "out", qid, outbox_id)
         await asyncio.to_thread(
-            self.store.log, peer.id, "out", KIND_ASK, {"qid": qid, "text": text[:300]}
+            self.store.log, peer.id, "out", KIND_ASK,
+            {"qid": qid, "text": text[:300], "mode": mode},
         )
         state = await asyncio.to_thread(self.store.state, peer.id)
         return {"qid": qid, "peer": peer.name, "last_seen_ms": state["last_seen_ms"]}
@@ -204,8 +248,12 @@ class PeerQuestions:
         if question is None:
             logger.info("peers: answer to a question we don't know ({}), dropped", qid[:8])
             return
-        if question["state"] not in ("queued", "expired"):
+        act = question.get("mode") == "act"
+        open_states = ("queued", "expired", "working") if act else ("queued", "expired")
+        if question["state"] not in open_states:
             return  # già arrivata: un doppione
+        working = act and status == "ok" and body.get("working") is True
+        done = _done_items(body.get("done")) if act else []
         text = text_field(body, "text", limit=MAX_ANSWER_CHARS)
         media: list[Path] = []
         missing: list[str] = []
@@ -217,13 +265,16 @@ class PeerQuestions:
                 missing.append(str(item.get("name") or "file")[:120])
             else:
                 media.append(self._workspace / got["path"])
+        state = ("working" if working else "answered") if status == "ok" else status
         await asyncio.to_thread(
-            self.store.set_question, peer_id, "out", qid,
-            state="answered" if status == "ok" else status, answer=text,
+            self.store.set_question, peer_id, "out", qid, state=state, answer=text,
         )
+        if act:
+            await asyncio.to_thread(self.store.set_done, peer_id, "out", qid, done)
         await asyncio.to_thread(
             self.store.log, peer_id, "in", KIND_ANSWER,
-            {"qid": qid, "status": status, "files": len(media)},
+            {"qid": qid, "status": status, "files": len(media), "mode": question.get("mode"),
+             "working": working},
         )
         peer = await self._link._peer(peer_id)
         await self._deliver_card(
@@ -233,11 +284,18 @@ class PeerQuestions:
             text=text,
             media=media,
             missing=missing,
+            mode="act" if act else "read",
+            qid=qid,
+            peer_id=peer_id,
+            done=done,
+            working=working,
         )
 
     async def _deliver_card(
         self, *, name: str, question: str, status: str, text: str,
-        media: list[Path], missing: list[str],
+        media: list[Path], missing: list[str], mode: str = "read", qid: str = "",
+        peer_id: str = "", done: list[dict[str, Any]] | None = None, working: bool = False,
+        undo: dict[str, int] | None = None,
     ) -> None:
         """La risposta nella chat personale: una scheda, la stessa dal vivo e riletta."""
         from jenny.bus.events import (
@@ -251,7 +309,7 @@ class PeerQuestions:
         if self._deliver is None:
             logger.warning("peers: an answer from {} arrived with nowhere to show it", name)
             return
-        card = {
+        card: dict[str, Any] = {
             "peer": name,
             "status": status,
             "question": question[:300],
@@ -259,6 +317,17 @@ class PeerQuestions:
             "missing": missing,
             "at": now_ms(),
         }
+        if mode == "act":
+            # Una richiesta di fare: l'elenco di cosa ha toccato (dal codice
+            # dell'altra), se ci sta ancora lavorando, e chi e quale per il
+            # tasto «Chiedi di annullare».
+            card.update({
+                "mode": "act", "qid": qid, "peerId": peer_id,
+                "done": list(done or []), "working": working,
+            })
+            if undo is not None:
+                # L'esito di un «Chiedi di annullare»: quanti file e promemoria.
+                card["undo"] = {k: int(v) for k, v in undo.items()}
         # Il testo per chi non disegna la scheda (Telegram, la tendina, la
         # cronologia del modello): chi parla e cosa, senza parole di una lingua.
         if status == "ok":
@@ -280,6 +349,11 @@ class PeerQuestions:
         ))
 
     async def _expire_loop(self) -> None:
+        # Al primo giro, lo stato che il cancello delle richieste legge.
+        try:
+            await self.refresh()
+        except Exception:
+            logger.opt(exception=True).warning("peers: first refresh failed")
         while True:
             try:
                 await self.expire_due()
@@ -315,22 +389,38 @@ class PeerQuestions:
         text = text_field(body, "text", limit=MAX_QUESTION_CHARS)
         if not is_id(qid) or not text:
             raise ValueError("bad question")
+        mode = "act" if body.get("mode") == "act" else "read"
         peer = await self._link._peer(peer_id)
         if peer is None:
             return
         fresh = await asyncio.to_thread(
-            self.store.add_question, peer_id, "in", qid, text, state="answering"
+            self.store.add_question, peer_id, "in", qid, text, state="answering", mode=mode
         )
         if not fresh:
             return
         await asyncio.to_thread(
-            self.store.log, peer_id, "in", KIND_ASK, {"qid": qid, "text": text[:300]}
+            self.store.log, peer_id, "in", KIND_ASK,
+            {"qid": qid, "text": text[:300], "mode": mode},
         )
         # In disparte: il messaggio ha già il suo ``ack``, la risposta è un altro.
-        self._spawn(self._answer(peer, qid, text))
+        self._spawn(self._answer(peer, qid, text, mode))
 
-    async def _answer(self, peer: Any, qid: str, text: str) -> None:
+    async def _answer(self, peer: Any, qid: str, text: str, mode: str = "read") -> None:
         cfg = await self._link._config()
+        if mode == "act":
+            asked = await asyncio.to_thread(
+                self.store.questions_since, peer.id, "in", now_ms() - 3600 * 1000
+            )
+            if self.acts is not None:
+                await self.acts.answer(peer, qid, text, too_many=asked > cfg.max_asks_per_hour)
+                return
+            await asyncio.to_thread(
+                self.store.set_question, peer.id, "in", qid, state="refused", answer=""
+            )
+            await self._link.send(peer.id, KIND_ANSWER, {
+                "qid": qid, "status": "refused", "text": "", "files": [], "mode": "act",
+            })
+            return
         status, reply, infos = "ok", "", []
         try:
             asked_last_hour = await asyncio.to_thread(
@@ -387,6 +477,8 @@ class PeerQuestions:
             "agent/peer_request.md",
             peer_name=peer.name,
             question=_fence(text),
+            act=False,
+            confirm=False,
             allow_files=turn.allow_files,
             max_files=MAX_FILES,
         )
@@ -419,6 +511,7 @@ class PeerQuestions:
 
 __all__ = [
     "ANSWER_TOOLS",
+    "MODES",
     "KIND_ANSWER",
     "KIND_ASK",
     "PEER_TURN",

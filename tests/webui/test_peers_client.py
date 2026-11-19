@@ -115,3 +115,24 @@ def test_every_key_the_panel_uses_exists_in_both_languages() -> None:
             for part in key.split("."):
                 assert part in node, f"{lang}: settings.peers.{key} manca"
                 node = node[part]
+
+
+def test_the_act_keys_built_at_runtime_exist_in_both_languages() -> None:
+    """Le chiavi composte dal pannello (livelli, stati, errori nuovi): la regex sopra non le vede."""
+    needed = [f"act.{v}" for v in ("label", "off", "confirm", "free")]
+    needed += [f"act.hint.{v}" for v in ("off", "confirm", "free")]
+    needed += [f"actState.{s}" for s in ("answering", "working", "answered", "refused",
+                                         "too_many", "unavailable", "failed", "undone")]
+    needed += [f"errors.{e}" for e in ("still_working", "nothing_to_undo", "bad_level")]
+    needed += [f"log.{k}" for k in ("confirmYes", "confirmNo", "undo", "undoAsked", "undone")]
+    for lang in ("it", "en"):
+        data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
+        for key in needed:
+            node = data["settings"]["peers"]
+            for part in key.split("."):
+                assert part in node, f"{lang}: settings.peers.{key} manca"
+                node = node[part]
+        status = data["home"]["peer"]["status"]
+        for key in ("refused_act", "undone", "undo_refused", "undo_still_working",
+                    "undo_not_found", "undo_failed"):
+            assert key in status, f"{lang}: home.peer.status.{key} manca"

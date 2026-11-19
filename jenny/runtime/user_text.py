@@ -410,6 +410,17 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "retry.stopped": "Persistent retry stopped after {count} identical errors.",
         "retry.gave_up": "Model request failed after {attempts} attempts, giving up.",
+        # Le richieste di fare da un'altra Jenny (``jenny.peers.acting``): le
+        # notifiche su questo telefono.
+        "peer.confirm_title": "{peer} wants to {what}",
+        "peer.what_open": "open {target}",
+        "peer.what_download": "download from {target}",
+        "peer.what_browser": "use the open web page",
+        "peer.confirm_body": "Part of a request from {peer}. Allow it?",
+        "peer.done_title": "{peer} asked me something",
+        "peer.done_body": "«{text}» — done",
+        "peer.working_body": "«{text}» — still working on it",
+        "peer.undone_body": "«{text}» — undone",
     },
     "it": {
         "stop.done": "Mi sono fermata.",
@@ -804,6 +815,15 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "retry.stopped": "Smetto di riprovare: {count} errori uguali di fila.",
         "retry.gave_up": "Il modello non ha risposto dopo {attempts} tentativi: mi fermo.",
+        "peer.confirm_title": "{peer} vuole {what}",
+        "peer.what_open": "aprire {target}",
+        "peer.what_download": "scaricare da {target}",
+        "peer.what_browser": "usare la pagina web aperta",
+        "peer.confirm_body": "Fa parte di una richiesta di {peer}. Lo consenti?",
+        "peer.done_title": "{peer} mi ha chiesto una cosa",
+        "peer.done_body": "«{text}» — fatto",
+        "peer.working_body": "«{text}» — ci sto ancora lavorando",
+        "peer.undone_body": "«{text}» — annullato",
     },
 }
 

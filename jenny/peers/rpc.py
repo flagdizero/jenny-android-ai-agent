@@ -16,7 +16,12 @@ from urllib.parse import urlencode
 from jenny.webui.commands import CommandError
 
 from .link import PeerError, PeerLink
-from .model import is_id
+from .model import ACT_LEVELS, is_id
+
+# I comandi delle richieste di fare (``jenny.peers.acting``): rispondere a una
+# conferma, annullare una richiesta arrivata qui, chiedere all'altra di
+# annullarne una fatta da qui, leggere quelle arrivate.
+ACT_METHODS = frozenset({"peer.confirm", "peer.undo", "peer.undo_remote", "peer.acts"})
 
 # Il link che il QR porta: lo apre la fotocamera di sistema, e Android lo passa
 # a Jenny (``intent-filter`` per ``jenny://pair`` nel manifest). Apre solo il
@@ -26,6 +31,9 @@ PAIR_LINK_SCHEME = "jenny://pair"
 _CODE_FOR = {
     "bad_code": "bad_request",
     "bad_name": "bad_request",
+    "bad_level": "bad_request",
+    "still_working": "unavailable",
+    "nothing_to_undo": "not_found",
     "protocol": "bad_request",
     "not_found": "not_found",
     "disabled": "forbidden",
@@ -58,6 +66,32 @@ def _text(params: dict[str, Any], key: str, *, limit: int = 253) -> str:
     if not isinstance(value, str):
         raise CommandError("bad_request", f"{key} must be a string")
     return value.strip()[:limit]
+
+
+def _qid(params: dict[str, Any]) -> str:
+    qid = params.get("qid")
+    if not is_id(qid):
+        raise CommandError("bad_request", "qid must be a request id")
+    return qid  # type: ignore[return-value]
+
+
+async def _act_command(link: PeerLink, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    acts = link.acts
+    if acts is None:
+        raise CommandError("unavailable", "requests to act are not running")
+    if method == "peer.confirm":
+        cid = params.get("cid")
+        allow = params.get("allow")
+        if not is_id(cid) or not isinstance(allow, bool):
+            raise CommandError("bad_request", "cid and allow are required")
+        return {"resolved": acts.confirmations.resolve(cid, allow)}
+    if method == "peer.undo":
+        return {"undo": await acts.undo(_peer_id(params), _qid(params))}
+    if method == "peer.undo_remote":
+        await acts.request_undo(_peer_id(params), _qid(params))
+        return {"asked": True}
+    peer_id = _peer_id(params)
+    return {"acts": await acts.history(peer_id), "pending": acts.pending(peer_id)}
 
 
 async def handle(
@@ -106,13 +140,19 @@ async def handle(
         elif method == "peer.remove":
             await link.remove(_peer_id(params))
         elif method == "peer.permissions":
-            flags = {}
+            flags: dict[str, Any] = {}
             for key in ("can_ask", "send_files"):
                 if key in params:
                     if not isinstance(params[key], bool):
                         raise CommandError("bad_request", f"{key} must be a boolean")
                     flags[key] = params[key]
+            if "act" in params:
+                if params["act"] not in ACT_LEVELS:
+                    raise CommandError("bad_request", "act must be off, confirm or free")
+                flags["act"] = params["act"]
             await link.set_permissions(_peer_id(params), **flags)
+        elif method in ACT_METHODS:
+            extra.update(await _act_command(link, method, params))
         elif method == "peer.ping":
             await link.ping(_peer_id(params))
         elif method == "peer.history":

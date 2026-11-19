@@ -34,7 +34,7 @@ from jenny.snapshot.crypto import decrypt_container, encrypt_container
 from jenny.snapshot.crypto_backends.base import CryptoAuthError
 
 from . import auth, files, model
-from .model import KIND_PING, KIND_UNPAIR, FrameError, is_id, text_field
+from .model import ACT_LEVELS, KIND_PING, KIND_UNPAIR, FrameError, is_id, text_field
 from .store import (
     SECRET_BYTES,
     PeerStore,
@@ -163,6 +163,9 @@ class PeerLink:
         # Dopo un abbinamento o uno scollegamento: chi possiede l'ascoltatore lo
         # riporta allo stato di config (``WebSocketChannel.apply_remote_access``).
         self.on_change: Callable[[], Awaitable[None]] | None = None
+        # Le richieste di fare (``jenny.peers.acting.PeerActs``): le lega il
+        # composition root, e i comandi ``peer.*`` le raggiungono da qui.
+        self.acts: Any = None
 
     # -- Config ---------------------------------------------------------------
 
@@ -250,15 +253,19 @@ class PeerLink:
                 "port": p.port,
                 "can_ask": p.can_ask,
                 "send_files": p.send_files,
+                "act": p.act,
                 "has_secret": read_secret(self._workspace, p.id) is not None,
                 "queued": queued,
                 **state,
             })
         pairing = self._live_pairing()
+        # Le conferme che aspettano l'utente di qui (le richieste di fare).
+        pending = self.acts.pending() if self.acts is not None else []
         return {
             "enabled": cfg.enabled,
             "self_id": self.self_id(),
             "peers": peers,
+            "pending": pending,
             "pairing": (
                 {"code": auth.format_pair_code(pairing.code), "expires_ms": pairing.expires_ms}
                 if pairing is not None
@@ -301,19 +308,24 @@ class PeerLink:
         await self._mutate(apply)
 
     async def set_permissions(
-        self, peer_id: str, *, can_ask: bool | None = None, send_files: bool | None = None
+        self, peer_id: str, *, can_ask: bool | None = None, send_files: bool | None = None,
+        act: str | None = None,
     ) -> None:
         """Cosa può fare *peer_id* su questa Jenny: lo decide chi riceve."""
+        if act is not None and act not in ACT_LEVELS:
+            raise PeerError("bad_level")
 
         def apply(peers: Any) -> bool:
             for p in peers.peers:
                 if p.id == peer_id:
-                    before = (p.can_ask, p.send_files)
+                    before = (p.can_ask, p.send_files, p.act)
                     if can_ask is not None:
                         p.can_ask = can_ask
                     if send_files is not None:
                         p.send_files = send_files
-                    return (p.can_ask, p.send_files) != before
+                    if act is not None:
+                        p.act = act
+                    return (p.can_ask, p.send_files, p.act) != before
             raise PeerError("not_found")
 
         await self._mutate(apply)

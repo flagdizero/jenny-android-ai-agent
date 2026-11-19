@@ -56,7 +56,8 @@ export function peerStateText(peer) {
 
 function errorText(e) {
   const reason = e?.message || '';
-  const known = ['bad_code', 'bad_name', 'no_code_open', 'unreachable', 'disabled', 'protocol'];
+  const known = ['bad_code', 'bad_name', 'no_code_open', 'unreachable', 'disabled', 'protocol',
+    'still_working', 'nothing_to_undo', 'bad_level'];
   return known.includes(reason) ? t(`errors.${reason}`) : t('errors.generic', { error: reason || 'error' });
 }
 
@@ -76,6 +77,8 @@ export class PeersPanel {
     /* La cronologia aperta, per Jenny: si chiede al tocco e resta finche' il
        pannello e' aperto. */
     this._history = {};
+    /* Le richieste di fare arrivate da quella Jenny, lette con la cronologia. */
+    this._acts = {};
     this._busy = false;
     this._timer = null;
     this._destroyed = false;
@@ -172,6 +175,8 @@ export class PeersPanel {
         <div class="peer-card-state">${escapeHtml(peerStateText(p))}</div>
         ${this._permHtml(p, 'can_ask', 'canAsk', 'canAskHint')}
         ${this._permHtml(p, 'send_files', 'sendFiles', 'sendFilesHint')}
+        ${this._actHtml(p)}
+        ${this._pendingHtml((s.pending || []).filter((c) => c.peer === p.id))}
         <div class="remote-actions">
           <button class="settings-btn-add" type="button" data-peers="ping" ${p.has_secret ? '' : 'disabled'}>
             <i class="ti ti-antenna-bars-5" aria-hidden="true"></i> ${escapeHtml(t('ping'))}</button>
@@ -182,6 +187,7 @@ export class PeersPanel {
           <button class="settings-btn-add" type="button" data-peers="history">
             <i class="ti ti-history" aria-hidden="true"></i> ${escapeHtml(t('history'))}</button>
         </div>
+        ${this._acts[p.id] ? this._actsHtml(this._acts[p.id]) : ''}
         ${this._history[p.id] ? this._historyHtml(this._history[p.id]) : ''}
       </div>`);
     }
@@ -201,6 +207,57 @@ export class PeersPanel {
     </div>`;
   }
 
+  /** Le richieste di fare di quella Jenny: no, sì chiedendo prima di ciò che
+   *  esce dal telefono, o sì per tutto. Lo decide chi riceve. */
+  _actHtml(peer) {
+    const id = `peer-act-${peer.id.slice(0, 8)}`;
+    const level = ['off', 'confirm', 'free'].includes(peer.act) ? peer.act : 'off';
+    const opts = ['off', 'confirm', 'free'].map((v) => `<option value="${v}" ${v === level ? 'selected' : ''}>${
+      escapeHtml(t(`act.${v}`))}</option>`).join('');
+    return `<div class="settings-field peer-perm peer-act">
+      <label class="settings-label" for="${id}">${escapeHtml(t('act.label'))}
+        <span class="settings-field-hint">${escapeHtml(t(`act.hint.${level}`))}</span></label>
+      <select class="settings-select" id="${id}" data-act>${opts}</select>
+    </div>`;
+  }
+
+  /** Le conferme che aspettano l'utente di qui: «Personale vuole aprire …». */
+  _pendingHtml(rows) {
+    if (!rows.length) return '';
+    return rows.map((c) => `<div class="peer-confirm" data-cid="${escapeHtml(c.cid)}">
+      <div class="peer-confirm-what"><i class="ti ti-hand-stop" aria-hidden="true"></i>
+        <span>${escapeHtml(c.what)}</span></div>
+      <div class="remote-actions">
+        <button class="settings-btn-add" type="button" data-confirm="no">${escapeHtml(t('confirmNo'))}</button>
+        <button class="settings-btn-add" type="button" data-confirm="yes">
+          <i class="ti ti-check" aria-hidden="true"></i> ${escapeHtml(t('confirmYes'))}</button>
+      </div>
+    </div>`).join('');
+  }
+
+  /** Le richieste di fare arrivate: cosa, com'è finita, cosa ha toccato, l'Annulla. */
+  _actsHtml(rows) {
+    if (!rows.length) return '';
+    const row = (r) => {
+      const when = new Date(r.at_ms).toLocaleString(i18n.locale, {
+        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+      });
+      const state = r.working ? 'working' : r.state;
+      const touched = (r.done || []).filter((d) => d && d.undoable).length;
+      const canUndo = !r.working && r.state === 'answered' && touched > 0;
+      return `<div class="peer-act-row" data-qid="${escapeHtml(r.qid)}">
+        <div class="peer-log-row"><span>«${escapeHtml(r.text)}»</span>
+          <span class="peer-log-when">${escapeHtml(when)}</span></div>
+        <div class="peer-act-state">${escapeHtml(t(`actState.${state}`, { count: touched }))}
+          ${canUndo ? `<button class="settings-btn-add" type="button" data-undo>
+            <i class="ti ti-arrow-back-up" aria-hidden="true"></i> ${escapeHtml(t('undo'))}</button>` : ''}
+        </div>
+      </div>`;
+    };
+    return `<div class="peer-log peer-acts"><div class="remote-sub">${escapeHtml(t('actsTitle'))}</div>${
+      rows.map(row).join('')}</div>`;
+  }
+
   _historyHtml(rows) {
     if (!rows.length) return `<div class="remote-hint">${escapeHtml(t('historyEmpty'))}</div>`;
     const line = (row) => {
@@ -217,6 +274,10 @@ export class PeersPanel {
         'sys:refused': ['log.refused', { kind: d.kind || '' }],
         'sys:removed': ['log.removed', {}],
         'sys:removed_by_other': ['log.removedByOther', {}],
+        'sys:confirm': [d.allowed ? 'log.confirmYes' : 'log.confirmNo', { target: d.target || '' }],
+        'sys:undo': ['log.undo', { files: d.restored || 0, jobs: d.jobs || 0 }],
+        'out:undo': ['log.undoAsked', {}],
+        'in:undone': ['log.undone', {}],
       }[`${row.direction}:${row.kind}`];
       if (!key) return '';
       const when = new Date(row.at_ms).toLocaleString(i18n.locale, {
@@ -259,6 +320,27 @@ export class PeersPanel {
           () => { input.checked = !value; });
       });
     }
+    for (const select of this.el.querySelectorAll('[data-act]')) {
+      const before = select.value;
+      select.addEventListener('change', () => {
+        const peerId = select.closest('[data-peer]')?.dataset.peer;
+        this._run(() => rpc.peer('permissions', { id: peerId, act: select.value }),
+          () => { select.value = before; });
+      });
+    }
+    for (const btn of this.el.querySelectorAll('[data-confirm]')) {
+      btn.addEventListener('click', () => {
+        const cid = btn.closest('[data-cid]')?.dataset.cid;
+        this._run(() => rpc.peer('confirm', { cid, allow: btn.dataset.confirm === 'yes' }));
+      });
+    }
+    for (const btn of this.el.querySelectorAll('[data-undo]')) {
+      btn.addEventListener('click', () => {
+        const peerId = btn.closest('[data-peer]')?.dataset.peer;
+        const qid = btn.closest('[data-qid]')?.dataset.qid;
+        this._undo(peerId, qid);
+      });
+    }
     for (const btn of this.el.querySelectorAll('[data-peers]')) {
       btn.addEventListener('click', () => {
         const card = btn.closest('[data-peer]');
@@ -297,12 +379,15 @@ export class PeersPanel {
     } else if (what === 'history') {
       if (this._history[peerId]) {
         delete this._history[peerId];
+        delete this._acts[peerId];
         this.render();
         return;
       }
       try {
         const status = await rpc.peer('history', { id: peerId });
         this._history[peerId] = status.history || [];
+        const acts = await rpc.peer('acts', { id: peerId });
+        this._acts[peerId] = acts.acts || [];
       } catch (e) {
         showToast(errorText(e), 'error');
         return;
@@ -324,6 +409,23 @@ export class PeersPanel {
       const done = await this._run(() => rpc.peer('remove', { id: peerId }));
       if (done) showToast(t('removed'));
     }
+  }
+
+  async _undo(peerId, qid) {
+    let result;
+    try {
+      result = await rpc.peer('undo', { id: peerId, qid });
+    } catch (e) {
+      showToast(errorText(e), 'error');
+      return;
+    }
+    const u = result.undo || {};
+    showToast(t('undone', { files: u.restored || 0, jobs: u.jobs || 0 }));
+    try {
+      const acts = await rpc.peer('acts', { id: peerId });
+      this._acts[peerId] = acts.acts || [];
+    } catch (e) { /* la lista si riprende al prossimo giro */ }
+    this.render();
   }
 
   /** Il modulo «Ho il codice dell'altra Jenny», vuoto o compilato da un QR. */

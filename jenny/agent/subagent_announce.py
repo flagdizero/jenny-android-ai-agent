@@ -185,6 +185,12 @@ class AnnounceMixin:
             # ``researcher`` nel passo vuol dire che un giro di ricerca c'è stato.
             if spec_for_plan.agent_type:
                 metadata["subagent_agent_type"] = spec_for_plan.agent_type
+        # La richiesta di un'altra Jenny per cui lavorava: il turno che legge il
+        # risultato lavora ancora per lei (cancello, annulla, aggiornamento).
+        if spec_for_plan is not None and spec_for_plan.peer_act:
+            from jenny.peers.gate import PEER_ACT_META
+
+            metadata[PEER_ACT_META] = dict(spec_for_plan.peer_act)
         if origin_message_id:
             metadata["origin_message_id"] = origin_message_id
         if taint:

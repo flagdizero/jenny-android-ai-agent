@@ -1936,6 +1936,21 @@ button.home-wakes-act:active { background: var(--active); }
   white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text);
 }
 .home-peer-status, .home-peer-missing { font-size: 13px; color: var(--text-muted); }
+/* Una richiesta di fare: l'elenco di cosa ha toccato di là, e «Chiedi di annullare». */
+.home-peer-card.is-act.is-ok .home-peer-head,
+.home-peer-card.is-undone .home-peer-head { color: var(--meta); border-color: var(--meta); }
+.home-peer-done { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.home-peer-done-item {
+  display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--text-muted);
+}
+.home-peer-done-label { overflow-wrap: anywhere; color: var(--text); }
+.home-peer-done-note { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+.home-peer-undo {
+  display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+  padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: 999px;
+  background: none; color: var(--text-muted); font: inherit; font-size: 13px;
+}
+.home-peer-undo:disabled { opacity: .5; }
 
 .home-block {
   font-size: 14.5px;

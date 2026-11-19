@@ -301,6 +301,17 @@
             android:name=".ReplyReceiver"
             android:exported="false" />
 
+        <!-- Pulsanti delle notifiche dell'altra Jenny («Consenti»/«No» su una
+             conferma, «Annulla» su una richiesta fatta). Come ReplyReceiver:
+             nessun intent-filter, lo raggiunge il PendingIntent che
+             NotifierBridge appende alla notifica. Quel PendingIntent è
+             immutabile, ma un'app con l'accesso alle notifiche può comunque
+             mandarlo (premere «Consenti» al posto dell'utente): il confine vero
+             è quell'accesso. V. il KDoc di PeerActionReceiver. -->
+        <receiver
+            android:name=".PeerActionReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>

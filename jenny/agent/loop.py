@@ -635,6 +635,37 @@ class AgentLoop(
         tool = self.tools.get("peer_ask")
         if tool is not None and hasattr(tool, "bind_questions"):
             tool.bind_questions(questions)
+        # Gli aiutanti di una richiesta di fare: il loro registro è della
+        # richiesta, e lei sa di avere ancora qualcuno al lavoro.
+        acts = getattr(questions, "acts", None)
+        subagents = getattr(self, "subagents", None)
+        if acts is not None and hasattr(subagents, "set_peer_act_listener"):
+            subagents.set_peer_act_listener(acts.helper_started)
+
+    def _peer_act_journal(self, act: dict[str, str]) -> Any:
+        """Il registro dell'annulla di una richiesta di un'altra Jenny (``peer-<qid>``)."""
+        from jenny.agent.write_journal import journal_for, journal_key
+
+        try:
+            return journal_for(Path(self.workspace), journal_key("peer", act["qid"]))
+        except Exception:  # noqa: BLE001 — senza registro il turno lavora lo stesso
+            logger.opt(exception=True).warning("Peer request {}: no undo journal", act["qid"])
+            return None
+
+    async def _peer_turn_ended(self, msg: InboundMessage, outcome: Any) -> None:
+        """La fine di un turno di una richiesta di un'altra Jenny, detta a ``PeerActs``."""
+        acts = getattr(getattr(self, "peer_questions", None), "acts", None)
+        meta = msg.metadata if isinstance(msg.metadata, dict) else None
+        if acts is None or meta is None:
+            return
+        from jenny.peers.gate import act_of
+
+        if act_of(meta) is None:
+            return
+        try:
+            await acts.turn_ended(meta, getattr(outcome, "final_text", "") or "")
+        except Exception:  # noqa: BLE001 — il turno è comunque finito
+            logger.opt(exception=True).warning("Peer request: end-of-turn hook failed")
 
     def _peers_available(self) -> bool:
         questions = getattr(self, "peer_questions", None)
@@ -784,10 +815,13 @@ class AgentLoop(
         lettura le controlla l'esecutore (``apps/permissions.py``).
         """
         from jenny.agent.tools.registry import ToolRegistryView
-        from jenny.session.keys import is_personal_session_key
+        from jenny.session.keys import is_peer_act_session_key, is_personal_session_key
 
         in_project = is_project_session_key(session_key)
         personal = is_personal_session_key(session_key)
+        # Le richieste di fare di un'altra Jenny: tutto, tranne quel che non si
+        # fa su richiesta di un altro telefono (sempre gli stessi, per la cache).
+        peer_act_session = is_peer_act_session_key(session_key)
         root: Path | None = None
         if in_project:
             from jenny.utils.wiki_paths import is_wiki_root
@@ -827,6 +861,8 @@ class AgentLoop(
             if name == "peer_ask":
                 return not personal or not self._peers_available()
             if name == "peer_attach":
+                return True
+            if peer_act_session and name == "install_update":
                 return True
             if not in_project:
                 return False
@@ -1627,7 +1663,16 @@ class AgentLoop(
         # (``plan.work``), col passo: il ritorno toglie il suo lavoro. Gli
         # aiutanti che lancia scrivono nei loro (``_run_subagent`` li lega).
         plan_journal, plan_step = self._plan_journal_of(metadata)
+        # Un turno che lavora per la richiesta di un'altra Jenny (``jenny.peers``):
+        # le sue scritture nel registro della richiesta, e il cancello sulle
+        # uscite legato per tutto il turno (anche gli aiutanti che lancia).
+        from jenny.peers import gate as peer_gate
+
+        peer_act = peer_gate.act_of(metadata)
+        if plan_journal is None and peer_act is not None:
+            plan_journal = self._peer_act_journal(peer_act)
         journal_token = set_journal(plan_journal, step=plan_step)
+        peer_gate_token = peer_gate.bind(peer_act)
         async def _on_context_overflow(new_window: int) -> None:
             """Called by the runner when a context_length error occurs.
 
@@ -1692,6 +1737,7 @@ class AgentLoop(
             ))
         finally:
             reset_journal(journal_token)
+            peer_gate.reset(peer_gate_token)
             reset_turn_taint(turn_taint_token)
             reset_workspace_scope(workspace_token)
             reset_request_context(request_token)
@@ -2051,6 +2097,9 @@ class AgentLoop(
                             msg, session_key,
                             stop_reason=getattr(outcome, "stop_reason", ""),
                         )
+                        # Il rientro di un aiutante di una richiesta di un'altra
+                        # Jenny: se era l'ultimo, l'aggiornamento parte.
+                        await self._peer_turn_ended(msg, outcome)
                     self._cron_turns.complete(msg, outcome=outcome)
                 except asyncio.CancelledError:
                     self._cron_turns.complete(

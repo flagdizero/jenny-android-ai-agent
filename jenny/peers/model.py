@@ -35,6 +35,9 @@ KIND_PING = "ping"
 KIND_UNPAIR = "unpair"
 KNOWN_KINDS = frozenset({KIND_PING, KIND_UNPAIR})
 
+# I livelli del permesso di *fare* (``PeerConfig.act``), dal più chiuso.
+ACT_LEVELS = ("off", "confirm", "free")
+
 
 class FrameError(ValueError):
     """Un frame che non è del protocollo."""

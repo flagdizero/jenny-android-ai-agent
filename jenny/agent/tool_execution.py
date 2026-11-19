@@ -28,6 +28,7 @@ from jenny.agent.progress_events import (
 from jenny.agent.tool_error_policy import TOOL_ERROR_RETRY_HINT
 from jenny.agent.tools.result import ToolResult, is_error_text, render_for_model
 from jenny.config.runtime_env import tool_timeout_s
+from jenny.peers.gate import before_tool as peer_gate_before_tool
 from jenny.providers.base import ToolCallRequest
 from jenny.security.subagent_policy import (
     policy_after_tool,
@@ -513,6 +514,16 @@ class ToolExecutionMixin:
             await self._emit_tool_result(spec, tool_call, params, started, result=refusal)
             return refusal, {
                 "name": tool_call.name, "status": "ok", "detail": "refused: junction",
+            }, None
+        # Il cancello di una richiesta di un'altra Jenny (``jenny.peers.gate``):
+        # un'uscita dal telefono può aspettare il «Consenti» dell'utente. Sta
+        # prima del tetto di tempo dello strumento, che l'attesa non consuma.
+        refusal = await peer_gate_before_tool(tool_call.name, params)
+        if refusal is not None:
+            budget.credit()
+            await self._emit_tool_result(spec, tool_call, params, started, result=refusal)
+            return refusal, {
+                "name": tool_call.name, "status": "ok", "detail": "refused: peer request",
             }, None
         emit_file_edit_events = (
             spec.progress_callback is not None

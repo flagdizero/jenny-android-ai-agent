@@ -72,6 +72,11 @@ class GatewayService : Service() {
          *  avviso apparteneva. */
         const val EXTRA_REPLY_SOURCE_TAG = "com.flagdizero.jenny.extra.REPLY_SOURCE_TAG"
 
+        /** Il pulsante premuto su una notifica dell'altra Jenny (`allow`,
+         *  `deny`, `undo`) e il suo `cid`/`qid`. Li mette `PeerActionReceiver`. */
+        const val EXTRA_PEER_ACTION = "com.flagdizero.jenny.extra.PEER_ACTION"
+        const val EXTRA_PEER_IDENT = "com.flagdizero.jenny.extra.PEER_IDENT"
+
         /** Le due superfici native da cui può entrare del testo dell'utente.
          *
          *  Valori di protocollo, non etichette: Python li riconosce per stringa
@@ -112,47 +117,75 @@ class GatewayService : Service() {
         private const val SCREEN_WAIT_MS = 1_500L
 
         /**
-         * Consegna *text* al gateway insistendo finché il budget regge.
+         * Ripete *attempt* finché riesce o il budget finisce.
          *
-         * Il cuore condiviso dalle due superfici native. Sta nel companion — e
-         * non sull'istanza — perché la mascotte lo chiama dal proprio
-         * controller, che vive nel processo del service ma non ha un'istanza di
-         * `Service` a portata di mano.
+         * Il cuore condiviso dalle superfici native: il testo della tendina e
+         * della mascotte ([deliverWithRetry]) e i pulsanti dell'altra Jenny
+         * (`deliverPeerAction`). Sta nel companion — e non sull'istanza —
+         * perché la mascotte lo chiama dal proprio controller, che vive nel
+         * processo del service ma non ha un'istanza di `Service` a portata di
+         * mano.
          *
          * **Va chiamata da un thread di lavoro, mai dal main Looper**:
-         * attraversa il confine Chaquopy (JNI + GIL) e può restare bloccata
-         * quanto il GIL resta preso da un turno in corso. I due chiamanti
-         * aprono entrambi un `thread {}` e questa funzione dorme dentro.
+         * *attempt* attraversa il confine Chaquopy (JNI + GIL) e può restare
+         * bloccato quanto il GIL resta preso da un turno in corso. I chiamanti
+         * aprono tutti un `thread {}` e questa funzione dorme dentro.
          *
          * Il backoff parte corto (mezzo secondo) perché a gateway già vivo la
          * consegna riesce al primo colpo, e si allarga fino a due secondi perché
          * oltre quel punto quello che si aspetta è l'avvio di Chaquopy, che non
-         * si affretta bussando più spesso.
+         * si affretta bussando più spesso. *what* serve solo ai log.
          */
+        private fun retryWithinBudget(what: String, budgetMs: Long, attempt: () -> Boolean): Boolean {
+            val deadline = SystemClock.elapsedRealtime() + budgetMs
+            var wait = 500L
+            var attempts = 0
+            while (true) {
+                attempts++
+                if (attempt()) {
+                    Log.i(TAG, "Native delivery ok ($what, attempt $attempts)")
+                    return true
+                }
+                if (SystemClock.elapsedRealtime() + wait >= deadline) {
+                    Log.i(TAG, "Native delivery failed within the budget " +
+                        "($what, $attempts attempts)")
+                    return false
+                }
+                Thread.sleep(wait)
+                wait = minOf(wait * 2, 2_000L)
+            }
+        }
+
+        /** Consegna *text* al gateway insistendo finché il budget regge (v.
+         *  [retryWithinBudget]). */
         private fun deliverWithRetry(
             text: String,
             source: String,
             sourceTag: String?,
             budgetMs: Long,
             screen: String? = null,
-        ): Boolean {
-            val deadline = SystemClock.elapsedRealtime() + budgetMs
-            var wait = 500L
-            var attempts = 0
-            while (true) {
-                attempts++
-                if (tryDeliverNativeText(text, source, sourceTag, screen)) {
-                    Log.i(TAG, "Native text delivered (source=$source, attempt $attempts)")
-                    return true
-                }
-                if (SystemClock.elapsedRealtime() + wait >= deadline) {
-                    Log.i(TAG, "Native text not delivered within the budget " +
-                        "(source=$source, $attempts attempts)")
-                    return false
-                }
-                Thread.sleep(wait)
-                wait = minOf(wait * 2, 2_000L)
+        ): Boolean = retryWithinBudget("text, source=$source", budgetMs) {
+            tryDeliverNativeText(text, source, sourceTag, screen)
+        }
+
+        /**
+         * Un tentativo di consegna del pulsante premuto su una notifica
+         * dell'altra Jenny. `false` se Python non è su, se il gateway non è
+         * agganciato o se nessuno ha ancora registrato il gestore — la finestra
+         * d'avvio a freddo che il retry aspetta. Non solleva.
+         */
+        private fun tryDeliverPeerAction(action: String, ident: String): Boolean = try {
+            if (!Python.isStarted()) {
+                false
+            } else {
+                Python.getInstance()
+                    .getModule("jenny.runtime.native_input")
+                    .callAttr("on_native_peer_action", action, ident)
+                    .toBoolean()
             }
+        } catch (e: Exception) {
+            Log.i(TAG, "Peer action delivery attempt failed: ${e.javaClass.simpleName}")
+            false
         }
 
         /**
@@ -422,6 +455,13 @@ class GatewayService : Service() {
         if (intent != null && !replyText.isNullOrBlank()) {
             deliverNativeText(replyText, intent.getStringExtra(EXTRA_REPLY_SOURCE_TAG))
         }
+        // Stessa garanzia per il tocco su una notifica dell'altra Jenny: un
+        // riavvio sticky non riconsegna un «Consenti».
+        val peerAction = intent?.getStringExtra(EXTRA_PEER_ACTION)
+        val peerIdent = intent?.getStringExtra(EXTRA_PEER_IDENT)
+        if (peerAction != null && peerIdent != null) {
+            deliverPeerAction(peerAction, peerIdent)
+        }
         return START_STICKY
     }
 
@@ -506,6 +546,34 @@ class GatewayService : Service() {
             }
             if (!delivered) {
                 NotifierBridge.postReplyFailure(applicationContext, text, sourceTag)
+            }
+        }
+    }
+
+    /**
+     * Consegna al gateway il pulsante premuto su una notifica dell'altra Jenny
+     * («Consenti», «No», «Annulla»), con la disciplina di [deliverNativeText]:
+     * thread di lavoro, stesso budget e stessa attesa che Python sia su,
+     * `releaseHandoffLock` in `finally` — il lock lo prende `PeerActionReceiver`.
+     *
+     * Niente notifica di fallimento, e non per pigrizia: un «Consenti» o un «No»
+     * che non arriva lascia la conferma senza risposta, e a farla scadere come
+     * un no è chi la aspetta lato Python; ripresentare il pulsante vorrebbe dire ricostruire una domanda di
+     * cui qui non si conoscono né il titolo né il testo.
+     */
+    private fun deliverPeerAction(action: String, ident: String) {
+        thread(name = "jenny-peer-action") {
+            try {
+                retryWithinBudget("peer action=$action", REPLY_DELIVERY_BUDGET_MS) {
+                    tryDeliverPeerAction(action, ident)
+                }
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                Log.i(TAG, "Peer action delivery interrupted")
+            } catch (e: Exception) {
+                Log.e(TAG, "Peer action delivery failed", e)
+            } finally {
+                PowerBridge.releaseHandoffLock()
             }
         }
     }

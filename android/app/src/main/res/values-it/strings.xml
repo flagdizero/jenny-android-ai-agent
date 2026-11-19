@@ -18,6 +18,9 @@
     <string name="reply_failed_text">Non era attiva. Tocca per rimandarlo.</string>
     <string name="reply_retry_label">Rimanda</string>
     <string name="reply_user_name">Tu</string>
+    <string name="peer_allow_label">Consenti</string>
+    <string name="peer_deny_label">No</string>
+    <string name="peer_undo_label">Annulla</string>
 
     <string name="floating_input_hint">Chiedi a Jenny…</string>
     <string name="floating_not_running">Jenny non è attiva in questo momento.</string>
