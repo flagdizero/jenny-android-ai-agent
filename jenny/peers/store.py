@@ -83,6 +83,25 @@ SCHEMA = Schema(
         );
         CREATE INDEX peer_log_peer ON peer_log(peer, seq);
         """,
+        # Le domande fra Jenny (``jenny.peers.questions``), nei due versi:
+        # ``out`` quelle che questa ha fatto, ``in`` quelle che le hanno fatto.
+        # ``state``: ``queued`` (in coda), ``answering`` (si sta rispondendo),
+        # ``answered``, ``refused``, ``failed``, ``expired``.
+        """
+        CREATE TABLE peer_questions (
+          qid TEXT NOT NULL,
+          peer TEXT NOT NULL,
+          direction TEXT NOT NULL,
+          text TEXT NOT NULL,
+          asked_ms INTEGER NOT NULL,
+          state TEXT NOT NULL,
+          outbox_id TEXT NOT NULL DEFAULT '',
+          answered_ms INTEGER NOT NULL DEFAULT 0,
+          answer TEXT NOT NULL DEFAULT '',
+          PRIMARY KEY (peer, direction, qid)
+        );
+        CREATE INDEX peer_questions_open ON peer_questions(direction, state, asked_ms);
+        """,
     ),
     shards={"peer_log": "at_ms / 86400000"},
 )
@@ -179,7 +198,9 @@ class PeerStore:
 
         Per ``rowid`` e non per ``created_ms, id``: due messaggi messi in coda
         nello stesso millisecondo avevano un ordine casuale (l'``id`` lo è), e
-        chi cita un messaggio precedente deve arrivare dopo di lui.
+        chi cita un messaggio precedente deve arrivare dopo di lui. Vale per i
+        pezzi di un file, che entrano tutti nello stesso millisecondo: l'ultimo
+        partiva prima degli altri, e al suo ``ack`` la copia in uscita spariva.
         """
         rows = self._db().read(
             "SELECT id, kind, body, created_ms, attempts FROM peer_outbox "
@@ -298,6 +319,73 @@ class PeerStore:
             "last_try_ms": int(row["last_try_ms"]),
             "last_error": str(row["last_error"]),
         }
+
+    # -- Domande --
+
+    def add_question(
+        self, peer: str, direction: str, qid: str, text: str, *, state: str,
+        outbox_id: str = "", at_ms: int | None = None,
+    ) -> bool:
+        """Una domanda nuova; falso se c'era già (un doppione dalla coda)."""
+        with self._db().write() as conn:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO peer_questions(qid, peer, direction, text, asked_ms, "
+                "state, outbox_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (qid, peer, direction, text, now_ms() if at_ms is None else at_ms, state,
+                 outbox_id),
+            )
+            return cur.rowcount == 1
+
+    def set_question(
+        self, peer: str, direction: str, qid: str, *, state: str, answer: str | None = None,
+    ) -> None:
+        with self._db().write() as conn:
+            if answer is None:
+                conn.execute(
+                    "UPDATE peer_questions SET state = ? WHERE peer = ? AND direction = ? "
+                    "AND qid = ?",
+                    (state, peer, direction, qid),
+                )
+            else:
+                conn.execute(
+                    "UPDATE peer_questions SET state = ?, answer = ?, answered_ms = ? "
+                    "WHERE peer = ? AND direction = ? AND qid = ?",
+                    (state, answer, now_ms(), peer, direction, qid),
+                )
+
+    def set_outbox(self, peer: str, direction: str, qid: str, outbox_id: str) -> None:
+        """Il messaggio in coda che porta la domanda: a scadenza si toglie da lì."""
+        with self._db().write() as conn:
+            conn.execute(
+                "UPDATE peer_questions SET outbox_id = ? WHERE peer = ? AND direction = ? "
+                "AND qid = ?",
+                (outbox_id, peer, direction, qid),
+            )
+
+    def question(self, peer: str, direction: str, qid: str) -> dict[str, Any] | None:
+        rows = self._db().read(
+            "SELECT qid, peer, direction, text, asked_ms, state, outbox_id, answered_ms, answer "
+            "FROM peer_questions WHERE peer = ? AND direction = ? AND qid = ?",
+            (peer, direction, qid),
+        )
+        return dict(rows[0]) if rows else None
+
+    def open_questions_before(self, cutoff_ms: int) -> list[dict[str, Any]]:
+        """Le domande fatte da qui, ancora senza risposta, più vecchie di *cutoff_ms*."""
+        rows = self._db().read(
+            "SELECT qid, peer, direction, text, asked_ms, state, outbox_id FROM peer_questions "
+            "WHERE direction = 'out' AND state = 'queued' AND asked_ms < ?",
+            (cutoff_ms,),
+        )
+        return [dict(r) for r in rows]
+
+    def questions_since(self, peer: str, direction: str, since_ms: int) -> int:
+        rows = self._db().read(
+            "SELECT COUNT(*) AS n FROM peer_questions WHERE peer = ? AND direction = ? "
+            "AND asked_ms >= ?",
+            (peer, direction, since_ms),
+        )
+        return int(rows[0]["n"]) if rows else 0
 
     # -- Cronologia --
 

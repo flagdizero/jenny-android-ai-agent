@@ -58,6 +58,7 @@ VOCABULARY = frozenset(
         "dream:",
         "gardener:",
         "internal:",
+        "peer:",
         "project:",
         "unified:default",
         "websocket:",

@@ -14,6 +14,7 @@ __all__ = [
     "GARDENER_SESSION_PREFIX",
     "INTERNAL_SESSION_PREFIX",
     "NOTEBOOK_CRON_SESSION_PREFIX",
+    "PEER_SESSION_PREFIX",
     "PROJECT_SESSION_PREFIX",
     "SUBAGENT_SESSION_PREFIX",
     "UNIFIED_SESSION_KEY",
@@ -105,6 +106,11 @@ GARDENER_SESSION_PREFIX = "gardener:"
 # scoperto — tutti passano una chiave esplicita.
 INTERNAL_SESSION_PREFIX = "internal:"
 
+# Prefisso dei turni con cui questa Jenny risponde a un'altra (``jenny.peers``):
+# ``peer:<id>``, una sessione per ogni Jenny abbinata. Interna: chi scrive lì non
+# è l'utente, e la memoria di Dream non la legge come sua.
+PEER_SESSION_PREFIX = "peer:"
+
 # Vocabolario delle sessioni interne (lavoro del sistema, non conversazione con
 # l'utente): prefisso -> *kind*. Elencare le sessioni e per definizione
 # un'operazione user-facing: chi lo fa deve filtrare con
@@ -119,6 +125,7 @@ _INTERNAL_KIND_BY_PREFIX: tuple[tuple[str, str], ...] = (
     (DREAM_SESSION_PREFIX, "dream"),
     (GARDENER_SESSION_PREFIX, "gardener"),
     (INTERNAL_SESSION_PREFIX, "internal"),
+    (PEER_SESSION_PREFIX, "peer"),
 )
 
 # Chiavi utente nella forma vecchia ``<canale>:<chat_id>``. Non esistono piu' come

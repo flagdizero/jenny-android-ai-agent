@@ -152,6 +152,10 @@ Your other Jennys (a work phone and a personal phone, say), reached directly ove
 |---|---|---|---|
 | `peers.enabled` | bool | `false` | Keeps the Tailscale listener up for other Jennys even when `gateway.remoteAccess` is off. On that listener they get only the `/peer` path, and only a paired Jenny gets past the handshake; the WebView is never served to them. Turning it on also arms the `peers` system job, which retries waiting messages every 15 minutes. |
 | `peers.peers[]` | list | `[]` | One entry per paired Jenny: `id`, `name` (what you call it), `host` (its MagicDNS name), `ip` (its `100.x` address, tried when the name doesn't resolve) and `port`. Pairing writes it; you rename or unlink from the panel. |
+| `peers.peers[].canAsk` | bool | `true` | That Jenny can ask this one questions. Each question is answered in a read-only turn with a closed set of looking tools: nothing is written, sent or scheduled. Decided on the phone that answers. |
+| `peers.peers[].sendFiles` | bool | `false` | Answers to that Jenny can carry files (up to 3 per answer, 20 MB each), only the ones the answering turn attaches. Off by default: it is where a document leaves this phone. |
+| `peers.askTtlHours` | int | `24` | A question still unanswered after this many hours is given up, and the chat says so. |
+| `peers.maxAsksPerHour` | int | `30` | How many questions per hour this Jenny answers from each other one; past that she answers "too many" without running a turn. |
 
 The secret each pair shares is **not** in this file: it lives in `<runtime_root>/peers/<id>.key` (mode 0600), outside the workspace, so it never travels in snapshots or backups. A phone restored from a backup shows the other Jenny as "link again" and needs a new code.
 

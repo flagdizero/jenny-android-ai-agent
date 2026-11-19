@@ -686,6 +686,11 @@ def replay_transcript_to_ui_messages(
         extra: dict[str, Any] = {"content": content_s}
         if media:
             extra["media"] = media
+        # La risposta di un'altra Jenny (``jenny.peers.questions``): la casa la
+        # disegna come una scheda anche riaprendo la chat, non come il suo ripiego.
+        agent_ui = rec.get("agent_ui")
+        if isinstance(agent_ui, dict) and isinstance(agent_ui.get("peer_answer"), dict):
+            extra["peerAnswer"] = agent_ui["peer_answer"]
         origin = rec.get("origin")
         if isinstance(origin, str) and origin:
             extra["origin"] = origin

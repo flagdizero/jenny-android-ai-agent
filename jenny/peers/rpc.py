@@ -105,6 +105,14 @@ async def handle(
             await link.rename(_peer_id(params), _text(params, "name", limit=80))
         elif method == "peer.remove":
             await link.remove(_peer_id(params))
+        elif method == "peer.permissions":
+            flags = {}
+            for key in ("can_ask", "send_files"):
+                if key in params:
+                    if not isinstance(params[key], bool):
+                        raise CommandError("bad_request", f"{key} must be a boolean")
+                    flags[key] = params[key]
+            await link.set_permissions(_peer_id(params), **flags)
         elif method == "peer.ping":
             await link.ping(_peer_id(params))
         elif method == "peer.history":
