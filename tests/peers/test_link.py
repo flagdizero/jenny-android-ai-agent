@@ -69,9 +69,12 @@ class Jenny:
             self.server = None
 
     async def close(self) -> None:
-        await self.stop_server()
+        # Prima la coda, poi il server: una coda ancora viva chiamerebbe l'altra
+        # mentre il suo server si chiude. E con un tetto, così una chiusura che
+        # non finisce è un errore con il suo nome e non una suite ferma.
         if self.link is not None:
-            await self.link.stop()
+            await asyncio.wait_for(self.link.stop(), timeout=15)
+        await asyncio.wait_for(self.stop_server(), timeout=15)
 
     def peers(self):
         return load_config(self.config_path).peers.peers
@@ -88,6 +91,9 @@ async def two(tmp_path: Path):
     await a.start()
     await b.start()
     yield a, b
+    for j in (a, b):
+        if j.link is not None:
+            await asyncio.wait_for(j.link.stop(), timeout=15)
     await a.close()
     await b.close()
 
@@ -200,6 +206,25 @@ async def test_a_wake_during_a_failing_attempt_is_not_lost(two):
     a.link.store.enqueue(b.id, "ping", {})
     await a.link._run_due()
     assert a.link.store.next_due_ms() == 0
+
+
+async def test_stop_ends_the_queue_even_when_a_wake_races_the_cancel(two):
+    """Su Python 3.11 ``wait_for`` può perdere una cancellazione che arriva insieme
+    alla sveglia: la coda deve fermarsi lo stesso, subito."""
+    a, _b = two
+    for _ in range(20):
+        a.link.start()
+        await asyncio.sleep(0)
+        a.link.kick()
+        await asyncio.wait_for(a.link.stop(), timeout=5)
+
+
+async def test_messages_leave_in_the_order_they_entered(tmp_path):
+    from jenny.peers.store import PeerStore
+
+    store = PeerStore(tmp_path / "workspace")
+    ids = [store.enqueue("p" * 32, "note", {"n": n}, at_ms=1000) for n in range(10)]
+    assert [row["id"] for row in store.pending("p" * 32)] == ids
 
 
 async def test_a_resent_message_is_not_handled_twice(two):

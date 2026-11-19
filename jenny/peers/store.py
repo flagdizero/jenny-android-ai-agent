@@ -175,10 +175,15 @@ class PeerStore:
         return msg_id
 
     def pending(self, peer: str) -> list[dict[str, Any]]:
-        """I messaggi in coda per *peer*, dal più vecchio."""
+        """I messaggi in coda per *peer*, nell'ordine in cui sono entrati.
+
+        Per ``rowid`` e non per ``created_ms, id``: due messaggi messi in coda
+        nello stesso millisecondo avevano un ordine casuale (l'``id`` lo è), e
+        chi cita un messaggio precedente deve arrivare dopo di lui.
+        """
         rows = self._db().read(
             "SELECT id, kind, body, created_ms, attempts FROM peer_outbox "
-            "WHERE peer = ? ORDER BY created_ms, id",
+            "WHERE peer = ? ORDER BY rowid",
             (peer,),
         )
         out = []

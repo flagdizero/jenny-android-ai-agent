@@ -158,6 +158,7 @@ class PeerLink:
         self._send_locks: dict[str, asyncio.Lock] = {}
         self._background: set[asyncio.Task[Any]] = set()
         self._wakes = 0
+        self._stopping = False
         # Dopo un abbinamento o uno scollegamento: chi possiede l'ascoltatore lo
         # riporta allo stato di config (``WebSocketChannel.apply_remote_access``).
         self.on_change: Callable[[], Awaitable[None]] | None = None
@@ -202,12 +203,19 @@ class PeerLink:
 
     def start(self) -> None:
         if self._task is None or self._task.done():
+            self._stopping = False
             self._task = asyncio.create_task(self._pump(), name="peers-pump")
 
     async def stop(self) -> None:
+        """Ferma la coda. Non basta ``cancel``: su Python 3.11 ``wait_for`` perde
+        una cancellazione che arriva insieme al suo risultato, e il giro tornava
+        ad aspettare per minuti (visto nei test il 19/11/2026). Il flag lo fa
+        uscire comunque al giro dopo, e la sveglia fa arrivare subito quel giro."""
+        self._stopping = True
         task, self._task = self._task, None
         if task is not None:
             task.cancel()
+            self._kick.set()
             await asyncio.gather(task, return_exceptions=True)
 
     def kick(self) -> None:
@@ -715,7 +723,7 @@ class PeerLink:
     # -- La coda ------------------------------------------------------------------------
 
     async def _pump(self) -> None:
-        while True:
+        while not self._stopping:
             try:
                 wait = await self._next_wait()
                 try:
@@ -723,6 +731,8 @@ class PeerLink:
                 except asyncio.TimeoutError:
                     pass
                 self._kick.clear()
+                if self._stopping:
+                    return
                 await self._run_due()
             except asyncio.CancelledError:
                 raise
