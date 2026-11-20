@@ -1,9 +1,12 @@
 """Gli strumenti delle altre Jenny: ``peer_ask`` per chiedere, ``peer_attach`` per rispondere con un file.
 
-``peer_ask`` è nella chat personale, e solo quando c'è un'altra Jenny abbinata
-(``AgentLoop._turn_tool_view``): mette la domanda in coda e torna subito. La
-risposta non passa da qui: arriva più tardi come una scheda a sé nella chat
-(``jenny.peers.questions``).
+``peer_ask`` è nella chat personale e nei giri dei suoi promemoria, e solo
+quando c'è un'altra Jenny abbinata (``AgentLoop._turn_tool_view``): mette la
+domanda in coda e torna subito. La risposta non passa da qui: arriva più tardi
+come una scheda a sé nella chat (``jenny.peers.questions``). Così anche un
+resoconto serale è solo un promemoria che chiede («ogni sera alle 19 chiedi a
+Lavoro com'è andata»), non una funzione a parte. Un lavoro nato da una
+richiesta dell'altra Jenny non chiede mai: il blocco dei giri.
 
 ``peer_attach`` esiste solo nel turno con cui questa Jenny risponde a un'altra
 (``ANSWER_TOOLS``): segna un file del workspace da mandare insieme alla risposta,
@@ -29,6 +32,8 @@ _REFUSALS = {
     "not_found": "There is no linked Jenny with that name.",
     "bad_question": "Write the question to ask.",
     "disabled": "Linking with other Jennys is turned off.",
+    "from_peer": "This work was asked for by another Jenny, so it can't ask a Jenny in turn: "
+                 "only the user of this phone starts questions.",
 }
 
 
@@ -89,10 +94,18 @@ class PeerAskTool(Tool):
     async def execute(
         self, peer: Any = None, question: Any = None, mode: Any = None, **kwargs: Any
     ) -> str:
+        from jenny.agent.tools.context import current_request_session_key
+        from jenny.peers.gate import current_act
         from jenny.peers.link import PeerError
+        from jenny.session.keys import CRON_SESSION_PREFIX
 
         if self._questions is None:
             return _REFUSALS["no_peers"]
+        # Il blocco dei giri: un lavoro nato da una richiesta dell'altra Jenny
+        # (il suo turno, i suoi aiutanti, un promemoria che ha creato) non
+        # rimanda domande indietro da solo. Il cancello è legato in tutti e tre.
+        if current_act() is not None:
+            return _REFUSALS["from_peer"]
         mode = "act" if mode == "act" else "read"
         try:
             asked = await self._questions.ask(str(peer or ""), str(question or ""), mode)
@@ -103,6 +116,13 @@ class PeerAskTool(Tool):
             return _REFUSALS.get(exc.code, f"Could not ask: {exc.code}.")
         name = asked["peer"]
         verb = "Asked" if mode == "read" else "Sent the request to"
+        if (current_request_session_key() or "").startswith(CRON_SESSION_PREFIX):
+            # Il giro silenzioso di un monitor: la scheda arriva nella chat
+            # personale da sola, un ``message`` per dire «ho chiesto» è rumore.
+            return (
+                f"{verb} {name}. Her answer will reach the user's chat by itself, as its own "
+                "card, when it arrives. Don't message the user about having asked."
+            )
         return (
             f"{verb} {name}. Her answer will appear in this chat as its own card when it "
             f"arrives: in seconds if {name} is reachable, otherwise when her phone is back "

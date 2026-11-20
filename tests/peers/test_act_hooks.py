@@ -191,3 +191,86 @@ def _named(name: str) -> Tool:
             return "ok"
 
     return _T()
+
+
+# --- Il resoconto serale è un promemoria che chiede ---------------------------
+
+
+class _Questions:
+    """Il servizio delle domande, ridotto a ciò che ``peer_ask`` gli chiede."""
+
+    def __init__(self) -> None:
+        self.asked: list[tuple[str, str, str]] = []
+
+    def available(self) -> bool:
+        return True
+
+    async def ask(self, peer: str, question: str, mode: str) -> dict[str, str]:
+        self.asked.append((peer, question, mode))
+        return {"peer": "Lavoro"}
+
+
+def _view_for(key: str) -> set[str]:
+    from jenny.agent.loop import AgentLoop
+    from jenny.bus.events import InboundMessage
+    from jenny.session.manager import Session
+
+    loop = AgentLoop.__new__(AgentLoop)
+    loop.tools = ToolRegistry()
+    for name in ("message", "cron", "peer_ask"):
+        loop.tools.register(_named(name))
+    loop.peer_questions = _Questions()
+    loop.plan_driver = None
+    loop._plan_tool_filter = lambda _msg, _key: (lambda _name: None)  # type: ignore[method-assign]
+    msg = InboundMessage(channel="websocket", sender_id="cron", chat_id="default", content="x")
+    view = loop._turn_tool_view(msg, Session(key=key), key, silent=True)
+    return set(view.tool_names) if view is not None else set(loop.tools.tool_names)
+
+
+def test_a_personal_monitor_can_ask_the_other_jenny_a_notebook_one_cannot():
+    # Un promemoria normale gira nella chat personale; un monitor nella sua
+    # ``cron:<job>``: in tutti e due «ogni sera chiedi a Lavoro…» deve trovare
+    # ``peer_ask``. Il giro di un quaderno ha il suo recinto, e lì non c'è.
+    assert "peer_ask" in _view_for(UNIFIED_SESSION_KEY)
+    assert "peer_ask" in _view_for("cron:" + "c" * 12)
+    assert "peer_ask" not in _view_for("cron:nb:Clienti/" + "c" * 12)
+
+
+def _ask_tool(session_key: str):
+    from jenny.agent.tools.context import bind_request_context
+    from jenny.agent.tools.peer import PeerAskTool
+
+    tool = PeerAskTool()
+    questions = _Questions()
+    tool.bind_questions(questions)
+    token = bind_request_context(RequestContext(
+        channel="websocket", chat_id="default", session_key=session_key,
+    ))
+    return tool, questions, token
+
+
+async def test_a_monitor_asks_and_does_not_announce_it():
+    from jenny.agent.tools.context import reset_request_context
+
+    tool, questions, token = _ask_tool("cron:" + "c" * 12)
+    try:
+        result = await tool.execute(peer="Lavoro", question="Com'è andata oggi?")
+    finally:
+        reset_request_context(token)
+    assert questions.asked == [("Lavoro", "Com'è andata oggi?", "read")]
+    assert "Don't message the user" in result
+
+
+async def test_work_asked_by_another_jenny_never_asks_back():
+    # Il blocco dei giri: un promemoria che Personale ha fatto creare su Lavoro
+    # gira col cancello della richiesta, e da lì non parte nessuna domanda.
+    from jenny.agent.tools.context import reset_request_context
+
+    tool, questions, token = _ask_tool(UNIFIED_SESSION_KEY)
+    try:
+        with gate.entered(ACT):
+            result = await tool.execute(peer="Personale", question="E tu?")
+    finally:
+        reset_request_context(token)
+    assert questions.asked == []
+    assert "another Jenny" in result

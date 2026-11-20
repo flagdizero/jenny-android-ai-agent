@@ -109,6 +109,7 @@ from jenny.session.history_meta import (
 )
 from jenny.session.keys import (
     CRON_SESSION_PREFIX,
+    NOTEBOOK_CRON_SESSION_PREFIX,
     is_project_session_key,
     is_valid_project_name,
     project_name,
@@ -822,6 +823,13 @@ class AgentLoop(
         # Le richieste di fare di un'altra Jenny: tutto, tranne quel che non si
         # fa su richiesta di un altro telefono (sempre gli stessi, per la cache).
         peer_act_session = is_peer_act_session_key(session_key)
+        # Il giro di un monitor personale (``cron:<job>``) può chiedere all'altra
+        # Jenny come la chat da cui è nato: «ogni sera chiedi a Lavoro…» è un
+        # promemoria come un altro. Quello di un quaderno no: ha il suo recinto.
+        personal_cron = (
+            session_key.startswith(CRON_SESSION_PREFIX)
+            and not session_key.startswith(NOTEBOOK_CRON_SESSION_PREFIX)
+        )
         root: Path | None = None
         if in_project:
             from jenny.utils.wiki_paths import is_wiki_root
@@ -855,11 +863,12 @@ class AgentLoop(
             # stessa radice che il tool risolve (``NotebookReadTool._root``).
             if name == "notebook":
                 return root is None
-            # Le altre Jenny: si chiede dalla chat personale, e solo quando ce
-            # n'e' una abbinata (cambia con un abbinamento, come una config).
-            # ``peer_attach`` vive solo nel turno di risposta, che ha la sua vista.
+            # Le altre Jenny: si chiede dalla chat personale (e dai suoi
+            # monitor), e solo quando ce n'e' una abbinata (cambia con un
+            # abbinamento, come una config). ``peer_attach`` vive solo nel turno
+            # di risposta, che ha la sua vista.
             if name == "peer_ask":
-                return not personal or not self._peers_available()
+                return not (personal or personal_cron) or not self._peers_available()
             if name == "peer_attach":
                 return True
             if peer_act_session and name == "install_update":
