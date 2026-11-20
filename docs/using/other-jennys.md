@@ -41,7 +41,7 @@ A question nobody answers within 24 hours expires, and the chat says so.
 
 ### Files in the answer
 
-If the answer is a document ("send me the quote you saved this morning"), the other Jenny can attach it, up to three files of 20 MB each. This is off by default. It is the point where a document leaves the work phone, so it is decided on that phone: **Answers can carry files**, per linked Jenny. With it off, the answer says the file exists but can't be sent.
+If the answer is a document ("send me the quote you saved this morning"), the other Jenny can attach it, up to three files of 20 MB each, both to an answer and to the reply to a request to do something. This is off by default. It is the point where a document leaves the work phone, so it is decided on that phone: **Answers can carry files**, per linked Jenny. With it off, the answer says the file exists but can't be sent.
 
 A file arrives in pieces, each checked. One that arrives half or damaged is not shown.
 
@@ -94,7 +94,9 @@ Every message waits in a queue on the phone that sends it, and is removed only w
 
 ## After a restore
 
-The secret the two phones share is kept outside the workspace. It is not in snapshots or in the encrypted backup, so a phone restored from a backup shows the other Jenny as **Link again**, and you link them with a new code. Android's phone-to-phone transfer, on the other hand, carries it like everything else.
+The secret the two phones share is kept outside the workspace. It is not in snapshots or in the encrypted backup, so a backup restored on a new phone, or after reinstalling Jenny, shows the other Jenny as **Link again**, and you link them with a new code. A restore on the same phone, with Jenny still installed, keeps the link. Android's phone-to-phone transfer, on the other hand, carries it like everything else.
+
+When you link again, the other phone replaces its old row for this Jenny and keeps the name and permissions you had given it, as long as this phone is the same device on your tailnet. If the restore went to a different phone, the other phone keeps the old row too, which stays *Not reachable*: unlink it there.
 
 ## Security, in short
 
