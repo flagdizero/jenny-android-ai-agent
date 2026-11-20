@@ -124,6 +124,22 @@ ACT = {
 
 @requires_node
 @requires_jsdom
+def test_a_request_where_nothing_was_allowed_does_not_say_it_did() -> None:
+    # Con l'unica uscita negata, la scheda diceva «Lavoro did it» sopra
+    # «non sono riuscita».
+    denied = {**ACT, "done": [{"kind": "egress", "label": "example.com",
+                               "undoable": False, "allowed": False}]}
+    out = _render(denied)
+    assert 'home.peer.fromAt {"name":"Lavoro"' in out["text"]
+    assert "home.peer.didAt" not in out["text"]
+    assert "home.peer.denied" in out["text"]
+    allowed = {**ACT, "done": [{"kind": "egress", "label": "example.com",
+                                "undoable": False, "allowed": True}]}
+    assert 'home.peer.didAt {"name":"Lavoro"' in _render(allowed)["text"]
+
+
+@requires_node
+@requires_jsdom
 def test_a_request_lists_what_it_touched_and_offers_to_undo() -> None:
     out = _render(ACT)
     assert out["cls"] == "home-peer-card is-ok is-act"

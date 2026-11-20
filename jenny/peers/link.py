@@ -29,7 +29,7 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.channels.ws_remote import is_tailnet_ip
+from jenny.channels.ws_remote import is_tailnet_ip, parse_ip
 from jenny.snapshot.crypto import decrypt_container, encrypt_container
 from jenny.snapshot.crypto_backends.base import CryptoAuthError
 
@@ -461,6 +461,9 @@ class PeerLink:
             host=text_field(first, "host", limit=253),
             ip=remote_ip or text_field(first, "ip", limit=45),
             port=port if isinstance(port, int) and 0 < port < 65536 else self.port,
+            # Il nome qui lo dà l'altra Jenny, non l'utente: se era già sua,
+            # resta quello che l'utente le aveva dato.
+            keep_name=True,
         )
 
     # -- Abbinamento: chi ha il codice ---------------------------------------------
@@ -532,19 +535,50 @@ class PeerLink:
         return {"id": peer_id, "name": name}
 
     async def _save_peer(
-        self, peer_id: str, secret: bytes, *, name: str, host: str, ip: str, port: int
+        self, peer_id: str, secret: bytes, *, name: str, host: str, ip: str, port: int,
+        keep_name: bool = False,
     ) -> None:
+        """Registra la Jenny appena abbinata, al posto di quella che era già lei.
+
+        «Già lei» è la stessa riga (stesso id: un ricollegamento dopo un
+        ripristino) o lo stesso telefono sulla tailnet (stesso indirizzo o nome:
+        quella Jenny ha perso la sua identità e se n'è fatta una nuova). Sui due
+        emulatori, il 20/11/2026, il secondo caso lasciava la riga vecchia, che
+        non avrebbe più risposto, accanto alla nuova; e il primo riscriveva la
+        riga da capo, coi permessi di partenza. Ora la nuova prende i permessi
+        della vecchia, e — con *keep_name*, quando il nome non l'ha scelto
+        l'utente — anche il nome.
+        """
         from jenny.config.schema import PeerConfig
 
         write_secret(self._workspace, peer_id, secret)
+        replaced: list[str] = []
+
+        def same_phone(p: Any) -> bool:
+            if p.id == peer_id:
+                return True
+            if ip and p.ip and parse_ip(p.ip) == parse_ip(ip):
+                return True
+            return bool(host and p.host and p.host.lower() == host.lower())
 
         def apply(peers: Any) -> bool:
+            old = next((p for p in peers.peers if p.id == peer_id), None)
+            old = old or next((p for p in peers.peers if same_phone(p)), None)
             entry = PeerConfig(id=peer_id, name=name, host=host, ip=ip, port=port)
-            peers.peers = [p for p in peers.peers if p.id != peer_id] + [entry]
+            if old is not None:
+                entry.can_ask, entry.send_files, entry.act = old.can_ask, old.send_files, old.act
+                if keep_name:
+                    entry.name = old.name
+            replaced.extend(p.id for p in peers.peers if p.id != peer_id and same_phone(p))
+            peers.peers = [p for p in peers.peers if not same_phone(p)] + [entry]
             peers.enabled = True
             return True
 
         await self._mutate(apply)
+        for old_id in replaced:
+            delete_secret(self._workspace, old_id)
+            await asyncio.to_thread(self.store.drop_peer, old_id)
+            logger.info("peers: {} replaced by {}", old_id[:8], peer_id[:8])
         await asyncio.to_thread(self.store.note_seen, peer_id, now_ms())
         await asyncio.to_thread(self.store.log, peer_id, "sys", "paired", {"name": name})
         logger.info("peers: paired with {} ({})", name, peer_id[:8])

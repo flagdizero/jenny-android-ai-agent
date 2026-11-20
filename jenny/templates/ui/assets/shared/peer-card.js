@@ -39,7 +39,12 @@ function timeOf(ms) {
 
 function headText(card, status, time) {
   const name = card.peer;
-  if (card.mode === 'act' && status === 'ok') {
+  /* «Ha fatto» solo se qualcosa è stato fatto: un file, un promemoria, una
+     pagina consentita. Con tutto negato la scheda diceva «Lavoro did it» sopra
+     «non sono riuscita» (prova sui due emulatori, 20/11/2026). */
+  const did = (card.done || []).some((d) => d && (d.undoable === true
+    || (d.kind === 'egress' && d.allowed !== false)));
+  if (card.mode === 'act' && status === 'ok' && (card.working || did)) {
     const key = card.working ? 'home.peer.workingAt' : 'home.peer.didAt';
     return i18n.t(key, { name, time });
   }
