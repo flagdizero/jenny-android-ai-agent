@@ -238,8 +238,8 @@ One row, **Linked Jennys**, says *Off*, *On · none linked*, or who is linked. T
 | Control | Effect | Default |
 |---|---|---|
 | **Link with other Jennys** | Lets this Jenny talk to the Jennys on your other phones over Tailscale (`peers.enabled`). Off: none can reach this one, and this one calls none. Without Tailscale on, the panel says so. | Off |
-| **Show the QR** | A one-time code (8 characters, 10 minutes, works once) as a QR to scan with the other phone's camera, with the address and the code written underneath for typing by hand. | — |
-| **I have the other's code** | The form for the other side: address (Tailscale name or `100.x.y.z`), code, and the name you give the other Jenny. Scanning the QR with the camera opens it already filled in. | — |
+| **Show the QR** | A one-time code (8 characters, 10 minutes, works once) as a QR to scan with the other phone's camera, with the address and the code written underneath for typing by hand. When the other Jenny links with it, the panel asks what to call her. | — |
+| **I have the other's code** | The form for the other side: address (Tailscale name or `100.x.y.z`), code, and the name you give the other Jenny. Scanning the QR with the camera opens it already filled in. With linking off, **Link** turns it on. | — |
 
 Each linked Jenny is a row with its state (*Last contact*, *Not reachable*, *N waiting*, *Never heard from*, or *Link again* after a restore), and these controls:
 
