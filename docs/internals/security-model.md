@@ -308,6 +308,7 @@ refactor.
 - [Privacy](./privacy.md) — what leaves the device and when.
 - [SSH access](../using/ssh.md) — setting up a remote host, and why a restore does not restore access.
 - [Your other Jenny](../using/other-jennys.md) — linking two Jennys, questions, requests to act, and their permissions.
+- [Peer protocol](./peer-protocol.md) — the wire format between linked Jennys, frame by frame, with test vectors.
 - [Configuration reference](../reference/configuration.md) — the `security.*` and `tools.*` keys in full.
 - [Tool reference](../reference/tools.md) — per-tool limits and behavior.
 - [Local models](../reference/local-models.md) — self-hosted providers, reachability and the HTTPS guidance.

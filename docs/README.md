@@ -70,6 +70,7 @@ For readers who want to understand how Jenny works internally or contribute code
 | [Security model](internals/security-model.md) | The four security boundaries, from the Android app sandbox down to the `python_exec` guardrails. |
 | [Privacy](internals/privacy.md) | What data leaves the device, who it goes to, and what stays local. |
 | [WebSocket protocol](reference/websocket.md) | The WebSocket wire protocol used between the WebUI and the gateway, for anyone building their own client. |
+| [Peer protocol](internals/peer-protocol.md) | The wire protocol two linked Jennys speak, with test vectors, for anyone building something that links with Jenny. |
 
 ### Contribute
 
