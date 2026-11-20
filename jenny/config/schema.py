@@ -825,6 +825,12 @@ class PeerConfig(Base):
     # telefono (una pagina da aprire, la rete dal codice) aspetta un «Consenti»
     # dell'utente di qui; ``free`` fa tutto senza chiedere. Spento di default.
     act: Literal["off", "confirm", "free"] = "off"
+    # ``kind``: che cosa c'è dall'altra parte, come l'ha detto lei abbinandosi
+    # (il campo ``agent`` del protocollo): ``jenny`` o ``opencode`` (le mani sul
+    # Mac, il plugin ``opencode-jenny``). Testo libero e non ``Literal``: un
+    # valore che questa versione non conosce non deve rendere illeggibile la
+    # config, e chi lo legge lo riconduce a ``jenny`` (``jenny.peers.model.peer_kind``).
+    kind: str = "jenny"
 
 
 class PeerPermissionsUpdate(Base):

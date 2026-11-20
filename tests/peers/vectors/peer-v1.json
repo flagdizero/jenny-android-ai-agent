@@ -99,6 +99,7 @@
     "container_b64": "Sk5CSwEAAAABEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqK24nkOP2ZM9iRU1xdiI9bHNJHW6nMkj2SQKtxqceFnwNwXjk/2LD5OAf4MjCgP8jCQ=="
   },
   "pairing": {
+    "doc": "A is an opencode plugin showing the code, B a Jenny joining it",
     "shower_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
     "joiner_id": "00112233445566778899aabbccddeeff",
     "code": "K7Q4MZP2",
@@ -115,18 +116,20 @@
           "name": "phone",
           "host": "phone.tail0000.ts.net",
           "ip": "100.64.0.2",
-          "port": 18790
+          "port": 18790,
+          "agent": "jenny"
         },
-        "wire": "{\"type\":\"pair\",\"v\":1,\"from\":\"00112233445566778899aabbccddeeff\",\"nonce\":\"b0b1b2b3b4b5b6b7b8b9babbbcbdbebf\",\"name\":\"phone\",\"host\":\"phone.tail0000.ts.net\",\"ip\":\"100.64.0.2\",\"port\":18790}"
+        "wire": "{\"type\":\"pair\",\"v\":1,\"from\":\"00112233445566778899aabbccddeeff\",\"nonce\":\"b0b1b2b3b4b5b6b7b8b9babbbcbdbebf\",\"name\":\"phone\",\"host\":\"phone.tail0000.ts.net\",\"ip\":\"100.64.0.2\",\"port\":18790,\"agent\":\"jenny\"}"
       },
       {
         "frame": {
           "type": "pair_challenge",
           "from": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
           "nonce": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
-          "salt": "000102030405060708090a0b0c0d0e0f"
+          "salt": "000102030405060708090a0b0c0d0e0f",
+          "agent": "opencode"
         },
-        "wire": "{\"type\":\"pair_challenge\",\"from\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"nonce\":\"a0a1a2a3a4a5a6a7a8a9aaabacadaeaf\",\"salt\":\"000102030405060708090a0b0c0d0e0f\"}"
+        "wire": "{\"type\":\"pair_challenge\",\"from\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"nonce\":\"a0a1a2a3a4a5a6a7a8a9aaabacadaeaf\",\"salt\":\"000102030405060708090a0b0c0d0e0f\",\"agent\":\"opencode\"}"
       },
       {
         "frame": {
@@ -139,9 +142,10 @@
         "frame": {
           "type": "pair_ok",
           "mac": "4572dedbf6684f763b65581a2e0f0ec5272ed7ca7808db119de94713e0aa2f44",
-          "sealed": "Sk5CSwEAAAABEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqK24nkOP2ZM9iRU1xdiI9bHNJHW6nMkj2SQKtxqceFnwNwXjk/2LD5OAf4MjCgP8jCQ=="
+          "sealed": "Sk5CSwEAAAABEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqK24nkOP2ZM9iRU1xdiI9bHNJHW6nMkj2SQKtxqceFnwNwXjk/2LD5OAf4MjCgP8jCQ==",
+          "agent": "opencode"
         },
-        "wire": "{\"type\":\"pair_ok\",\"mac\":\"4572dedbf6684f763b65581a2e0f0ec5272ed7ca7808db119de94713e0aa2f44\",\"sealed\":\"Sk5CSwEAAAABEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqK24nkOP2ZM9iRU1xdiI9bHNJHW6nMkj2SQKtxqceFnwNwXjk/2LD5OAf4MjCgP8jCQ==\"}"
+        "wire": "{\"type\":\"pair_ok\",\"mac\":\"4572dedbf6684f763b65581a2e0f0ec5272ed7ca7808db119de94713e0aa2f44\",\"sealed\":\"Sk5CSwEAAAABEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqK24nkOP2ZM9iRU1xdiI9bHNJHW6nMkj2SQKtxqceFnwNwXjk/2LD5OAf4MjCgP8jCQ==\",\"agent\":\"opencode\"}"
       },
       {
         "frame": {

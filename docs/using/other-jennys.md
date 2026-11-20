@@ -77,6 +77,16 @@ There is no separate report feature, because a reminder does it. In the personal
 
 The card arrives even on a quiet day. A monitor ("only tell me if Work has news") still shows Work's card when there's nothing new, because the answer doesn't go through the monitor's check.
 
+## Your Mac, with opencode
+
+The other side doesn't have to be a phone. If you use [opencode](https://opencode.ai) on your Mac, the `opencode-jenny` plugin links it the same way, so your Jenny can ask questions about your code: "is the CI of PR 85 green?", "what changed on main today?". opencode does the work on the Mac; Jenny stays the one you talk to.
+
+- **Installing.** On the Mac, with opencode and Tailscale already there, run `npx opencode-jenny`. It installs the plugin, keeps opencode running in the background, and prints a QR in the Terminal. Scan it with the phone's camera and tap **Link**, as above.
+- **What it can read.** One folder you choose when installing (by default `~/Documents/GitHub`), and only to read: `git status`, `log`, `diff`, and GitHub's PRs, checks and runs through `gh`. It can't edit files, run other commands or open web pages. Each question is a session you can open in opencode to see what it did.
+- **Regular checks** are reminders, set in words: "every hour, ask the Mac whether the CI of PR 85 is green, and tell me only if it changes". Nothing to set up on the Mac.
+
+In the panel the Mac is marked *Mac · opencode*. It doesn't ask your phone anything, so it has no permission rows. The details of the link are in the [Peer protocol](../internals/peer-protocol.md).
+
 ## Permissions are decided by whoever receives
 
 Each phone decides what the other may do *to it*: whether the other can ask questions (**Can ask me questions**, on by default), whether answers to it can carry files, and whether it can ask for things to be done. Nothing set on the personal phone opens anything on the work phone.

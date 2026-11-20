@@ -5218,6 +5218,8 @@ dialog.image-lightbox::backdrop { background: transparent; }
 .peer-card-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .peer-card-head i { font-size: 18px; color: var(--text-muted); }
 .peer-card-name { color: var(--text); }
+/* Il tipo di un collegato che non è una Jenny (opencode sul Mac). */
+.peer-card-kind { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 .peer-card-state { margin: 2px 0 6px 26px; font-size: 12px; color: var(--text-faint); }
 .peer-perm { margin: 4px 0 4px 26px; }
 .peer-perm .settings-field-hint { display: block; }

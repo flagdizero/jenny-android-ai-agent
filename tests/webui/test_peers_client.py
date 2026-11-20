@@ -164,3 +164,54 @@ def test_the_act_keys_built_at_runtime_exist_in_both_languages() -> None:
         for key in ("refused_act", "undone", "undo_refused", "undo_still_working",
                     "undo_not_found", "undo_failed"):
             assert key in status, f"{lang}: home.peer.status.{key} manca"
+
+
+def _card(peer: dict) -> str:
+    """La riga di un collegato come la disegna il pannello vero (``PeersPanel.render``)."""
+    import re
+
+    cls = re.search(r"(?ms)^export class PeersPanel \{.*?^\}$", PEERS)
+    assert cls, "PeersPanel non trovata"
+    script = (
+        "const i18n = { locale: 'it', t: (k, p) => p ? `${k} ${JSON.stringify(p)}` : k };\n"
+        "const t = (key, params) => i18n.t(`settings.peers.${key}`, params);\n"
+        "const escapeHtml = (s) => String(s ?? '');\n"
+        "const POLL_MS = 5000;\n"
+        + function(PEERS, "timeText") + "\n"
+        + function(PEERS, "isOpencodePeer") + "\n"
+        + function(PEERS, "peerStateText") + "\n"
+        + cls.group(0).removeprefix("export ")
+        + f"""
+const panel = Object.create(PeersPanel.prototype);
+Object.assign(panel, {{ _acts: {{}}, _history: {{}}, _pair: null, _destroyed: false }});
+let out = '';
+panel._paint = (parts) => {{ out = parts.join(''); }};
+panel.status = {{ enabled: true, tailscale: {{ state: 'up' }}, peers: [{json.dumps(peer)}], pending: [] }};
+panel.render();
+console.log(JSON.stringify(out));
+"""
+    )
+    return json.loads(run_js(script))
+
+
+@requires_node
+def test_a_mac_with_opencode_is_marked_and_has_no_permission_rows() -> None:
+    peer = {"id": "a" * 32, "name": "Mac", "kind": "opencode", "has_secret": True,
+            "can_ask": True, "send_files": False, "act": "off", "last_seen_ms": 0, "queued": 0}
+    html = _card(peer)
+    assert "peer-card-opencode" in html and "ti-device-laptop" in html
+    assert "settings.peers.kindOpencode" in html and "settings.peers.opencodeHint" in html
+    assert 'data-perm="can_ask"' not in html and 'data-perm="send_files"' not in html
+    assert "data-act" not in html
+    for action in ("ping", "rename", "remove", "history"):
+        assert f'data-peers="{action}"' in html
+
+
+@requires_node
+def test_another_jenny_keeps_her_permission_rows() -> None:
+    peer = {"id": "b" * 32, "name": "Lavoro", "kind": "jenny", "has_secret": True,
+            "can_ask": True, "send_files": False, "act": "off", "last_seen_ms": 0, "queued": 0}
+    html = _card(peer)
+    assert "peer-card-opencode" not in html and "kindOpencode" not in html
+    assert 'data-perm="can_ask"' in html and 'data-perm="send_files"' in html
+    assert "data-act" in html

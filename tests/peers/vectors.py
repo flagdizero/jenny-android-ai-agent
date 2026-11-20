@@ -134,6 +134,7 @@ def build() -> dict[str, Any]:
             "container_b64": base64.b64encode(sealed).decode("ascii"),
         },
         "pairing": {
+            "doc": "A is an opencode plugin showing the code, B a Jenny joining it",
             "shower_id": A_ID,
             "joiner_id": B_ID,
             "code": CODE,
@@ -144,12 +145,13 @@ def build() -> dict[str, Any]:
                 _frame({
                     "type": "pair", "v": model.PROTOCOL_VERSION, "from": B_ID, "nonce": NONCE_B,
                     "name": "phone", "host": B_HOST, "ip": B_IP, "port": PORT,
+                    "agent": "jenny",
                 }),
                 _frame({"type": "pair_challenge", "from": A_ID, "nonce": NONCE_A,
-                        "salt": PAIR_SALT}),
+                        "salt": PAIR_SALT, "agent": "opencode"}),
                 _frame({"type": "pair_proof", "mac": mac_pair_b}),
                 _frame({"type": "pair_ok", "mac": mac_pair_a,
-                        "sealed": base64.b64encode(sealed).decode("ascii")}),
+                        "sealed": base64.b64encode(sealed).decode("ascii"), "agent": "opencode"}),
                 _frame({"type": "pair_done", "mac": mac_pair_done}),
             ],
         },

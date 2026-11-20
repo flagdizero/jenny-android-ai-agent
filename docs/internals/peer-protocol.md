@@ -50,10 +50,10 @@ B opens a WebSocket to A's `/peer` and the exchange is:
 
 | # | Direction | Frame |
 |---|---|---|
-| 1 | B → A | `{"type":"pair", "v":1, "from":B, "nonce":nB, "name":…, "host":…, "ip":…, "port":…}` |
-| 2 | A → B | `{"type":"pair_challenge", "from":A, "nonce":nA, "salt":s}` |
+| 1 | B → A | `{"type":"pair", "v":1, "from":B, "nonce":nB, "name":…, "host":…, "ip":…, "port":…, "agent":…}` |
+| 2 | A → B | `{"type":"pair_challenge", "from":A, "nonce":nA, "salt":s, "agent":…}` |
 | 3 | B → A | `{"type":"pair_proof", "mac": mac(K, "pair-b", B, A, nB, nA)}` |
-| 4 | A → B | `{"type":"pair_ok", "mac": mac(K, "pair-a", A, B, nA, nB), "sealed": base64(seal(hex(K), S))}` |
+| 4 | A → B | `{"type":"pair_ok", "mac": mac(K, "pair-a", A, B, nA, nB), "sealed": base64(seal(hex(K), S)), "agent":…}` |
 | 5 | B → A | `{"type":"pair_done", "mac": mac(S, "pair-done", B, A, nB, nA)}` |
 
 - `nA`, `nB` are fresh 16-byte nonces and `s` a fresh 16-byte salt, all in hex.
@@ -66,7 +66,7 @@ Rules on each side:
 - **A** checks frame 3 before anything else. A wrong MAC costs one of the 5 tries and closes the connection. After frame 5 checks out, A forgets the code and stores B. A also refuses a `pair` whose `from` is its own id or not an id.
 - **B** stores A only after frame 4's MAC checks out and the box opens to exactly 32 bytes, and after sending frame 5. If no code is open on A, A just closes the connection.
 
-**Optional field, from the next version of Jenny:** `pair_challenge` and `pair_ok` may carry `"agent": "jenny"` or `"agent": "opencode"`. It tells B what it just linked with, so that its panel can say so. A side that does not know the field ignores it.
+**`agent`** says what is on each side: `"jenny"` or `"opencode"` (the `opencode-jenny` plugin on the user's computer). Each side sends it in its own frames (`pair`, `pair_challenge`, `pair_ok`) and stores what the other said with the new peer: a Jenny shows an opencode peer as a computer, not as another Jenny. The field is optional: a missing or unknown value means `"jenny"`, and older Jennys, which don't send it, are read that way. B takes it from `pair_ok`, or from `pair_challenge` if `pair_ok` doesn't carry it.
 
 ## Every connection after pairing
 

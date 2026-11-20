@@ -252,6 +252,8 @@ Each linked Jenny is a row with its state (*Last contact*, *Not reachable*, *N w
 | **Can ask me to do things** | `act`: **No**, **Yes, but ask me before sending anything out** (opening a page, downloading or network access from code waits for **Allow** on a notification), or **Yes, everything**. | No |
 | **History** | Opens the list of questions, answers, files, tests and decisions, in both directions. Above it, **Requests to act**: the latest requests from that Jenny with their state (*In progress*, *Still working on it*, *Done*, *Refused*, *Undone*…) and **Undo**. | — |
 
+A row for **your Mac with opencode** ([Your Mac, with opencode](../using/other-jennys.md#your-mac-with-opencode)) is marked *Mac · opencode* and shows only **Test**, **Rename** / **Unlink** and **History**: the Mac answers questions and never asks this phone anything, so the permission rows have nothing to guard.
+
 While a request waits for a confirmation, the row shows it highlighted, with what it wants to do and **Allow** / **No**, the same as on the notification.
 
 All of these are decided on this phone, for what the *other* Jenny may do here. Changes apply at once; setting **Can ask me to do things** to **No** also denies the confirmations waiting.

@@ -36,7 +36,7 @@ from typing import Any
 from loguru import logger
 
 from .link import PeerError, PeerLink
-from .model import is_id, text_field
+from .model import is_id, peer_kind, text_field
 from .store import new_id, now_ms
 
 KIND_ASK = "ask"
@@ -237,7 +237,10 @@ class PeerQuestions:
             {"qid": qid, "text": text[:300], "mode": mode},
         )
         state = await asyncio.to_thread(self.store.state, peer.id)
-        return {"qid": qid, "peer": peer.name, "last_seen_ms": state["last_seen_ms"]}
+        return {
+            "qid": qid, "peer": peer.name, "kind": peer_kind(peer.kind),
+            "last_seen_ms": state["last_seen_ms"],
+        }
 
     async def _on_answer(self, peer_id: str, body: dict[str, Any]) -> None:
         qid = body.get("qid")

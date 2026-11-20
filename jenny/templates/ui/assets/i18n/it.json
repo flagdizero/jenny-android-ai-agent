@@ -606,7 +606,9 @@
         "undone": "Annullata"
       },
       "undo": "Annulla",
-      "undone": "Annullata. File rimessi com'erano: {files} · promemoria tolti: {jobs}"
+      "undone": "Annullata. File rimessi com'erano: {files} · promemoria tolti: {jobs}",
+      "kindOpencode": "Mac · opencode",
+      "opencodeHint": "opencode sul tuo computer. Risponde alle domande su codice, git e GitHub, in sola lettura; non chiede mai niente a questa Jenny."
     },
     "whoThinksHint": "Ogni marca tiene i suoi modelli: un tocco su un modello lo fa rispondere.",
     "answersWith": "risponde con {model}",

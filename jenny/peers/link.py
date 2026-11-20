@@ -34,7 +34,16 @@ from jenny.snapshot.crypto import decrypt_container, encrypt_container
 from jenny.snapshot.crypto_backends.base import CryptoAuthError
 
 from . import auth, files, model
-from .model import ACT_LEVELS, KIND_PING, KIND_UNPAIR, FrameError, is_id, text_field
+from .model import (
+    ACT_LEVELS,
+    KIND_PING,
+    KIND_UNPAIR,
+    SELF_AGENT,
+    FrameError,
+    is_id,
+    peer_kind,
+    text_field,
+)
 from .store import (
     SECRET_BYTES,
     PeerStore,
@@ -254,6 +263,7 @@ class PeerLink:
                 "can_ask": p.can_ask,
                 "send_files": p.send_files,
                 "act": p.act,
+                "kind": peer_kind(p.kind),
                 "has_secret": read_secret(self._workspace, p.id) is not None,
                 "queued": queued,
                 **state,
@@ -431,6 +441,7 @@ class PeerLink:
         nonce_a = auth.new_nonce()
         await ws.send(model.encode({
             "type": "pair_challenge", "from": mine, "nonce": nonce_a, "salt": pairing.salt,
+            "agent": SELF_AGENT,
         }))
         proof = await self._recv(ws, "pair_proof")
         key = await asyncio.to_thread(auth.code_key, pairing.code, pairing.salt)
@@ -447,6 +458,7 @@ class PeerLink:
             "type": "pair_ok",
             "mac": auth.mac(key, "pair-a", mine, peer_id, nonce_a, nonce_b),
             "sealed": auth.b64(sealed),
+            "agent": SELF_AGENT,
         }))
         done = await self._recv(ws, "pair_done")
         if not auth.mac_ok(secret, done.get("mac"), "pair-done", peer_id, mine, nonce_b, nonce_a):
@@ -464,6 +476,7 @@ class PeerLink:
             # Il nome qui lo dà l'altra Jenny, non l'utente: se era già sua,
             # resta quello che l'utente le aveva dato.
             keep_name=True,
+            kind=peer_kind(first.get("agent")),
         )
 
     # -- Abbinamento: chi ha il codice ---------------------------------------------
@@ -493,6 +506,7 @@ class PeerLink:
                 "type": "pair", "v": model.PROTOCOL_VERSION, "from": mine, "nonce": nonce_b,
                 "name": own_host.split(".", 1)[0] if own_host else "",
                 "host": own_host or "", "ip": own_ip or "", "port": self.port,
+                "agent": SELF_AGENT,
             }))
             try:
                 challenge = await self._recv(ws, "pair_challenge")
@@ -516,6 +530,10 @@ class PeerLink:
                 raise PeerError("bad_code") from exc
             if not auth.mac_ok(key, ok.get("mac"), "pair-a", peer_id, mine, nonce_a, nonce_b):
                 raise PeerError("bad_code")
+            # Chi c'è dall'altra parte: lo dice il ``pair_ok`` (o già la sfida).
+            # Una parte che non lo dice, o dice qualcosa che non conosciamo, è
+            # una Jenny come le altre.
+            kind = peer_kind(ok.get("agent", challenge.get("agent")))
             sealed = auth.unb64(ok.get("sealed"))
             if sealed is None:
                 raise PeerError("protocol")
@@ -531,12 +549,14 @@ class PeerLink:
             }))
         finally:
             await _close(ws)
-        await self._save_peer(peer_id, secret, name=name, host=host, ip=used_ip or ip, port=port)
+        await self._save_peer(
+            peer_id, secret, name=name, host=host, ip=used_ip or ip, port=port, kind=kind
+        )
         return {"id": peer_id, "name": name}
 
     async def _save_peer(
         self, peer_id: str, secret: bytes, *, name: str, host: str, ip: str, port: int,
-        keep_name: bool = False,
+        keep_name: bool = False, kind: str = SELF_AGENT,
     ) -> None:
         """Registra la Jenny appena abbinata, al posto di quella che era già lei.
 
@@ -564,7 +584,7 @@ class PeerLink:
         def apply(peers: Any) -> bool:
             old = next((p for p in peers.peers if p.id == peer_id), None)
             old = old or next((p for p in peers.peers if same_phone(p)), None)
-            entry = PeerConfig(id=peer_id, name=name, host=host, ip=ip, port=port)
+            entry = PeerConfig(id=peer_id, name=name, host=host, ip=ip, port=port, kind=kind)
             if old is not None:
                 entry.can_ask, entry.send_files, entry.act = old.can_ask, old.send_files, old.act
                 if keep_name:

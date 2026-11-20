@@ -39,6 +39,11 @@ function timeText(ms) {
   });
 }
 
+/** Vero per un collegato che è opencode sul Mac, non un'altra Jenny (`kind`). */
+export function isOpencodePeer(peer) {
+  return peer?.kind === 'opencode';
+}
+
 /** Lo stato di un'altra Jenny in una riga: raggiungibile, in coda, da ricollegare. */
 export function peerStateText(peer) {
   if (!peer.has_secret) return t('stateRepair');
@@ -182,15 +187,21 @@ export class PeersPanel {
       parts.push(`<div class="remote-hint">${escapeHtml(t('noneLinked'))}</div>`);
     }
     for (const p of peers) {
-      parts.push(`<div class="peer-card" data-peer="${escapeHtml(p.id)}">
+      // Un Mac con opencode (il plugin `opencode-jenny`) risponde e basta: non
+      // fa domande a questa Jenny, non riceve file né chiede di fare. I permessi
+      // che vanno da qui a lui non hanno niente da proteggere, e non si mostrano.
+      const mac = isOpencodePeer(p);
+      parts.push(`<div class="peer-card${mac ? ' peer-card-opencode' : ''}" data-peer="${escapeHtml(p.id)}">
         <div class="peer-card-head">
-          <i class="ti ti-arrows-exchange" aria-hidden="true"></i>
+          <i class="ti ${mac ? 'ti-device-laptop' : 'ti-arrows-exchange'}" aria-hidden="true"></i>
           <span class="peer-card-name">${escapeHtml(p.name)}</span>
+          ${mac ? `<span class="peer-card-kind">${escapeHtml(t('kindOpencode'))}</span>` : ''}
         </div>
         <div class="peer-card-state">${escapeHtml(peerStateText(p))}</div>
-        ${this._permHtml(p, 'can_ask', 'canAsk', 'canAskHint')}
-        ${this._permHtml(p, 'send_files', 'sendFiles', 'sendFilesHint')}
-        ${this._actHtml(p)}
+        ${mac ? `<div class="remote-hint">${escapeHtml(t('opencodeHint'))}</div>` : ''}
+        ${mac ? '' : this._permHtml(p, 'can_ask', 'canAsk', 'canAskHint')}
+        ${mac ? '' : this._permHtml(p, 'send_files', 'sendFiles', 'sendFilesHint')}
+        ${mac ? '' : this._actHtml(p)}
         ${this._pendingHtml((s.pending || []).filter((c) => c.peer === p.id))}
         <div class="remote-actions">
           <button class="settings-btn-add" type="button" data-peers="ping" ${p.has_secret ? '' : 'disabled'}>
