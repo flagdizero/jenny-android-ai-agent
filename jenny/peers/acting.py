@@ -69,6 +69,7 @@ class PeerActs:
         get_cron: Callable[[], Any] | None = None,
         notify_done: Callable[[str, str, str], None] | None = None,
         clear_done: Callable[[str], None] | None = None,
+        notify_undone: Callable[[str, str, str], None] | None = None,
         confirmations: Confirmations | None = None,
     ) -> None:
         self._link = link
@@ -77,6 +78,7 @@ class PeerActs:
         self._get_cron = get_cron or (lambda: None)
         self._notify_done = notify_done
         self._clear_done = clear_done
+        self._notify_undone = notify_undone
         self.confirmations = confirmations or Confirmations()
         # Copia sincrona di nomi e livelli: il cancello li legge dai fili del
         # codice, dove non si può aspettare la config.
@@ -389,12 +391,13 @@ class PeerActs:
         await asyncio.to_thread(
             self.store.log, peer_id, "sys", "undo", {"qid": qid, "by": by, **result}
         )
-        if self._notify_done is not None:
+        # Ripostata senza «Annulla»: non resta niente da annullare.
+        if self._notify_undone is not None:
             from jenny.runtime.user_text import say
 
             short = " ".join(str(row["text"]).split())[:120]
             try:
-                self._notify_done(
+                self._notify_undone(
                     qid, say("peer.done_title", peer=self.name(peer_id)),
                     say("peer.undone_body", text=short),
                 )

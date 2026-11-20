@@ -97,6 +97,33 @@ def test_the_summary_names_a_single_peer() -> None:
     assert off == "settings.peers.summaryOff"
 
 
+def _fresh(before: object, after: object) -> object:
+    script = function(PEERS, "peerLinkedFromQr") + f"""
+console.log(JSON.stringify(peerLinkedFromQr({json.dumps(before)}, {json.dumps(after)})));
+"""
+    return json.loads(run_js(script))
+
+
+@requires_node
+def test_a_jenny_linked_from_this_qr_is_asked_a_name() -> None:
+    # Chi mostrava il QR le dava il nome Tailscale, da rinominare a mano.
+    old = {"id": "a" * 32, "name": "Casa"}
+    new = {"id": "b" * 32, "name": "sdk-gphone16k-arm64-2"}
+    assert _fresh({"pairing": True, "peers": [old]},
+                  {"pairing": False, "peers": [old, new]}) == new
+
+
+@requires_node
+def test_no_name_is_asked_without_an_open_code() -> None:
+    old = {"id": "a" * 32, "name": "Casa"}
+    new = {"id": "b" * 32, "name": "Lavoro"}
+    # Chi si collega col codice dell'altra il nome l'ha già dato nel modulo.
+    assert _fresh({"pairing": False, "peers": [old]},
+                  {"pairing": False, "peers": [old, new]}) is None
+    assert _fresh(None, {"pairing": False, "peers": [new]}) is None
+    assert _fresh({"pairing": True, "peers": [old]}, {"pairing": True, "peers": [old]}) is None
+
+
 def test_every_key_the_panel_uses_exists_in_both_languages() -> None:
     import re
 
@@ -125,6 +152,7 @@ def test_the_act_keys_built_at_runtime_exist_in_both_languages() -> None:
                                          "too_many", "unavailable", "failed", "undone")]
     needed += [f"errors.{e}" for e in ("still_working", "nothing_to_undo", "bad_level")]
     needed += [f"log.{k}" for k in ("confirmYes", "confirmNo", "undo", "undoAsked", "undone")]
+    needed += ["linkedTitle", "renameTitle"]  # ``t(fresh ? … : …)`` in ``_rename``
     for lang in ("it", "en"):
         data = json.loads((ASSETS / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
         for key in needed:

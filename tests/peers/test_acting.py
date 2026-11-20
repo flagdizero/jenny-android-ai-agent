@@ -176,6 +176,26 @@ async def test_undo_asked_from_the_other_phone_puts_the_file_back(two):
     assert note.read_text(encoding="utf-8") == "prima\n"
 
 
+async def test_the_undone_notice_has_no_undo_button(two):
+    # Sui due emulatori la notifica «annullato» teneva ancora «Annulla».
+    a, b = two
+    await pair(a, b)
+    _set_peer(b, act="free")
+    qa, acts_a, delivered = _wire(a)
+    (b.workspace / "note").mkdir()
+    (b.workspace / "note" / "bianchi.md").write_text("prima\n", encoding="utf-8")
+    _, acts_b, _ = _wire(b, ActingAgent(b.workspace))
+    notices: list[tuple[str, str]] = []
+    acts_b._notify_done = lambda qid, title, body: notices.append(("done", qid))
+    acts_b._notify_undone = lambda qid, title, body: notices.append(("undone", qid))
+
+    asked = await qa.ask("", "Aggiorna la nota su Bianchi", mode="act")
+    await wait_until(lambda: delivered, timeout=10)
+    await acts_a.request_undo(b.id, asked["qid"])
+    await wait_until(lambda: len(delivered) >= 2, timeout=10)
+    assert notices == [("done", asked["qid"]), ("undone", asked["qid"])]
+
+
 async def test_undo_from_the_other_phone_is_refused_once_the_permission_is_off(two):
     a, b = two
     await pair(a, b)

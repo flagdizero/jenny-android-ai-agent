@@ -969,6 +969,7 @@ class GatewayContainer:
             get_cron=lambda: self.cron,
             notify_done=notifier.post_peer_done,
             clear_done=lambda qid: notifier.clear_peer_notice("done", qid),
+            notify_undone=notifier.post_peer_undone,
             confirmations=confirmations,
         )
         acts.deliver_card = questions._deliver_card

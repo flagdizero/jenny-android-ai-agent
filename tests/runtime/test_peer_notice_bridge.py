@@ -40,6 +40,10 @@ class _FakeBridge:
         self.calls.append(("postPeerDone", qid, title, body))
         return True
 
+    def postPeerUndone(self, qid: str, title: str, body: str) -> bool:  # noqa: N802
+        self.calls.append(("postPeerUndone", qid, title, body))
+        return True
+
     def clearPeerNotice(self, kind: str, ident: str) -> bool:  # noqa: N802
         self.calls.append(("clearPeerNotice", kind, ident))
         return True
@@ -102,6 +106,11 @@ class TestNoticesThroughTheBridge:
         notifier.post_peer_done(QID, "Fatto", "Ho aggiunto la nota.")
         await _drain()
         assert bridge.calls == [("postPeerDone", QID, "Fatto", "Ho aggiunto la nota.")]
+
+    async def test_undone_goes_without_its_button(self, bridge):
+        notifier.post_peer_undone(QID, "Fatto", "Annullato.")
+        await _drain()
+        assert bridge.calls == [("postPeerUndone", QID, "Fatto", "Annullato.")]
 
     @pytest.mark.parametrize("kind, ident", [("confirm", CID), ("done", QID)])
     async def test_clear(self, bridge, kind, ident):
@@ -219,6 +228,7 @@ class TestBoundaryWithKotlin:
         src = read_source(ANDROID_SRC / "NotifierBridge.kt")
         assert "fun postPeerConfirm(cid: String, title: String, body: String): Boolean" in src
         assert "fun postPeerDone(qid: String, title: String, body: String): Boolean" in src
+        assert "fun postPeerUndone(qid: String, title: String, body: String): Boolean" in src
         assert "fun clearPeerNotice(kind: String, ident: String): Boolean" in src
 
     def test_notice_kinds_match(self):
