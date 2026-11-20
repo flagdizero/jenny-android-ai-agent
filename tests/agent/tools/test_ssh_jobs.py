@@ -296,7 +296,15 @@ async def test_a_job_that_keeps_writing_is_delivered_once_byte_for_byte(tmp_path
             env, job.job_id, until=lambda _t, j: j.status == STATUS_FINISHED
         )
         written = Path(job.log_path).read_text()
-        assert written.count("\n") > 12
+        # Dodici poll hanno portato qualcosa: se ogni byte esce una volta sola il
+        # log è cresciuto dodici volte mentre lo si leggeva, e una riga è una
+        # sola ``write``, quindi le righe sono almeno dodici. Meno di dodici
+        # vuol dire che un poll ha ridato byte già consegnati.
+        # Quante righe cadano fra un poll e l'altro lo decide invece il carico
+        # della macchina: a riposo il poll (9 ms) è più svelto della riga
+        # (12 ms), ne porta una o nessuna, e le righe sono dodici esatte. Qui si
+        # chiedeva «più di dodici», vero solo sotto ``pytest -n``.
+        assert written.count("\n") >= 12
         assert delivered == written
 
 
