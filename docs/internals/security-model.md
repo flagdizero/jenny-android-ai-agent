@@ -136,6 +136,33 @@ A password gets the same treatment at every layer the tools touch — never in a
 
 Two things this does **not** protect against, stated plainly: a command the agent runs on the server has whatever rights the account you gave it has, and Jenny's snapshots do not cover a remote machine. There is no undo on the other end.
 
+## Other Jennys
+
+Two Jennys of the same person can be linked ([Your other Jenny](../using/other-jennys.md)). This is the first party that talks to Jenny without being the user, so it gets its own rules. The guiding one: **the phone that receives decides**. Nothing set on the asking phone opens anything on the other one.
+
+**The wire.** Linked Jennys reach each other on the Tailscale listener described under [WebUI authentication](#webui-authentication), with the same network rules (bound to the Tailscale addresses, sources outside the tailnet refused before anything else). The listener is up when `peers.enabled` is on with at least one linked Jenny, even with remote access off; then it serves only the peer path. The two paths don't cross: `/peer` takes only peer frames, never the WebView's, and the WebUI path never takes a peer frame. A frame is at most 256 KB, only known kinds are handled, and a message id seen in the last 7 days is acknowledged and dropped, so a replayed or repeated message does nothing twice.
+
+**Pairing.** The code is 8 characters from a 31-letter alphabet (about 40 bits), shown on one phone, valid once, for 10 minutes and 5 wrong tries, and held only in memory. It never travels: both sides derive a key from it (PBKDF2, 200,000 rounds, fresh salt) and prove knowledge of it with HMACs, and the new 32-byte secret goes across sealed with that key. The `jenny://pair` link fills in the form; it never links on its own.
+
+**Every connection.** Both sides prove the shared secret to each other with HMAC-SHA256 over fresh nonces, each with a label for its role, so neither can send the other's proof back. A failure closes the connection without saying why. WireGuard already encrypts the traffic, and nothing else is layered on it. The secret lives in `<runtime_root>/peers/<id>.key` (mode 0600), outside the workspace, so no file tool reaches it while `security.restrictToWorkspace` is on, and it is in no snapshot or backup. Android's phone-to-phone transfer carries it, like everything else.
+
+**Questions are read-only, and the question is data.** The other Jenny answers in her own session (`peer:<id>`), in a read-only turn whose tool list is closed: looking tools only (files, recall, notebooks, reminders, location, and `peer_attach` to mark a file). There is no `message`, web, code, helper or SSH tool in it, so a question written to make her send data somewhere has nothing to send it with. The turn is tainted from its start. Files leave only if the answering phone allowed them for that Jenny (`sendFiles`, off by default), only those the turn marked, up to 3 of 20 MB, travelling in hashed parts from a copy outside the workspace. Each Jenny answers at most `maxAsksPerHour` (30) questions an hour from each linked one, and past that answers without running a turn.
+
+**Requests to act** are refused unless the acting phone set `act` for that Jenny. With `confirm` or `free`, the request runs in a session of its own (`peer:<id>:act`) with every tool except `install_update`, tainted from its start like a question. What carries its rules is a gate (`jenny/peers/gate.py`): a context variable bound for the request's turn, for every helper it starts (through the helper's saved spec, so a resumed helper keeps it), and for every run of a reminder it created. With `confirm`, the gate holds `web_fetch`, `browser_open`, `browser_do` and `download_file` until the user of the acting phone taps **Allow** on a notification, and closes network access from code (`http_get`, `http_post`, sockets) outright, from worker threads too. Typing into a running code session (`write_stdin`) is refused below `free`, since a session started outside the request has no such check on its network. The level is read at every action, so turning the permission down takes effect at once and denies what is waiting. No answer in 10 minutes is a no. The wait happens before the tool's own timeout starts.
+
+What the request changes is written to undo journals: `peer-<qid>` for its own turns, each helper's own journal (recorded on the request). **Undo** runs them back as one chain and removes the reminders the request created. It puts back only files still as the request left them, and it can be started from the acting phone (notification, panel) or asked by the other one (an `undo` frame, honoured only while `act` is still on). The answer to the asking phone carries a list of what was touched, built from the journals and the job list, not written by the model.
+
+**No ping-pong.** A turn answering the other Jenny can't ask her anything (`peer_ask` is not in its tools), and `peer_ask` refuses whenever a request's gate is bound: its turn, its helpers, the reminders it created.
+
+**What stays open — read this before turning `act` on.**
+
+- **With `free`, nothing is held.** The request can open any page, download, and use the network from code. What remains is the taint (a helper it starts is born untrusted with no task sites, so J1 closes its egress once it reads your private data), the journal and Undo. Undo can't call back what was sent or opened.
+- **With `confirm`, Allow is per host, not per URL.** The notification shows the site, not the path or query, and what goes in them is not checked. Inside a turn one Allow covers that host for the rest of the turn.
+- **The buttons are a notification.** An app granted notification access can press **Allow** or **Undo**, like the direct-reply action above. The confirmation id is random and single-use, and what it allows is held by the gateway, not in the notification, but the press itself can't be told apart from yours.
+- **The pair secret proves the phone, not you.** If the other phone is compromised, or its Jenny was steered by something she read, her requests carry the same authority as yours. The permission levels are there to bound what that is worth.
+- **An answer is not tainted on the asking side.** It lands in the personal chat as a card, and in the model's history as a quoted message from that Jenny (`Name: «…»`), not as untrusted content. Text the other Jenny was steered into writing reaches your personal Jenny's context as something said by your other Jenny, and from there can reach memory at consolidation.
+- **Read-only is enforced by tool refusals** (see [the read-only turn](#smaller-boundaries-and-where-they-stop)), and with `agents.defaults.orchestratorMode` off the acting turn holds the web tools itself: the gate still applies to them, J1 does not.
+
 ## What the agent can and cannot do on the phone
 
 **Can:** (read this list as "Jenny, as a whole" — the agent you talk to is an **orchestrator** and does several of these only by delegating)
@@ -278,6 +305,7 @@ refactor.
 
 - [Privacy](./privacy.md) — what leaves the device and when.
 - [SSH access](../using/ssh.md) — setting up a remote host, and why a restore does not restore access.
+- [Your other Jenny](../using/other-jennys.md) — linking two Jennys, questions, requests to act, and their permissions.
 - [Configuration reference](../reference/configuration.md) — the `security.*` and `tools.*` keys in full.
 - [Tool reference](../reference/tools.md) — per-tool limits and behavior.
 - [Local models](../reference/local-models.md) — self-hosted providers, reachability and the HTTPS guidance.

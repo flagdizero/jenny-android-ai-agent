@@ -65,3 +65,4 @@ The details, including why Tailscale is recognised by its IPv6 range rather than
 
 - [Settings](../reference/settings.md#from-other-devices): the panel, field by field.
 - [Telegram bridge](telegram.md): the other way to reach a phone left at home, with notifications that follow you.
+- [Your other Jenny](other-jennys.md): two phones each with its own Jenny, talking to each other over the same Tailscale listener.

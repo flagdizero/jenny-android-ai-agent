@@ -82,7 +82,7 @@ A row of four icons, each with its name under it, pinned to the bottom of the sc
 |---|---|---|
 | ✿ | **Console** | The conversation with Jenny, with everything under it on show: thoughts, tool calls, timings. See [Chat basics](chat.md). |
 | brain | **Brain** | Which brands exist, which model she thinks with (each brand holds its models, and a tap on one switches to it), the generation parameters, what the phone lets her do while the screen is off, and the app version with the token usage. |
-| hand | **Hands** | What she can do and with which permissions — web search, location, SSH, Telegram, skills — and the jobs that start by themselves. |
+| hand | **Hands** | What she can do and with which permissions — web search, location, SSH, Telegram, your other devices and other Jennys, skills — and the jobs that start by themselves. |
 | database | **Memory** | What she remembers: the three memory files and their caps, Dream that fills them, the gardener that fills the notebooks, the workspace files, the local snapshot history. |
 
 The first-run wizard is not part of the workshop: it is a page of its own that both the home and the workshop send you to while no provider is configured, and it has no dock to wander off through. See [First run](../start/first-run.md).
