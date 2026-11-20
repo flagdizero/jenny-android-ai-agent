@@ -8,9 +8,9 @@ Jenny does not phone home in the telemetry sense (the daily update check, covere
 
 The WebUI itself is served entirely from `127.0.0.1` — no page, font, or script it loads comes from the internet.
 
-## The eight data recipients
+## The nine data recipients
 
-Data only leaves the phone through one of these eight paths, each gated by a condition you control. The GitHub and F-Droid build has seven: the Google Drive copy exists only in the Play Store build, and the other build contains no code for it.
+Data only leaves the phone through one of these nine paths, each gated by a condition you control. The GitHub and F-Droid build has eight: the Google Drive copy exists only in the Play Store build, and the other build contains no code for it.
 
 | Recipient | What it receives | Condition |
 |---|---|---|
@@ -22,6 +22,7 @@ Data only leaves the phone through one of these eight paths, each gated by a con
 | **Your Google Drive** | An encrypted copy of the whole workspace — everything listed under "What stays local" below, `config.json` included — in a "Jenny" folder Jenny creates. Google sees encrypted packs, their sizes and when they were written. It opens only with a password you choose, which is never stored — not on the phone, not in Drive: Google holds the copy, not a way to read it. | Play Store build only. Only after you tap **Turn on the Drive copy** in **Settings → Backup** (`extensions.drive.provider`, default off); then once a day on Wi-Fi, never over mobile data. See [Backup and restore](../using/backup.md#copy-on-google-drive). |
 | **OpenStreetMap's tile server** (`tile.openstreetmap.org`) | Requests for the map tiles of a place card in the chat: the area of the map (zoom and tile numbers), the phone's IP address and a user-agent naming Jenny and its version. Not who is looking, and not your location as such — though a card for where you are shows that area. The WebView never talks to it: the gateway fetches the tiles and keeps them for seven days. | Only when a place card is shown in the chat (from `get_location` or `find_place`) and its tiles are not already cached. |
 | **The SSH hosts you registered** | The commands the agent runs on that machine, and — through `ssh_transfer` — the content of any workspace file it uploads there. Files fetched with `ssh_transfer` travel the other way, from the server into the workspace. | Only if `tools.ssh.enable` is `true` (default `false`), only for an alias a person registered in the workshop (**Hands → SSH**) whose host key you accepted by hand, and only through a `sysadmin` subagent. The agent can never name an address, only one of your aliases. |
+| **Your other Jenny**, on another of your phones, over Tailscale | The questions and requests this Jenny sends her, and the answers this Jenny gives her: text written by the model from whatever it looked at (chats, notebooks, diary, reminders), the list of what a request changed here, and files, if you allowed them. Directly phone to phone, encrypted by Tailscale; nothing passes through a Jenny server or Tailscale's. | Only after you linked the two phones in **Hands → Other Jennys** (`peers.enabled`, default `false`). Answers go out only while that Jenny may ask (`canAsk`, default on once linked); files only with `sendFiles` (default off). See [Your other Jenny](../using/other-jennys.md). |
 
 One more, smaller case: if your configured provider is OpenRouter, Jenny adds fixed attribution headers to every request (`HTTP-Referer` pointing at Jenny's GitHub repo, `X-OpenRouter-Title: Jenny`, `X-OpenRouter-Categories: android-agent,personal-agent`) so OpenRouter can attribute traffic to the app. This doesn't add a new recipient — OpenRouter is already your chosen LLM provider — but it does add identifying metadata to that traffic.
 
@@ -52,12 +53,13 @@ It's worth stating this relationship plainly, because it's easy to underestimate
 
 ## How to shrink the surface
 
-None of the eight recipients above are mandatory except your LLM provider (Jenny can't function without one). To reduce what leaves the device:
+None of the nine recipients above are mandatory except your LLM provider (Jenny can't function without one). To reduce what leaves the device:
 
 - **Leave the Drive copy off** (Play Store build) if you'd rather your Google account didn't hold even an encrypted copy — or install the GitHub or F-Droid build, which has no Google library at all. The `.jbk` export with a passphrase is the alternative.
 - **Turn off update checks** (`updates.enabled: false`) if you don't want the daily request to GitHub; you can still look for a new version by hand with **Check now**.
 - **Turn off location sharing** in the workshop (**Hands → Location**) if you don't want your last-known location included in every turn sent to the provider.
 - **Leave SSH off** unless you actually want Jenny reaching a server — it is off by default, and every registered host is a machine that receives commands and can receive workspace files.
+- **On a phone you link to another Jenny, decide what it gives out.** Questions are answered by default once linked; turn off **Can ask me questions** for that Jenny if it should only ask, never answer. Files stay off unless you turn them on.
 - **Don't enable Telegram** unless you actually want a second channel — it's off by default, and enabling it means your conversation also flows through Telegram's servers.
 - **Pick your LLM provider deliberately.** Since messages, history, and file contents all go to whichever provider you configure, your provider's own privacy policy and data-retention practice matters as much as anything Jenny does.
 - Avoid putting anything you wouldn't want reaching your LLM provider inside `workspace/`, given the chain described above.
@@ -68,4 +70,5 @@ None of the eight recipients above are mandatory except your LLM provider (Jenny
 - [Location](../using/location.md) — the location toggle and Android permission.
 - [Telegram bridge](../using/telegram.md) — what Telegram adds and when it's active.
 - [SSH access](../using/ssh.md) — registering a host, and what the agent can send to it.
+- [Your other Jenny](../using/other-jennys.md) — linking two of your phones, and what each one gives the other.
 - [Configuration reference](../reference/configuration.md) — `tools.location`, `telegram.enabled`, and related keys.

@@ -231,6 +231,31 @@ One row, **Tailscale**, sums up the state: *off*, *on · waiting for Tailscale*,
 
 When Tailscale is down, the panel says so (*Waiting for Tailscale*, *Tailscale needs you*), and on the phone it offers **Open Tailscale**. Seen from another device, the panel warns that turning the switch off disconnects that window, and that only the phone can turn it back on.
 
+### Other Jennys
+
+One row, **Linked Jennys**, says *Off*, *On · none linked*, or who is linked. Tapping it opens the panel. How to use it: [Your other Jenny](../using/other-jennys.md).
+
+| Control | Effect | Default |
+|---|---|---|
+| **Link with other Jennys** | Lets this Jenny talk to the Jennys on your other phones over Tailscale (`peers.enabled`). Off: none can reach this one, and this one calls none. Without Tailscale on, the panel says so. | Off |
+| **Show the QR** | A one-time code (8 characters, 10 minutes, works once) as a QR to scan with the other phone's camera, with the address and the code written underneath for typing by hand. When the other Jenny links with it, the panel asks what to call her. | — |
+| **I have the other's code** | The form for the other side: address (Tailscale name or `100.x.y.z`), code, and the name you give the other Jenny. Scanning the QR with the camera opens it already filled in. With linking off, **Link** turns it on. | — |
+
+Each linked Jenny is a row with its state (*Last contact*, *Not reachable*, *N waiting*, *Never heard from*, or *Link again* after a restore), and these controls:
+
+| Control | Effect | Default |
+|---|---|---|
+| **Test** | Sends a ping, and retries whatever is waiting for that Jenny now. | — |
+| **Rename** / **Unlink** | Unlinking forgets the secret and, if the other is reachable, unlinks it too. Linking again needs a new code. | — |
+| **Can ask me questions** | That Jenny can ask this one questions, answered in a read-only turn (`canAsk`). | On |
+| **Answers can carry files** | Answers to that Jenny can attach files, up to 3 of 20 MB (`sendFiles`). | Off |
+| **Can ask me to do things** | `act`: **No**, **Yes, but ask me before sending anything out** (opening a page, downloading or network access from code waits for **Allow** on a notification), or **Yes, everything**. | No |
+| **History** | Opens the list of questions, answers, files, tests and decisions, in both directions. Above it, **Requests to act**: the latest requests from that Jenny with their state (*In progress*, *Still working on it*, *Done*, *Refused*, *Undone*…) and **Undo**. | — |
+
+While a request waits for a confirmation, the row shows it highlighted, with what it wants to do and **Allow** / **No**, the same as on the notification.
+
+All of these are decided on this phone, for what the *other* Jenny may do here. Changes apply at once; setting **Can ask me to do things** to **No** also denies the confirmations waiting.
+
 ### Skills
 
 One row, **What she knows**, counts the skills that come with the app and the ones that are yours. Tapping it opens the list in two blocks. You can switch your own skills on and off there; the built-in ones can't be turned off. To create, change or delete a skill, ask Jenny in chat.

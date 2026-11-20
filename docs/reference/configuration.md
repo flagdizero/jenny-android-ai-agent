@@ -146,7 +146,7 @@ A number outside its range in a file written by an older version is **clamped to
 
 ## peers
 
-Your other Jennys (a work phone and a personal phone, say), reached directly over Tailscale. Set it from the workshop (Hands → Other Jennys).
+Your other Jennys (a work phone and a personal phone, say), reached directly over Tailscale. Set it from the workshop (Hands → Other Jennys). How it works: [Your other Jenny](../using/other-jennys.md); its boundaries: [Security model](../internals/security-model.md#other-jennys).
 
 | Key | Type | Default | Effect |
 |---|---|---|---|

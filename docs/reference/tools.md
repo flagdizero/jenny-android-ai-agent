@@ -12,9 +12,9 @@ There is no fixed tool count. What Jenny actually has available in a given conve
 
 - **The agent's scope** — the main agent loads either the `orchestrator` scope (default, see `agents.defaults.orchestratorMode`) or the historical `core` scope; a subagent loads the `subagent` scope, narrowed further by its agent type. The four SSH tools sit in a scope of their own, `remote`, which **no** agent loads by default — only the `sysadmin` subagent type asks for it. Two more scopes work the same way: `apps` (the `app-builder`'s face of `app`) and `notebook` (the `notebook-editor`'s `board` and its face of `notebook`). The same install therefore exposes different tools to the orchestrator, to a `sysadmin` subagent, and to every other subagent.
 
-A conversation agent can draw on **51** named built-in tools: 50 registered through the standard loader (53 classes: a few names have one class per scope — `app` has three, see [The `app` tool and who writes apps](#the-app-tool-and-who-writes-apps), and [`notebook`](#notebook) two) (`jenny/agent/tools/loader.py`, which imports 27 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `use_app` (`UseAppTool` in `app_actions.py`), the one tool every Jenny App action runs through, re-synced every turn and present while at least one app has an action. No single agent sees all 51 at once — see the scope note above. If you ask Jenny to list its tools, expect the number to vary between installs.
+A conversation agent can draw on **53** named built-in tools: 52 registered through the standard loader (55 classes: a few names have one class per scope — `app` has three, see [The `app` tool and who writes apps](#the-app-tool-and-who-writes-apps), and [`notebook`](#notebook) two) (`jenny/agent/tools/loader.py`, which imports 28 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `use_app` (`UseAppTool` in `app_actions.py`), the one tool every Jenny App action runs through, re-synced every turn and present while at least one app has an action. No single agent sees all 53 at once — see the scope note above. If you ask Jenny to list its tools, expect the number to vary between installs.
 
-Below, tools are grouped into ten categories. Each entry gives the exact tool name the model calls, what it does for you in practice, the parameters worth knowing, hard numeric limits, the config toggle that controls it, and any gotcha worth knowing before you rely on it.
+Below, tools are grouped into eleven categories. Each entry gives the exact tool name the model calls, what it does for you in practice, the parameters worth knowing, hard numeric limits, the config toggle that controls it, and any gotcha worth knowing before you rely on it.
 
 ### Reading the "Config" line — a toggle is not the only gate
 
@@ -692,6 +692,26 @@ Closes the session — page, cookies and the second WebView.
 
 Config, under `tools.androidWeb.browser`: `timeout`, `maxSnapshotChars`, `maxReadChars`, `idleCloseS` (an idle session is reaped on its own). See [Configuration](configuration.md).
 
+## 11. Other Jennys
+
+The tools behind [Your other Jenny](../using/other-jennys.md). Both are in the `core` and `orchestrator` scopes, never in a subagent's.
+
+### peer_ask
+
+Sends a question, or a request to do something, to the user's other Jenny on another phone. It queues the message and returns at once: the answer arrives later as a card of its own in the personal chat, in seconds if the other phone is reachable, otherwise when it is back.
+
+- `question` is required, written for the other Jenny: she can't see this conversation.
+- `peer` is the other Jenny's name as the user calls it; it can be left out when only one is linked.
+- `mode`: `read` (default) for a question, answered in a read-only turn; `act` to have her do it on her phone, which she refuses unless that phone allows requests to act from this one.
+
+Where it is: the personal chat and the runs of its reminders and monitors (so "every evening ask Work how the day went" is just a reminder), not a notebook's chat or its reminders. It is listed only while another Jenny is linked. It refuses inside work another Jenny asked for — her request's turn, its helpers, a reminder it created — so two Jennys can't keep each other busy. In a monitor's silent run it asks the model not to announce the question, since the card reaches the chat by itself.
+
+Config: `peers.enabled` and a linked Jenny. Limits: 4,000 characters per question; the other side answers at most `peers.maxAsksPerHour` (30) per hour from each Jenny.
+
+### peer_attach
+
+Marks a file of the workspace to go with the answer this Jenny is giving another one. It exists only in the read-only turn that answers a question, and sends nothing by itself: the file goes with the answer, and only if this phone allowed files for that Jenny (`sendFiles`). At most 3 files of 20 MB per answer, only from inside the workspace; `config.json` with its copies and anything under `.jenny/` (snapshots, backup staging) are refused.
+
 ---
 
 ## The internal registry: Dream
@@ -719,6 +739,7 @@ The workshop's **Hands** drawer governs exactly two tool settings, and SSH gets 
 | Web search (max results, timeout, fetch max chars) | Yes — Hands → Web Search (the `enable` switch itself is config-only) | `tools.androidWeb.*` |
 | Location sharing | Yes — Hands → Location | `tools.location.enable` |
 | SSH access (on/off, hosts, keys, fingerprints) | Yes — Hands → SSH (its own section) | `tools.ssh.enable`, `tools.ssh.hosts` |
+| Other Jennys (`peer_ask`, `peer_attach`, and what each other Jenny may do here) | Yes — Hands → Other Jennys (its own section) | `peers.*` |
 | File tools (read/write/edit/patch/list/find/grep) | No | `tools.file.enable` |
 | Python execution | No | `tools.pythonExec.enable` (+ timeout, output cap, module lists) |
 | Self-inspection (`my`) | No | `tools.my.enable`, `tools.my.allowSet` |

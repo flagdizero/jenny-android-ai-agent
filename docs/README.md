@@ -36,6 +36,7 @@ Start here if you just want to install and use the app.
 | [SSH access](using/ssh.md) | Registering your own remote machines, generating the on-device key, pinning host fingerprints, short commands vs detached jobs — and why a restore doesn't bring SSH access back. |
 | [Telegram bridge](using/telegram.md) | Pairing and using the optional Telegram bridge alongside the WebUI, and what does and doesn't work over it. |
 | [Jenny from your other devices](using/remote-access.md) | Opening the phone's Jenny from a computer or a second phone over Tailscale: the link and its key, what works from there, and what happens when Tailscale drops. |
+| [Your other Jenny](using/other-jennys.md) | Linking the Jennys on two of your phones over Tailscale: asking the other one, asking it to do things with Allow and Undo, a daily report as a reminder, and who decides what. |
 | [Location](using/location.md) | How device location is shared with the model as context, the two-gate permission model, and the privacy trade-off. |
 | [Backup and restore](using/backup.md) | Encrypted `.jbk` backups (for disaster recovery) vs. local workspace snapshots (a time machine), and how to restore either. |
 | [Phone app launcher](using/app-launcher.md) | The search drawer that opens your phone's apps and mini-apps, and the card a long press on a row opens, for app info, uninstalling, editing and deleting. |
