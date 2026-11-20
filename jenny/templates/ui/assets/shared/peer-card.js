@@ -23,6 +23,13 @@ const STATUSES = new Set([
 ]);
 const DONE_ICONS = { file: 'ti-file', job: 'ti-clock', egress: 'ti-world' };
 const ID_RE = /^[0-9a-f]{32}$/;
+/* Le richieste già annullate, e i tasti «Chiedi di annullare» disegnati per
+   ciascuna: la scheda `undone` arriva dopo quella `ok`, come messaggio a sé, e
+   senza questo la vecchia offriva ancora di annullare (prova sui due
+   emulatori, 20/11/2026). I tasti si tolgono anche fuori dal documento, perché
+   il replay può costruire le schede prima di attaccarle. */
+const undoneQids = new Set();
+const undoButtons = new Map();
 
 function timeOf(ms) {
   const n = Number(ms);
@@ -60,6 +67,7 @@ function doneNode(done) {
 
 function undoButton(card) {
   if (!ID_RE.test(card.qid || '') || !ID_RE.test(card.peerId || '')) return null;
+  if (undoneQids.has(card.qid)) return null;
   const undoable = (card.done || []).some((d) => d && d.undoable === true);
   if (!undoable) return null;
   const btn = button('home-peer-undo', null, async () => {
@@ -74,7 +82,17 @@ function undoButton(card) {
   });
   btn.appendChild(icon('ti-arrow-back-up'));
   btn.appendChild(el('span', '', i18n.t('home.peer.askUndo')));
+  if (!undoButtons.has(card.qid)) undoButtons.set(card.qid, []);
+  undoButtons.get(card.qid).push(btn);
   return btn;
+}
+
+/** La richiesta *qid* è stata annullata: i suoi tasti spariscono, e non tornano. */
+function markUndone(qid) {
+  if (!ID_RE.test(qid || '')) return;
+  undoneQids.add(qid);
+  for (const btn of undoButtons.get(qid) || []) btn.remove();
+  undoButtons.delete(qid);
 }
 
 /** Il nodo della scheda, o `null` se *card* non è una risposta di un'altra Jenny. */
@@ -97,6 +115,7 @@ export function peerCardNode(card) {
     const text = typeof card.text === 'string' ? card.text : '';
     node.appendChild(el('div', 'home-peer-quote', text || i18n.t('home.peer.empty')));
   } else if (status === 'undone') {
+    markUndone(card.qid);
     const u = card.undo || {};
     node.appendChild(el('div', 'home-peer-status', i18n.t('home.peer.status.undone', {
       name: card.peer, files: Number(u.restored) || 0, jobs: Number(u.jobs) || 0,

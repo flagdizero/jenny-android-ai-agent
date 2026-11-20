@@ -18,7 +18,7 @@ CARD = (ASSETS / "shared" / "peer-card.js").read_text(encoding="utf-8")
 DOM = (ASSETS / "shared" / "dom.js").read_text(encoding="utf-8")
 
 
-def _render(card: object, click: str | None = None) -> dict:
+def _render(card: object, click: str | None = None, before: str | None = None) -> dict:
     script = (
         "import { createRequire } from 'module';\n"
         "const require = createRequire(import.meta.url);\n"
@@ -36,7 +36,9 @@ def _render(card: object, click: str | None = None) -> dict:
         + function(CARD, "headText") + "\n"
         + function(CARD, "doneNode") + "\n"
         + function(CARD, "undoButton") + "\n"
+        + function(CARD, "markUndone") + "\n"
         + function(CARD, "peerCardNode") + "\n"
+        + (before or "")
         + f"const node = peerCardNode({json.dumps(card)});\n"
         + (click or "")
         + "console.log(JSON.stringify(node ? { cls: node.className, html: node.innerHTML, "
@@ -149,6 +151,27 @@ def test_still_working_has_no_undo_and_nothing_undoable_neither() -> None:
     assert "home.peer.askUndo" not in out["text"]
     only_out = {**ACT, "done": [{"kind": "egress", "label": "x.it", "undoable": False}]}
     assert "home.peer.askUndo" not in _render(only_out)["text"]
+
+
+@requires_node
+@requires_jsdom
+def test_once_undone_the_old_card_stops_offering_undo() -> None:
+    # Sui due emulatori la scheda «ha fatto» teneva «Chiedi di annullare» anche
+    # dopo la scheda «annullato». Qui la vecchia è costruita fuori dal documento,
+    # come nel replay, e la nuova arriva dopo.
+    undone = {"peer": "Lavoro", "status": "undone", "mode": "act", "qid": "a" * 32,
+              "question": "x", "undo": {"restored": 1, "kept": 0, "jobs": 0}}
+    before = (
+        f"const old = peerCardNode({json.dumps(ACT)});\n"
+        "const hadIt = !!old.querySelector('.home-peer-undo');\n"
+        f"peerCardNode({json.dumps(undone)});\n"
+        "const keptIt = !!old.querySelector('.home-peer-undo');\n"
+    )
+    click = "calls.push(['old', hadIt, keptIt]);\n"
+    out = _render(ACT, click, before)
+    assert ["old", True, False] in out["calls"]
+    # E un ridisegno della stessa richiesta non lo rimette.
+    assert "home.peer.askUndo" not in out["text"]
 
 
 @requires_node

@@ -49,9 +49,11 @@ _REFUSALS = {
             "names, dates and details she needs, since she can't see this conversation."
         ),
         mode=StringSchema(
-            "'read' (default): she looks and answers. 'act': she does it on her phone "
-            "(a reminder, a note, saving a file, a task for her helpers), if the user "
-            "allowed requests to act there.",
+            "'read' (default): she only looks at what she already has and answers. 'act': "
+            "she does something on her phone (open or read a web page there, set a "
+            "reminder, write a note, save a file, give her helpers a task), if the user "
+            "allowed requests to act there. Use 'act' whenever the user wants something "
+            "done, even when they say 'ask her to…': in 'read' she can't do anything.",
             enum=("read", "act"),
             nullable=True,
         ),

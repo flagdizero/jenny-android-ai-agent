@@ -3010,21 +3010,29 @@ class AgentLoop(
         )
 
     def _append_channel_delivery(
-        self, session_key: str, content: str, media: list[str] | None
+        self, session_key: str, content: str, media: list[str] | None,
+        taint: list[str] | None = None,
     ) -> None:
         """Append the proactive delivery to *session_key* (caller holds the lock)."""
         session = self.sessions.get_or_create(session_key)
         extra: dict[str, Any] = {"_channel_delivery": True}
         if media:
             extra["media"] = list(media)
+        if taint:
+            # Un testo che non viene da Jenny (la risposta di un'altra Jenny):
+            # la riga porta le sue fonti come un risultato di ``web_fetch``,
+            # così finché resta in vista i lavori che Jenny avvia nascono
+            # contaminati (``turn_taint_for``).
+            extra[TOOL_TAINT_META] = list(taint)
         session.add_message("assistant", content, **extra)
         self.sessions.save(session)
 
     async def _record_channel_delivery_locked(
-        self, session_key: str, content: str, media: list[str] | None
+        self, session_key: str, content: str, media: list[str] | None,
+        taint: list[str] | None = None,
     ) -> None:
         async with self._session_locks.get(session_key):
-            self._append_channel_delivery(session_key, content, media)
+            self._append_channel_delivery(session_key, content, media, taint)
 
     async def record_channel_delivery(
         self,
@@ -3032,6 +3040,7 @@ class AgentLoop(
         session_key: str,
         content: str,
         media: list[str] | None = None,
+        taint: list[str] | None = None,
     ) -> None:
         """Register a proactive delivery as an ``assistant`` message in the session.
 
@@ -3070,7 +3079,7 @@ class AgentLoop(
             # ``Lock.acquire()`` su un lock libero non cede il controllo, quindi
             # qui non c'è finestra in cui un turno possa infilarsi: e anche se
             # cedesse, l'append avverrebbe comunque sotto lock.
-            await self._record_channel_delivery_locked(session_key, content, media)
+            await self._record_channel_delivery_locked(session_key, content, media, taint)
             return
         logger.debug(
             "Channel delivery for session {} deferred: session busy",
@@ -3081,7 +3090,7 @@ class AgentLoop(
         self._schedule_session_write(
             session_key,
             functools.partial(
-                self._record_channel_delivery_locked, session_key, content, media
+                self._record_channel_delivery_locked, session_key, content, media, taint
             ),
         )
 

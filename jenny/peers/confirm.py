@@ -6,6 +6,14 @@ sì o no: dalla notifica (i tasti «Consenti» e «No», ``runtime.notifier``), 
 pannello dell'Officina (``peer.confirm``), o togliendo il permesso, che conta
 come un no. Senza risposta entro :data:`CONFIRM_TTL_S` è un no.
 
+**La scadenza è sull'ora vera**, non sul tempo di asyncio: l'orologio monotono
+che i timer del loop usano si ferma quando Android sospende la CPU, e su
+jenny_square una conferma era ancora in attesa dopo 684 s di ora vera con un
+tetto di 600 (prova del 20/11/2026). Per questo l'attesa va a tratti brevi
+(:data:`CHECK_EVERY_S`) e ogni volta guarda l'ora; e il giro del job ``peers``,
+che passa attraverso Doze, chiude con :meth:`Confirmations.expire_due` quelle
+scadute mentre il telefono dormiva.
+
 Quello che si chiede lo tiene **il server**, come le sonde SSH
 (``webui/ssh_api.py``): chi preme un tasto manda solo l'identificativo, casuale
 e buono una volta. Un'app con l'accesso alle notifiche che premesse «Consenti»
@@ -26,6 +34,8 @@ from .store import now_ms
 
 #: Quanto aspetta una conferma prima di valere «no».
 CONFIRM_TTL_S = 600.0
+#: Ogni quanto, del tempo da sveglio, l'attesa guarda l'ora vera.
+CHECK_EVERY_S = 30.0
 
 Post = Callable[[str, str, str], None]
 Clear = Callable[[str], None]
@@ -78,11 +88,19 @@ class Confirmations:
         self._pending[cid] = pending
         self._notify(lambda: self._post and self._post(cid, peer_name, pending.what))
         self._changed()
+        deadline_ms = pending.at_ms + int(self._ttl_s * 1000)
         try:
-            return await asyncio.wait_for(asyncio.shield(pending.future), self._ttl_s)
-        except asyncio.TimeoutError:
-            logger.info("peers: a confirmation for {} went unanswered", peer_name)
-            return False
+            while True:
+                left_s = (deadline_ms - now_ms()) / 1000
+                if left_s <= 0:
+                    logger.info("peers: a confirmation for {} went unanswered", peer_name)
+                    return False
+                try:
+                    return await asyncio.wait_for(
+                        asyncio.shield(pending.future), min(left_s, CHECK_EVERY_S)
+                    )
+                except asyncio.TimeoutError:
+                    continue
         finally:
             self._pending.pop(cid, None)
             if not pending.future.done():
@@ -107,6 +125,23 @@ class Confirmations:
                 denied += 1
         return denied
 
+    def expire_due(self, *, now: int | None = None) -> int:
+        """Le conferme oltre la scadenza diventano un no: le chiude il giro di ``peers``.
+
+        Serve quando il telefono ha dormito: l'attesa in :meth:`ask` guarda l'ora
+        solo mentre la CPU è sveglia, e senza questo il lavoro che aspetta
+        resterebbe fermo, con la notifica su, fino al primo risveglio lungo.
+        """
+        cutoff = (now_ms() if now is None else now) - int(self._ttl_s * 1000)
+        expired = 0
+        for p in list(self._pending.values()):
+            if p.at_ms <= cutoff and not p.future.done():
+                p.future.set_result(False)
+                expired += 1
+        if expired:
+            logger.info("peers: {} confirmation(s) went unanswered while the phone slept", expired)
+        return expired
+
     def _notify(self, call: Callable[[], Any]) -> None:
         try:
             call()
@@ -118,4 +153,4 @@ class Confirmations:
             self._notify(self.on_change)
 
 
-__all__ = ["CONFIRM_TTL_S", "Confirmations"]
+__all__ = ["CHECK_EVERY_S", "CONFIRM_TTL_S", "Confirmations"]

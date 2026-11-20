@@ -18,7 +18,7 @@ Kotlin è risolta via Chaquopy alla prima chiamata; senza contesto Android
 (desktop/test) ogni chiamata è un no-op silenzioso.
 
 **Le notifiche dell'altra Jenny** (``post_peer_confirm``, ``post_peer_done``,
-``clear_peer_notice``) passano dallo stesso bridge ma non sono alert: hanno
+``post_peer_undone``, ``clear_peer_notice``) passano dallo stesso bridge ma non sono alert: hanno
 pulsanti («Consenti»/«No», «Annulla») e non tacciono con la chat a schermo,
 perché sono una decisione da prendere o un'azione da poter disfare, non un
 messaggio da leggere. Il tocco su un pulsante torna da
@@ -337,6 +337,22 @@ def post_peer_done(qid: str, title: str, body: str) -> None:
         _peer_fire("postPeerDone", qid, title, body)
     except Exception:  # noqa: BLE001 — mai un'eccezione al chiamante
         logger.opt(exception=True).warning("Peer done notice failed")
+
+
+def post_peer_undone(qid: str, title: str, body: str) -> None:
+    """Riposta la notifica di ``post_peer_done`` per *qid*, senza «Annulla». Mai solleva.
+
+    Dopo l'annullamento il pulsante non ha più niente da fare: lasciato sotto
+    «annullato», invitava a un secondo tocco a vuoto.
+    """
+    try:
+        if not _peer_ident_ok(qid):
+            logger.warning("Peer undone notice not posted: malformed qid")
+            return
+        title, body = _peer_text(title, body)
+        _peer_fire("postPeerUndone", qid, title, body)
+    except Exception:  # noqa: BLE001 — mai un'eccezione al chiamante
+        logger.opt(exception=True).warning("Peer undone notice failed")
 
 
 def clear_peer_notice(kind: str, ident: str) -> None:

@@ -304,6 +304,7 @@ class PeerQuestions:
             WEBUI_DEFAULT_CHAT_ID,
             OutboundMessage,
         )
+        from jenny.runtime.delivery import RECORD_TAINT_META
         from jenny.session.turn_visibility import mark_silent_turn
 
         if self._deliver is None:
@@ -339,6 +340,12 @@ class PeerQuestions:
             "_record_channel_delivery": True,
             "_proactive_fanout": True,
         }
+        if text:
+            # Il testo l'ha scritto l'altra Jenny, che può essere stata guidata
+            # da quel che ha letto: nella cronologia di questa la riga è non
+            # fidata come un ``web_fetch``, e finché resta in vista i lavori
+            # che Jenny avvia nascono contaminati.
+            metadata[RECORD_TAINT_META] = [f"peer:{name}"]
         mark_silent_turn(metadata)
         await self._deliver(OutboundMessage(
             channel=WEBSOCKET_CHANNEL,

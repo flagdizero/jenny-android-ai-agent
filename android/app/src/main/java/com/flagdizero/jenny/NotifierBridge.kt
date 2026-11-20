@@ -663,6 +663,13 @@ class NotifierBridge(context: Context) {
             ),
         )
 
+    /** La stessa notifica di [postPeerDone], ripostata dopo l'annullamento e
+     *  senza «Annulla»: non c'è più niente da annullare, e il pulsante rimasto
+     *  sotto «annullato» diceva il contrario (prova sui due emulatori,
+     *  20/11/2026). */
+    fun postPeerUndone(qid: String, title: String, body: String): Boolean =
+        postPeer(PEER_KIND_DONE, qid, title, body, emptyList())
+
     /** Toglie la notifica di [postPeerConfirm] (*kind* `confirm`) o di
      *  [postPeerDone] (`done`). `false` su un tipo o un identificativo
      *  malformato. */

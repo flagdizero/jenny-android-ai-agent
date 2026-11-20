@@ -54,6 +54,18 @@ export function peerStateText(peer) {
   return parts.join(' · ');
 }
 
+/** L'altra Jenny appena collegata dal QR di questa, o `null`.
+ *
+ *  Chi mostra il QR non sceglieva un nome: il collegamento le dava quello di
+ *  Tailscale (`sdk-gphone16k-arm64-2` sui due emulatori, 20/11/2026), da
+ *  rinominare a mano. Una Jenny nuova comparsa mentre il codice era aperto è
+ *  quella che l'ha usato: il pannello chiede subito come chiamarla. */
+export function peerLinkedFromQr(before, after) {
+  if (!before?.pairing || !after) return null;
+  const known = new Set((before.peers || []).map((p) => p.id));
+  return (after.peers || []).find((p) => !known.has(p.id)) || null;
+}
+
 function errorText(e) {
   const reason = e?.message || '';
   const known = ['bad_code', 'bad_name', 'no_code_open', 'unreachable', 'disabled', 'protocol',
@@ -121,6 +133,7 @@ export class PeersPanel {
   }
 
   _show(status) {
+    const before = this.status;
     this.status = status;
     /* Il codice mostrato vive finché il server lo tiene aperto: usato o
        scaduto, il QR sparisce da solo. */
@@ -128,6 +141,8 @@ export class PeersPanel {
     if (!status.pairing) this._pair = null;
     this.onStatus?.(status);
     this.render();
+    const fresh = peerLinkedFromQr(before, status);
+    if (fresh) this._rename(fresh, { fresh: true });
   }
 
   render() {
@@ -439,6 +454,8 @@ export class PeersPanel {
       busyText: t('joining'),
       bodyHtml: `
         ${link ? `<p class="oc-dialog-note">${escapeHtml(t('fromQr'))}</p>` : ''}
+        ${this.status && !this.status.enabled
+    ? `<p class="oc-dialog-note">${escapeHtml(t('joinTurnsOn'))}</p>` : ''}
         <div class="settings-field">
           <label class="settings-label" for="dlg-peer-host">${escapeHtml(t('address'))}</label>
           <input type="text" class="settings-input" id="dlg-peer-host" autocomplete="off"
@@ -479,6 +496,14 @@ export class PeersPanel {
         };
         if (link?.port) params.port = link.port;
         try {
+          /* Chi tocca «Collega» vuole il collegamento: con l'interruttore spento
+             il link del QR apriva il modulo e poi falliva con «spento», e
+             bisognava annullare, accendere e inquadrare di nuovo (prova sui due
+             emulatori, 20/11/2026). Il modulo lo dice, e lo accende qui. */
+          if (this.status && !this.status.enabled) {
+            const on = await rpc.peer('set', { enabled: true });
+            if (!this._destroyed) this._show(on);
+          }
           const status = await rpc.peer('pair.join', params);
           if (!this._destroyed) this._show(status);
         } catch (e) {
@@ -491,19 +516,31 @@ export class PeersPanel {
     });
   }
 
-  _rename(peer) {
+  /** «Come la chiami?». Con `fresh`, appena collegata dal QR di qui: il
+   *  titolo dice che cosa è successo. */
+  _rename(peer, { fresh = false } = {}) {
     if (!peer) return;
     formDialog({
       id: 'peer-rename-dialog',
-      title: t('renameTitle'),
+      title: t(fresh ? 'linkedTitle' : 'renameTitle'),
       okText: i18n.t('common.save'),
       cancelText: i18n.t('common.cancel'),
       bodyHtml: `
+        ${fresh ? `<p class="oc-dialog-note">${escapeHtml(t('linkedNote'))}</p>` : ''}
         <div class="settings-field">
           <label class="settings-label" for="dlg-peer-rename">${escapeHtml(t('nameLabel'))}</label>
           <input type="text" class="settings-input" id="dlg-peer-rename" maxlength="40"
             autocomplete="off" value="${escapeHtml(peer.name)}" />
         </div>`,
+      /* Il nome che c'è, selezionato: si scrive sopra senza cancellarlo a mano
+         (quello di Tailscale, appena collegata, non lo vuole tenere nessuno). */
+      setup: (dialog) => {
+        setTimeout(() => {
+          const input = dialog.querySelector('#dlg-peer-rename');
+          input?.focus();
+          input?.select();
+        }, 50);
+      },
       onOk: async (dialog) => {
         const name = dialog.querySelector('#dlg-peer-rename').value.trim();
         if (!name) {

@@ -50,6 +50,25 @@ async def test_the_next_turn_reads_the_alert_in_its_context(loop_factory) -> Non
     assert any(ALERT in str(m.get("content")) for m in history)
 
 
+async def test_an_answer_from_another_jenny_taints_what_comes_next(loop_factory) -> None:
+    """La risposta di un'altra Jenny entra in cronologia come non fidata: il
+    turno dopo ne eredita le fonti, e il provider non vede la chiave."""
+    from jenny.security.subagent_policy import turn_taint_for
+    from jenny.session.history_meta import SUBAGENT_TAINT_META, TOOL_TAINT_META
+
+    loop = loop_factory()
+    await loop.record_channel_delivery(
+        session_key=UNIFIED_SESSION_KEY, content="Lavoro: «sì»", taint=["peer:Lavoro"],
+    )
+
+    session = loop.sessions.get_or_create(UNIFIED_SESSION_KEY)
+    assert session.messages[0][TOOL_TAINT_META] == ["peer:Lavoro"]
+    taint = turn_taint_for(session.messages, {}, SUBAGENT_TAINT_META, TOOL_TAINT_META)
+    assert taint.sources == ["peer:Lavoro"]
+    history = session.get_history(max_messages=120)
+    assert all(TOOL_TAINT_META not in m for m in history)
+
+
 async def test_media_are_kept_with_the_recorded_line(loop_factory) -> None:
     loop = loop_factory()
     media = ["/data/plots/backup.png"]

@@ -144,6 +144,9 @@ async def test_a_request_runs_in_its_own_session_and_lists_what_it_touched(two):
     assert "tools" not in call
     assert "BEGIN QUESTION\nSalvami" in call["prompt"]
     assert "waits for the user of this phone" in call["prompt"]
+    # Sui due emulatori, al risultato dell'aiutante Lavoro rispose solo «fatto»,
+    # senza il titolo chiesto.
+    assert "give what the request asked for" in call["prompt"]
 
     card = _card(delivered[0])
     assert card["status"] == "ok"
@@ -174,6 +177,26 @@ async def test_undo_asked_from_the_other_phone_puts_the_file_back(two):
     assert card["status"] == "undone"
     assert card["undo"]["restored"] == 1
     assert note.read_text(encoding="utf-8") == "prima\n"
+
+
+async def test_the_undone_notice_has_no_undo_button(two):
+    # Sui due emulatori la notifica «annullato» teneva ancora «Annulla».
+    a, b = two
+    await pair(a, b)
+    _set_peer(b, act="free")
+    qa, acts_a, delivered = _wire(a)
+    (b.workspace / "note").mkdir()
+    (b.workspace / "note" / "bianchi.md").write_text("prima\n", encoding="utf-8")
+    _, acts_b, _ = _wire(b, ActingAgent(b.workspace))
+    notices: list[tuple[str, str]] = []
+    acts_b._notify_done = lambda qid, title, body: notices.append(("done", qid))
+    acts_b._notify_undone = lambda qid, title, body: notices.append(("undone", qid))
+
+    asked = await qa.ask("", "Aggiorna la nota su Bianchi", mode="act")
+    await wait_until(lambda: delivered, timeout=10)
+    await acts_a.request_undo(b.id, asked["qid"])
+    await wait_until(lambda: len(delivered) >= 2, timeout=10)
+    assert notices == [("done", asked["qid"]), ("undone", asked["qid"])]
 
 
 async def test_undo_from_the_other_phone_is_refused_once_the_permission_is_off(two):
@@ -309,6 +332,28 @@ async def test_confirm_asks_once_per_host_and_refuses_on_no():
             assert await gate.before_tool(name, {}) is None
 
 
+async def test_a_no_is_asked_once_per_site_whatever_the_tool():
+    # Sui due emulatori: no a browser_open, poi web_fetch sullo stesso sito, e
+    # la notifica tornava.
+    auth = FakeAuthority(level="confirm", answer=False)
+    gate.install(auth)
+    with gate.entered(ACT):
+        assert await gate.before_tool("browser_open", {"url": "https://example.net"})
+        again = await gate.before_tool("web_fetch", {"url": "https://Example.NET/page"})
+        assert again is not None and "already said no" in again
+        assert await gate.before_tool("download_file", {"url": "https://example.net/a.pdf"})
+        assert auth.asked == [("open", "example.net")]
+        # Un altro sito si chiede ancora.
+        auth.answer = True
+        assert await gate.before_tool("web_fetch", {"url": "https://bianchi.it"}) is None
+        assert auth.asked[-1] == ("open", "bianchi.it")
+    # Il no vale per questo contesto: un altro (un aiutante) chiede per sé.
+    auth.answer = False
+    with gate.entered(ACT):
+        await gate.before_tool("web_fetch", {"url": "https://example.net"})
+    assert auth.asked[-1] == ("open", "example.net") and len(auth.asked) == 3
+
+
 async def test_free_passes_and_notes_what_left():
     auth = FakeAuthority(level="free")
     gate.install(auth)
@@ -374,6 +419,54 @@ async def test_a_confirmation_is_answered_once_and_cleared():
 async def test_an_unanswered_confirmation_is_a_no():
     conf = Confirmations(ttl_s=0.05)
     assert await conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x") is False
+
+
+async def test_a_confirmation_expires_on_the_real_clock(monkeypatch):
+    # Il telefono che dorme: il tempo di asyncio quasi non passa, l'ora vera sì.
+    # Prima la scadenza era un solo ``wait_for`` sul tempo del loop, e su
+    # jenny_square una conferma era ancora in attesa dopo 684 s su 600.
+    import jenny.peers.confirm as confirm_mod
+
+    clock = {"ms": 1_000_000}
+    monkeypatch.setattr(confirm_mod, "now_ms", lambda: clock["ms"])
+    monkeypatch.setattr(confirm_mod, "CHECK_EVERY_S", 0.01)
+    cleared: list[str] = []
+    conf = Confirmations(clear=cleared.append, ttl_s=600)
+    task = asyncio.create_task(conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x"))
+    await wait_until(lambda: conf.pending(), timeout=2)
+    await asyncio.sleep(0.05)
+    assert not task.done()
+    clock["ms"] += 601_000
+    assert await asyncio.wait_for(task, 2) is False
+    assert conf.pending() == [] and len(cleared) == 1
+
+
+async def test_the_peers_round_closes_a_confirmation_that_expired_in_sleep():
+    conf = Confirmations(ttl_s=600)
+    task = asyncio.create_task(conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x"))
+    await wait_until(lambda: conf.pending(), timeout=2)
+    at = conf.pending()[0]["at_ms"]
+    assert conf.expire_due(now=at + 599_000) == 0
+    assert conf.expire_due(now=at + 600_000) == 1
+    assert await asyncio.wait_for(task, 2) is False
+    assert conf.pending() == []
+
+
+async def test_the_container_round_expires_confirmations():
+    from types import SimpleNamespace
+
+    from jenny.runtime.container import GatewayContainer
+
+    conf = Confirmations(ttl_s=600)
+    task = asyncio.create_task(conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x"))
+    await wait_until(lambda: conf.pending(), timeout=2)
+    conf._pending[conf.pending()[0]["cid"]].at_ms -= 601_000
+    woken: list[bool] = []
+    link = SimpleNamespace(wake=lambda: woken.append(True),
+                           acts=SimpleNamespace(confirmations=conf))
+    GatewayContainer._wake_peers(SimpleNamespace(_peer_link=lambda: link))  # type: ignore[arg-type]
+    assert woken == [True]
+    assert await asyncio.wait_for(task, 2) is False
 
 
 async def test_turning_the_permission_off_denies_what_waits():
