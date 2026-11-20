@@ -532,6 +532,15 @@ export class PeersPanel {
           <input type="text" class="settings-input" id="dlg-peer-rename" maxlength="40"
             autocomplete="off" value="${escapeHtml(peer.name)}" />
         </div>`,
+      /* Il nome che c'è, selezionato: si scrive sopra senza cancellarlo a mano
+         (quello di Tailscale, appena collegata, non lo vuole tenere nessuno). */
+      setup: (dialog) => {
+        setTimeout(() => {
+          const input = dialog.querySelector('#dlg-peer-rename');
+          input?.focus();
+          input?.select();
+        }, 50);
+      },
       onOk: async (dialog) => {
         const name = dialog.querySelector('#dlg-peer-rename').value.trim();
         if (!name) {

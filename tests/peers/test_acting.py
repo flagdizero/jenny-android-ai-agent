@@ -144,6 +144,9 @@ async def test_a_request_runs_in_its_own_session_and_lists_what_it_touched(two):
     assert "tools" not in call
     assert "BEGIN QUESTION\nSalvami" in call["prompt"]
     assert "waits for the user of this phone" in call["prompt"]
+    # Sui due emulatori, al risultato dell'aiutante Lavoro rispose solo «fatto»,
+    # senza il titolo chiesto.
+    assert "give what the request asked for" in call["prompt"]
 
     card = _card(delivered[0])
     assert card["status"] == "ok"

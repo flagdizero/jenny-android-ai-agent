@@ -121,6 +121,9 @@ async def test_a_question_comes_back_as_a_card(two):
     assert call["metadata"]["readonly"] is True
     assert call["metadata"]["_taint"] == ["peer:Personale"]
     assert "BEGIN QUESTION\nÈ arrivata" in call["prompt"]
+    # Una richiesta di fare arrivata come domanda: si dice come rimandarla, non
+    # «non posso» (sui due emulatori Lavoro rispose «navigazione non disponibile»).
+    assert "send it again as a request to do something" in call["prompt"]
     offered = set(call["tools"].tool_names)
     assert offered == {"read_file", "recall_chat", "peer_attach"}
 
