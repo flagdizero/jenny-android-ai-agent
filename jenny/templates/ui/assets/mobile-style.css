@@ -5219,6 +5219,12 @@ dialog.image-lightbox::backdrop { background: transparent; }
 .peer-card-head i { font-size: 18px; color: var(--text-muted); }
 .peer-card-name { color: var(--text); }
 .peer-card-state { margin: 2px 0 6px 26px; font-size: 12px; color: var(--text-faint); }
+.peer-perm { margin: 4px 0 4px 26px; }
+.peer-perm .settings-field-hint { display: block; }
+.peer-log { margin: 6px 0 0 26px; display: grid; gap: 4px; }
+.peer-log-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-muted); }
+.peer-log-row span:first-child { overflow-wrap: anywhere; }
+.peer-log-when { color: var(--text-faint); white-space: nowrap; }
 .peer-pair-facts {
   display: grid;
   gap: 6px;

@@ -56,6 +56,7 @@ import { renderMediaList } from './shared/media.js';
 import { originBadge } from './shared/origin.js';
 import { copyWithToast, latencyText, renderReplyExtras } from './shared/reply.js';
 import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
+import { peerCardNode } from './shared/peer-card.js';
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
    Sotto questa soglia il filo insegue i messaggi nuovi; sopra, no — chi sta
@@ -400,7 +401,7 @@ export class HomeChat {
           if (turn.boundary) this._appendBoundary();
           else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, false, turn.at, turn.device);
           else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at, turn.error,
-            turn.journal, turn.moves);
+            turn.journal, turn.moves, turn.peer);
         }
       });
     } finally {
@@ -433,7 +434,7 @@ export class HomeChat {
         if (turn.boundary) this._appendBoundary(true);
         else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true, turn.at, turn.device);
         else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs, turn.at, null,
-          turn.journal, turn.moves);
+          turn.journal, turn.moves, turn.peer);
       }
     });
     this.onThreadChange?.();
@@ -490,12 +491,18 @@ export class HomeChat {
           if (moves.length) (current.moves ||= []).push(...moves);
           return;
         }
+        /* La risposta di un'altra Jenny: la scheda prende il posto del testo,
+           che e' solo il ripiego per chi non la disegna (Telegram, la tendina). */
+        if (msg.peerAnswer) {
+          current.peer = msg.peerAnswer;
+          return;
+        }
         const text = msg.text || msg.content || '';
         if (text) current.content += (current.content ? '\n\n' : '') + text;
       },
     });
     // Un turno senza niente da mostrare non e' una bolla vuota: non e' niente.
-    return turns.filter((t) => t.boundary || t.user || t.content || t.media.length);
+    return turns.filter((t) => t.boundary || t.user || t.content || t.peer || t.media.length);
   }
 
   /* ── Frame dal vivo ── */
@@ -643,7 +650,10 @@ export class HomeChat {
       if (step || (msg.text && !msg.error)) this._dropPassing();
       else this._keepPassing();
     }
-    if (msg.text) {
+    const peerCard = peerCardNode(msg.agent_ui?.peer_answer);
+    if (peerCard) {
+      this._ensureTurn().appendChild(peerCard);
+    } else if (msg.text) {
       const block = document.createElement('div');
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(msg.text);
@@ -868,10 +878,13 @@ export class HomeChat {
   }
 
   _appendAssistant(content, media, toTop = false, latencyMs = null, at = null, error = null,
-    journal = null, moves = null) {
+    journal = null, moves = null, peer = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-jenny';
-    if (content) {
+    const card = peer ? peerCardNode(peer) : null;
+    if (card) {
+      node.appendChild(card);
+    } else if (content) {
       const block = document.createElement('div');
       block.className = 'home-block';
       block.innerHTML = renderMarkdown(content);

@@ -1920,6 +1920,23 @@ button.home-wakes-act:active { background: var(--active); }
   max-width: 100%;
 }
 
+/* La risposta di un'altra Jenny (`shared/peer-card.js`): chi e quando, la
+   domanda, e la risposta citata col bordo `--meta`. Non e' markdown: e' un
+   dato arrivato da un altro telefono. */
+.home-peer-card { display: grid; gap: 6px; }
+.home-peer-head {
+  display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+  padding: 2px 9px; border: 1px solid var(--border-strong); border-radius: 999px;
+  font-size: 12px; color: var(--text-muted);
+}
+.home-peer-card.is-ok .home-peer-head { color: var(--meta); border-color: var(--meta); }
+.home-peer-question { font-size: 12px; color: var(--text-faint); }
+.home-peer-quote {
+  padding: 2px 0 2px 10px; border-left: 2px solid var(--meta);
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text);
+}
+.home-peer-status, .home-peer-missing { font-size: 13px; color: var(--text-muted); }
+
 .home-block {
   font-size: 14.5px;
   line-height: 1.45;

@@ -73,6 +73,9 @@ export class PeersPanel {
     this._joinWith = opts.joinWith || null;
     this.status = null;
     this._pair = null;
+    /* La cronologia aperta, per Jenny: si chiede al tocco e resta finche' il
+       pannello e' aperto. */
+    this._history = {};
     this._busy = false;
     this._timer = null;
     this._destroyed = false;
@@ -167,6 +170,8 @@ export class PeersPanel {
           <span class="peer-card-name">${escapeHtml(p.name)}</span>
         </div>
         <div class="peer-card-state">${escapeHtml(peerStateText(p))}</div>
+        ${this._permHtml(p, 'can_ask', 'canAsk', 'canAskHint')}
+        ${this._permHtml(p, 'send_files', 'sendFiles', 'sendFilesHint')}
         <div class="remote-actions">
           <button class="settings-btn-add" type="button" data-peers="ping" ${p.has_secret ? '' : 'disabled'}>
             <i class="ti ti-antenna-bars-5" aria-hidden="true"></i> ${escapeHtml(t('ping'))}</button>
@@ -174,10 +179,53 @@ export class PeersPanel {
             <i class="ti ti-pencil" aria-hidden="true"></i> ${escapeHtml(t('rename'))}</button>
           <button class="settings-btn-add remote-danger" type="button" data-peers="remove">
             <i class="ti ti-unlink" aria-hidden="true"></i> ${escapeHtml(t('remove'))}</button>
+          <button class="settings-btn-add" type="button" data-peers="history">
+            <i class="ti ti-history" aria-hidden="true"></i> ${escapeHtml(t('history'))}</button>
         </div>
+        ${this._history[p.id] ? this._historyHtml(this._history[p.id]) : ''}
       </div>`);
     }
     this._paint(parts);
+  }
+
+  /** Un permesso di quella Jenny su questa: lo decide chi riceve. */
+  _permHtml(peer, key, label, hint) {
+    const id = `peer-${key}-${peer.id.slice(0, 8)}`;
+    return `<div class="settings-field settings-toggle-row peer-perm">
+      <label class="settings-label" for="${id}">${escapeHtml(t(label))}
+        <span class="settings-field-hint">${escapeHtml(t(hint))}</span></label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="${id}" data-perm="${key}" ${peer[key] ? 'checked' : ''}>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>`;
+  }
+
+  _historyHtml(rows) {
+    if (!rows.length) return `<div class="remote-hint">${escapeHtml(t('historyEmpty'))}</div>`;
+    const line = (row) => {
+      const d = row.data || {};
+      const key = {
+        'out:ask': ['log.askOut', { text: d.text || '' }],
+        'in:ask': ['log.askIn', { text: d.text || '' }],
+        'out:answer': ['log.answerOut', {}],
+        'in:answer': ['log.answerIn', {}],
+        'in:file': ['log.file', { name: d.name || '' }],
+        'out:ping': ['log.ping', {}],
+        'in:ping': ['log.ping', {}],
+        'sys:paired': ['log.paired', {}],
+        'sys:refused': ['log.refused', { kind: d.kind || '' }],
+        'sys:removed': ['log.removed', {}],
+        'sys:removed_by_other': ['log.removedByOther', {}],
+      }[`${row.direction}:${row.kind}`];
+      if (!key) return '';
+      const when = new Date(row.at_ms).toLocaleString(i18n.locale, {
+        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+      });
+      return `<div class="peer-log-row"><span>${escapeHtml(t(key[0], key[1]))}</span>
+        <span class="peer-log-when">${escapeHtml(when)}</span></div>`;
+    };
+    return `<div class="peer-log">${rows.map(line).join('')}</div>`;
   }
 
   _pairHtml(pair) {
@@ -202,6 +250,15 @@ export class PeersPanel {
   _paint(parts) {
     this.el.innerHTML = parts.join('');
     this.el.querySelector('#peers-enabled')?.addEventListener('change', (e) => this._toggle(e.target));
+    for (const input of this.el.querySelectorAll('[data-perm]')) {
+      input.addEventListener('change', () => {
+        const peerId = input.closest('[data-peer]')?.dataset.peer;
+        const key = input.dataset.perm;
+        const value = input.checked;
+        this._run(() => rpc.peer('permissions', { id: peerId, [key]: value }),
+          () => { input.checked = !value; });
+      });
+    }
     for (const btn of this.el.querySelectorAll('[data-peers]')) {
       btn.addEventListener('click', () => {
         const card = btn.closest('[data-peer]');
@@ -237,6 +294,20 @@ export class PeersPanel {
     } else if (what === 'ping') {
       const done = await this._run(() => rpc.peer('ping', { id: peerId }));
       if (done) showToast(t('pingSent'));
+    } else if (what === 'history') {
+      if (this._history[peerId]) {
+        delete this._history[peerId];
+        this.render();
+        return;
+      }
+      try {
+        const status = await rpc.peer('history', { id: peerId });
+        this._history[peerId] = status.history || [];
+      } catch (e) {
+        showToast(errorText(e), 'error');
+        return;
+      }
+      this.render();
     } else if (what === 'rename') {
       this._rename(this._peer(peerId));
     } else if (what === 'remove') {

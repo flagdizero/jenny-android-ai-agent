@@ -549,7 +549,26 @@
         "unreachable": "The other Jenny doesn't answer: check Tailscale on both phones",
         "disabled": "Linking with other Jennys is off",
         "protocol": "The other Jenny answered in a way I don't understand: update both",
-        "generic": "It didn't work: {error}"
+        "generic": "It didn't work: {error}",
+        "which_peer": "Pick which Jenny"
+      },
+      "canAsk": "Can ask me questions",
+      "canAskHint": "I look at my things and answer. I don't write, send or schedule anything.",
+      "sendFiles": "Answers can carry files",
+      "sendFilesHint": "A document I attach leaves this phone.",
+      "history": "History",
+      "historyEmpty": "Nothing yet.",
+      "log": {
+        "askOut": "Asked: “{text}”",
+        "askIn": "Asked you: “{text}”",
+        "answerOut": "Answered",
+        "answerIn": "Answered",
+        "file": "File received: {name}",
+        "ping": "Test",
+        "paired": "Linked",
+        "refused": "Refused: {kind}",
+        "removed": "Unlinked",
+        "removedByOther": "Unlinked by the other"
       }
     },
     "whoThinksHint": "Each brand holds its models: one tap on a model makes it answer.",
@@ -1615,6 +1634,19 @@
       "all": "All reminders",
       "ok": "That's fine",
       "close": "Close"
+    },
+    "peer": {
+      "from": "From {name}",
+      "fromAt": "From {name} · {time}",
+      "empty": "(no text)",
+      "missing": "Didn't arrive: {files}",
+      "status": {
+        "refused": "{name} doesn't take questions from this phone. It's turned on on {name}'s phone: Workshop → Other Jennys.",
+        "too_many": "{name} got too many questions in the last hour: try again later.",
+        "unavailable": "{name} has no model to answer with yet.",
+        "failed": "{name} couldn't answer.",
+        "expired": "{name} stayed unreachable: the question expired without an answer."
+      }
     }
   },
   "workshop": {

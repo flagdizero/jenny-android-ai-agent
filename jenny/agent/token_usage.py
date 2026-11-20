@@ -66,6 +66,9 @@ _INTERNAL_KIND_TO_SOURCE = {
     # ``"user"``, cioe' il lavoro di manutenzione verrebbe addebitato alla chat
     # dell'utente — peggio di un bucket generico, perche' e' plausibile.
     "gardener": "gardener",
+    # Le risposte a un'altra Jenny (``jenny.peers``): lavoro che non ha chiesto
+    # l'utente di questo telefono, quindi non nella sua chat.
+    "peer": "system",
 }
 _WRITE_LOCK = threading.Lock()
 

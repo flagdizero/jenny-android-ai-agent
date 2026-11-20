@@ -37,6 +37,9 @@ class GatewayContainer:
         # Stato di runtime (ex-nonlocal). `agent` è riassegnato dall'onboarding
         # tramite set_agent.
         self._agent: Any = None
+        # Le domande fra Jenny (``jenny.peers.questions``): nascono col
+        # collegamento, cioè col canale WebSocket, e si legano all'agente.
+        self._peer_questions: Any = None
         self.onboarding_event = asyncio.Event()
 
         # Collaboratori popolati da build().
@@ -847,8 +850,11 @@ class GatewayContainer:
                 fresh = await asyncio.to_thread(load_config)
                 if fresh.peers.enabled and self.cron is not None:
                     self._register_peers_job(fresh)
+                if self._peer_questions is not None:
+                    await self._peer_questions.refresh()
 
             link.on_change = peers_changed
+            self._wire_peer_questions(link, config)
 
         # I giri delle estensioni impacchettate in questa build. Registrati
         # **sempre**: il loro interruttore si gira dalla WebUI a gateway acceso,
@@ -911,7 +917,27 @@ class GatewayContainer:
         # giardiniere lo chiama con il proprio trigger prima di scrivere pagine.
         agent.take_snapshot = self._take_snapshot
         self._wire_plan_driver(agent, config)
+        # Dopo l'onboarding il canale c'è già: le domande fra Jenny si legano
+        # subito. Al boot normale le lega ``_wire_peer_questions``, più avanti.
+        if (questions := getattr(self, "_peer_questions", None)) is not None:
+            agent.attach_peer_questions(questions)
         return agent
+
+    def _wire_peer_questions(self, link: Any, config: Config) -> None:
+        """Il servizio delle domande fra Jenny, sopra il collegamento del canale."""
+        from pathlib import Path
+
+        from jenny.peers.questions import PeerQuestions
+
+        questions = PeerQuestions(
+            link,
+            Path(config.workspace_path),
+            get_agent=lambda: self._agent,
+            deliver=self._deliver_to_channel,
+        )
+        self._peer_questions = questions
+        if self._agent is not None:
+            self._agent.attach_peer_questions(questions)
 
     def _wire_plan_driver(self, agent: Any, config: Config) -> None:
         """Il driver dei piani a lista: nasce con l'agente, perché lo guida.
@@ -1057,6 +1083,9 @@ class GatewayContainer:
                 await self.zone_watch.start()
             await self.snapshot.start()
             self._maintenance = asyncio.create_task(self._database_maintenance())
+            if (questions := getattr(self, "_peer_questions", None)) is not None:
+                await questions.refresh()
+                questions.start()
             tasks = [self.channels.start()]
             if self._agent:
                 tasks.append(self._agent.run())
@@ -1080,6 +1109,8 @@ class GatewayContainer:
                 # PRIMA del flush_all(), così nessun writer di session.messages
                 # è attivo durante il flush.
                 await self._agent.shutdown()
+            if (questions := getattr(self, "_peer_questions", None)) is not None:
+                await questions.stop()
             await self.channels.stop()
             from jenny.agent.tools.exec_session import DEFAULT_EXEC_SESSION_MANAGER
 

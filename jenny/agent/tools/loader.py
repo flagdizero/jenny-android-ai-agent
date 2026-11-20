@@ -86,6 +86,7 @@ _HARDCODED_TOOL_MODULES = [
     "board",
     "plan",
     "notebook",
+    "peer",
 ]
 
 

@@ -375,6 +375,9 @@ class AgentLoop(
         # container. Lo usa la risposta di un promemoria di quaderno
         # (``cron/bound_runner.py``); ``None`` fuori dal gateway.
         self.mirror_delivery: Callable[[OutboundMessage], Awaitable[None]] | None = None
+        # Le domande alle altre Jenny (``jenny.peers.questions``): le lega il
+        # composition root con ``attach_peer_questions``, quando il collegamento c'è.
+        self.peer_questions: Any | None = None
         self.restrict_to_workspace = restrict_to_workspace
         self.extract_document_text = extract_document_text
         self.workspace_scopes = WorkspaceScopeResolver(
@@ -622,6 +625,21 @@ class AgentLoop(
 
         logger.info("Registered {} tools: {}", len(registered), registered)
 
+    def attach_peer_questions(self, questions: Any) -> None:
+        """Lega il servizio delle domande fra Jenny (``jenny.peers.questions``).
+
+        Lo chiama il composition root quando il collegamento esiste: il canale
+        WebSocket, che lo possiede, nasce dopo l'agente al boot normale.
+        """
+        self.peer_questions = questions
+        tool = self.tools.get("peer_ask")
+        if tool is not None and hasattr(tool, "bind_questions"):
+            tool.bind_questions(questions)
+
+    def _peers_available(self) -> bool:
+        questions = getattr(self, "peer_questions", None)
+        return bool(questions is not None and questions.available())
+
     def _set_tool_context(
         self, channel: str, chat_id: str,
         message_id: str | None = None, metadata: dict | None = None,
@@ -803,6 +821,13 @@ class AgentLoop(
             # stessa radice che il tool risolve (``NotebookReadTool._root``).
             if name == "notebook":
                 return root is None
+            # Le altre Jenny: si chiede dalla chat personale, e solo quando ce
+            # n'e' una abbinata (cambia con un abbinamento, come una config).
+            # ``peer_attach`` vive solo nel turno di risposta, che ha la sua vista.
+            if name == "peer_ask":
+                return not personal or not self._peers_available()
+            if name == "peer_attach":
+                return True
             if not in_project:
                 return False
             return name == "recall_history"

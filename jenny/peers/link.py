@@ -33,7 +33,7 @@ from jenny.channels.ws_remote import is_tailnet_ip
 from jenny.snapshot.crypto import decrypt_container, encrypt_container
 from jenny.snapshot.crypto_backends.base import CryptoAuthError
 
-from . import auth, model
+from . import auth, files, model
 from .model import KIND_PING, KIND_UNPAIR, FrameError, is_id, text_field
 from .store import (
     SECRET_BYTES,
@@ -151,6 +151,7 @@ class PeerLink:
         self._handlers: dict[str, Handler] = {
             KIND_PING: self._on_ping,
             KIND_UNPAIR: self._on_unpair,
+            files.KIND_FILE_PART: self._on_file_part,
         }
         self._pairing: _Pairing | None = None
         self._kick = asyncio.Event()
@@ -247,6 +248,8 @@ class PeerLink:
                 "host": p.host,
                 "ip": p.ip,
                 "port": p.port,
+                "can_ask": p.can_ask,
+                "send_files": p.send_files,
                 "has_secret": read_secret(self._workspace, p.id) is not None,
                 "queued": queued,
                 **state,
@@ -297,12 +300,51 @@ class PeerLink:
 
         await self._mutate(apply)
 
+    async def set_permissions(
+        self, peer_id: str, *, can_ask: bool | None = None, send_files: bool | None = None
+    ) -> None:
+        """Cosa può fare *peer_id* su questa Jenny: lo decide chi riceve."""
+
+        def apply(peers: Any) -> bool:
+            for p in peers.peers:
+                if p.id == peer_id:
+                    before = (p.can_ask, p.send_files)
+                    if can_ask is not None:
+                        p.can_ask = can_ask
+                    if send_files is not None:
+                        p.send_files = send_files
+                    return (p.can_ask, p.send_files) != before
+            raise PeerError("not_found")
+
+        await self._mutate(apply)
+
     async def ping(self, peer_id: str) -> None:
         if await self._peer(peer_id) is None:
             raise PeerError("not_found")
         await asyncio.to_thread(self.store.enqueue, peer_id, KIND_PING, {})
         await asyncio.to_thread(self.store.log, peer_id, "out", KIND_PING, {})
         self.wake(peer_id)
+
+    async def send_file(self, peer_id: str, source: Path) -> dict[str, Any]:
+        """Mette in coda i pezzi di *source* per *peer_id*; ritorna la sua descrizione.
+
+        I pezzi partono prima di qualunque messaggio messo in coda dopo: chi
+        cita il file in un messaggio lo trova già arrivato.
+        """
+        if await self._peer(peer_id) is None:
+            raise PeerError("not_found")
+        try:
+            info = await asyncio.to_thread(
+                files.stage_outgoing, self._workspace, self.store, peer_id, Path(source)
+            )
+        except files.FileError as exc:
+            raise PeerError(f"file_{exc.code}") from exc
+        self.kick()
+        return info
+
+    def received_file(self, peer_id: str, fid: str) -> dict[str, Any] | None:
+        """Il file *fid* arrivato intero da *peer_id*, o ``None``."""
+        return files.received(self._workspace, peer_id, fid)
 
     async def send(self, peer_id: str, kind: str, body: dict[str, Any]) -> str:
         """Mette in coda un messaggio per *peer_id*; parte appena l'altra c'è."""
@@ -647,7 +689,10 @@ class PeerLink:
                             waiting[row["id"]] = fut
                             await ws.send(model.encode({
                                 "type": "msg", "id": row["id"], "kind": row["kind"],
-                                "body": row["body"], "created_ms": row["created_ms"],
+                                "body": await asyncio.to_thread(
+                                    files.wire_body, self._workspace, row["kind"], row["body"]
+                                ),
+                                "created_ms": row["created_ms"],
                             }))
                             verdict, reason = await asyncio.wait_for(fut, timeout=ACK_TIMEOUT_S)
                             waiting.pop(row["id"], None)
@@ -659,6 +704,8 @@ class PeerLink:
                                     {"kind": row["kind"], "reason": reason},
                                 )
                             await asyncio.to_thread(self.store.remove, row["id"])
+                            if row["kind"] == files.KIND_FILE_PART:
+                                files.part_sent(self._workspace, row["body"])
             await ws.send(model.encode({"type": "done"}))
 
         async def receiver() -> None:
@@ -774,6 +821,16 @@ class PeerLink:
 
     async def _on_ping(self, peer_id: str, body: dict[str, Any]) -> None:
         await asyncio.to_thread(self.store.log, peer_id, "in", KIND_PING, {})
+
+    async def _on_file_part(self, peer_id: str, body: dict[str, Any]) -> None:
+        peer = await self._peer(peer_id)
+        name = peer.name if peer is not None else peer_id[:8]
+        done = await asyncio.to_thread(files.receive_part, self._workspace, peer_id, name, body)
+        if done is not None:
+            await asyncio.to_thread(
+                self.store.log, peer_id, "in", "file",
+                {"name": done["name"], "size": done["size"], "path": done["path"]},
+            )
 
     async def _on_unpair(self, peer_id: str, body: dict[str, Any]) -> None:
         logger.info("peers: {} unpaired us", peer_id[:8])

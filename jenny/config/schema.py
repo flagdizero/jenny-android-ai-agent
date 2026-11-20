@@ -814,6 +814,19 @@ class PeerConfig(Base):
     host: str = ""
     ip: str = ""
     port: int = Field(default=18790, ge=1, le=65535)
+    # Cosa può fare *l'altra* su questa Jenny: lo decide chi riceve.
+    # ``can_ask``: domande, a cui si risponde con un turno in sola lettura.
+    can_ask: bool = True
+    # ``send_files``: le risposte a quella Jenny possono portare file. Spento
+    # di default: è il punto in cui un documento lascia questo telefono.
+    send_files: bool = False
+
+
+class PeerPermissionsUpdate(Base):
+    """Il cambio di un permesso dall'Officina (``peer.permissions``)."""
+
+    can_ask: bool | None = None
+    send_files: bool | None = None
 
 
 class PeersConfig(Base):
@@ -826,6 +839,12 @@ class PeersConfig(Base):
 
     enabled: bool = False
     peers: list[PeerConfig] = Field(default_factory=list)
+    # Una domanda senza risposta dopo tante ore si dà per persa, e chi l'ha
+    # fatta lo dice all'utente invece di aspettare per sempre.
+    ask_ttl_hours: int = Field(default=24, ge=1, le=24 * 7)
+    # Quante domande per ora una Jenny accetta da ciascuna altra: un tetto ai
+    # giri e al costo, non una misura di cortesia.
+    max_asks_per_hour: int = Field(default=30, ge=1, le=600)
 
 
 class GatewayConfig(Base):
