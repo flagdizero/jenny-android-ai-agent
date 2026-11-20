@@ -797,6 +797,37 @@ class RemoteAccessConfig(Base):
     key: str = ""
 
 
+class PeerConfig(Base):
+    """Un'altra Jenny dell'utente, abbinata a questa (``peers.peers``).
+
+    Qui sta solo quello che non è segreto: il segreto condiviso vive fuori dal
+    workspace (``jenny.peers.store``), quindi non viaggia negli snapshot e un
+    telefono ripristinato trova l'abbinamento «da rifare» invece di un segreto
+    copiato su due telefoni.
+
+    ``host`` è il nome MagicDNS dell'altro telefono e ``ip`` il suo ``100.x``:
+    si prova il nome e, se non risolve, l'indirizzo.
+    """
+
+    id: str
+    name: str
+    host: str = ""
+    ip: str = ""
+    port: int = Field(default=18790, ge=1, le=65535)
+
+
+class PeersConfig(Base):
+    """Le altre Jenny dell'utente, raggiunte direttamente sulla tailnet.
+
+    Spento di default. Acceso, il secondo ascoltatore (``channels.ws_remote``)
+    resta su anche con l'accesso remoto della WebView spento, ma risponde solo
+    sul percorso ``/peer``, e lì solo a una Jenny abbinata.
+    """
+
+    enabled: bool = False
+    peers: list[PeerConfig] = Field(default_factory=list)
+
+
 class GatewayConfig(Base):
     """Gateway/server configuration."""
 
@@ -1159,6 +1190,7 @@ class Config(BaseSettings):
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
+    peers: PeersConfig = Field(default_factory=PeersConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     power: PowerConfig = Field(default_factory=PowerConfig)

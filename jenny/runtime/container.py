@@ -268,6 +268,36 @@ class GatewayContainer:
 
         return {job_id: runner(job) for job_id, job in extensions.system_jobs().items()}
 
+    def _peer_link(self) -> Any | None:
+        """Il collegamento con le altre Jenny, se il canale WebSocket c'è."""
+        from jenny.bus.events import WEBSOCKET_CHANNEL
+
+        channels = getattr(self.channels, "channels", None) or {}
+        ws = channels.get(WEBSOCKET_CHANNEL)
+        return getattr(ws, "peer_link", None)
+
+    def _wake_peers(self) -> None:
+        link = self._peer_link()
+        if link is not None:
+            link.wake()
+
+    def _register_peers_job(self, config: Config) -> None:
+        from jenny.cron.types import CronJob, CronPayload, CronSchedule
+        from jenny.runtime.cron_dispatch import PEERS_EVERY_MS
+
+        # L'id scritto per esteso, come gli altri: è ``PEERS_JOB_ID`` del
+        # dispatcher, e ``tests/cron/test_system_job_purposes.py`` legge i letterali.
+        self.cron.register_system_job(CronJob(
+            id="peers",
+            name="peers",
+            schedule=CronSchedule(
+                kind="every",
+                every_ms=PEERS_EVERY_MS,
+                tz=config.agents.defaults.timezone,
+            ),
+            payload=CronPayload(kind="system_event"),
+        ))
+
     def _retire_orphan_system_jobs(self) -> None:
         """Ritira i job di sistema che nessuno, in questa build, sa eseguire.
 
@@ -735,6 +765,7 @@ class GatewayContainer:
             cron=self.cron,
             snapshot_before_dream=self._snapshot_before_dream,
             extension_jobs=self._extension_job_runners(),
+            wake_peers=self._wake_peers,
         ).dispatch
 
         # I lavoratori periodici che questa versione **non esegue piu'** (``atlas``,
@@ -798,6 +829,26 @@ class GatewayContainer:
             logger.info("Update check: every {}h", updates_cfg.check_interval_h)
         else:
             logger.info("Update check: disabled")
+
+        # La coda delle altre Jenny: il giro si registra solo a collegamento
+        # acceso (un risveglio ogni quarto d'ora per chi non l'usa sarebbe
+        # batteria buttata), e si aggiunge da sé quando lo si accende a caldo.
+        if config.peers.enabled:
+            self._register_peers_job(config)
+        link = self._peer_link()
+        if link is not None:
+            on_change = link.on_change
+
+            async def peers_changed() -> None:
+                if on_change is not None:
+                    await on_change()
+                from jenny.config.loader import load_config
+
+                fresh = await asyncio.to_thread(load_config)
+                if fresh.peers.enabled and self.cron is not None:
+                    self._register_peers_job(fresh)
+
+            link.on_change = peers_changed
 
         # I giri delle estensioni impacchettate in questa build. Registrati
         # **sempre**: il loro interruttore si gira dalla WebUI a gateway acceso,

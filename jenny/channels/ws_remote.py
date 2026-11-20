@@ -295,7 +295,11 @@ class RemoteListener:
         # bastata, Tailscale aspetta l'utente: niente più tentativi.
         self._app_opened = False
         self._needs_user = False
+        # Acceso = c'è un motivo per ascoltare: la WebView da fuori (``_webui``),
+        # le altre Jenny (``_peers_on``), o tutte e due.
         self._enabled = False
+        self._webui = False
+        self._peers_on = False
         self._key = ""
         self._bound: tuple[str, ...] = ()
         self._server: Any | None = None
@@ -320,6 +324,10 @@ class RemoteListener:
         self._guard: Callable[[asyncio.AbstractEventLoop, dict[str, Any]], None] | None = None
         self._guard_loop: asyncio.AbstractEventLoop | None = None
         self._guard_previous: Any = None
+        # Chiamata quando il server torna ad ascoltare (Tailscale su, indirizzi
+        # nuovi): la coda delle altre Jenny riparte subito invece di aspettare
+        # il suo prossimo tentativo (``PeerLink.wake``).
+        self.on_listening: Callable[[], None] | None = None
 
     # -- Stato --------------------------------------------------------------
 
@@ -330,6 +338,11 @@ class RemoteListener:
     @property
     def key(self) -> str:
         return self._key
+
+    @property
+    def webui_enabled(self) -> bool:
+        """La WebView si apre da fuori (non solo le altre Jenny)."""
+        return self._webui
 
     @property
     def bound(self) -> tuple[str, ...]:
@@ -346,11 +359,26 @@ class RemoteListener:
         """
         local = getattr(connection, "local_address", None)
         peer = getattr(connection, "remote_address", None)
-        if not self._enabled or not self._key or not peer_allowed(local, peer, self._bound):
+        if not self._webui or not self._key or not peer_allowed(local, peer, self._bound):
             logger.info("remote access: refused {} on {}", _host_of(peer), _host_of(local))
             return None
         _REMOTE_KEY.set(self._key)
         return self._key
+
+    def admit_peer(self, connection: Any) -> str | None:
+        """L'indirizzo dell'altra Jenny, o ``None`` se la connessione va rifiutata.
+
+        Vale per il solo percorso ``/peer`` (``jenny.peers``): stesso controllo
+        d'indirizzo della WebView, ma nessuna chiave — chi è dall'altra parte lo
+        prova poi il collegamento, con il segreto dell'abbinamento. Non imposta
+        la chiave della WebView: una connessione ``/peer`` non apre mai la WebUI.
+        """
+        local = getattr(connection, "local_address", None)
+        peer = getattr(connection, "remote_address", None)
+        if not self._peers_on or not peer_allowed(local, peer, self._bound):
+            logger.info("peers: refused {} on {}", _host_of(peer), _host_of(local))
+            return None
+        return _host_of(peer)
 
     def track(self, connection: Any) -> None:
         ip = _host_of(getattr(connection, "remote_address", None)) or "?"
@@ -419,7 +447,7 @@ class RemoteListener:
         else:
             tailscale = "down"
         return {
-            "enabled": self._enabled,
+            "enabled": self._webui,
             "listening": self._server is not None,
             "tailscale": tailscale,
             "revive_attempts": self._revive_attempts,
@@ -443,16 +471,24 @@ class RemoteListener:
 
     # -- Ciclo di vita ------------------------------------------------------
 
-    async def apply(self, *, enabled: bool, key: str) -> None:
+    async def apply(self, *, enabled: bool, key: str, peers: bool = False) -> None:
         """Porta l'ascoltatore allo stato di config. Idempotente.
 
         Una chiave nuova chiude le connessioni aperte con la vecchia: è il
         «scollega tutti», e vale anche quando l'opzione resta accesa.
+
+        *peers* tiene su l'ascoltatore per le altre Jenny (``jenny.peers``) anche
+        con l'accesso della WebView spento: in quel caso risponde solo a ``/peer``.
         """
         rotated = bool(self._key) and key != self._key
-        self._enabled = enabled and bool(key)
+        webui_off = self._webui and not (enabled and bool(key))
+        self._webui = enabled and bool(key)
+        self._peers_on = peers
+        self._enabled = self._webui or self._peers_on
         self._key = key
-        if rotated:
+        # Spenta la WebView da fuori ma non le altre Jenny: il server resta, le
+        # finestre aperte da fuori no.
+        if rotated or webui_off:
             await self.disconnect_all()
         # ``done()``: un giro morto non va lasciato al suo posto. Senza, un
         # ``apply`` successivo lo trovava «c'è» e non ne faceva partire un altro.
@@ -468,7 +504,7 @@ class RemoteListener:
         self._kick.set()
 
     async def stop(self) -> None:
-        self._enabled = False
+        self._enabled = self._webui = self._peers_on = False
         watch, self._watch = self._watch, None
         if watch is not None:
             watch.cancel()
@@ -593,6 +629,11 @@ class RemoteListener:
             logger.info(
                 "remote access: listening on {} port {} ({})", ", ".join(found), self.port, reason
             )
+            if self.on_listening is not None:
+                try:
+                    self.on_listening()
+                except Exception:
+                    logger.opt(exception=True).warning("remote access: on_listening failed")
 
     # -- Tailscale giù: riaccenderlo ----------------------------------------
 

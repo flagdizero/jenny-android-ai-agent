@@ -225,6 +225,30 @@ class MainActivity : AppCompatActivity() {
          *  col suo gettone accanto. */
         private const val EXTRA_OPEN_CHAT_VIA_HOME = "com.flagdizero.jenny.extra.OPEN_CHAT_VIA_HOME"
 
+        /**
+         * Il link d'abbinamento fra due Jenny (`jenny://pair?host=…&code=…`),
+         * arrivato dal QR inquadrato con la fotocamera di sistema. Resta qui
+         * finché la pagina non lo chiede ([NativeCommands.takePairLink]), una
+         * volta sola. Nel companion e non nell'istanza: un avvio fuori dal task
+         * home passa da [redirectToHome], che chiude questa copia e ne apre
+         * un'altra, e il link deve arrivare a quella.
+         *
+         * Apre solo il modulo dell'abbinamento già compilato: il tocco su
+         * «Collega» resta dell'utente, quindi un link arrivato da chiunque non
+         * abbina niente da solo.
+         */
+        @Volatile
+        private var pendingPairLink: String? = null
+
+        /** Tiene da parte il link se [intent] è un `jenny://pair`. */
+        private fun capturePairLink(intent: Intent?): Boolean {
+            val data = intent?.data ?: return false
+            if (intent.action != Intent.ACTION_VIEW) return false
+            if (data.scheme != "jenny" || data.host != "pair") return false
+            pendingPairLink = data.toString().take(2048)
+            return true
+        }
+
         /** È un [ACTION_OPEN_CHAT] fatto da noi? (v. [EXTRA_OPEN_CHAT_TOKEN]) */
         private fun isOurOpenChat(context: Context, intent: Intent?): Boolean {
             val asked = intent?.action == ACTION_OPEN_CHAT ||
@@ -703,6 +727,8 @@ class MainActivity : AppCompatActivity() {
         // loro launcher, e l'ordine di registrazione dev'essere sempre lo
         // stesso (v. [NativeExtension.attach]).
         nativeExtensions = Extensions.all.associate { it.name to it.attach(this) }
+        // Prima di un eventuale redirectToHome: il link passa alla copia home.
+        capturePairLink(intent)
         // Una ricreazione (onRenderProcessGone, un cambio di configurazione)
         // rilegge `intent`, che onNewIntent può aver sostituito con quello di
         // una notifica: chi è nata home lo resta, e lo dice lo stato salvato.
@@ -1029,6 +1055,14 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Un QR d'abbinamento inquadrato con Jenny già aperta: la pagina viene
+        // avvisata e chiede il link (`shared/peer-link.js`).
+        if (capturePairLink(intent)) {
+            webView?.evaluateJavascript(
+                "if (window.jennyPeer && window.jennyPeer.onPairLink) window.jennyPeer.onPairLink()"
+            ) {}
+            return
+        }
         // Tap su una notifica proattiva: la chat personale sale sopra la
         // pagina in cui eri, che resta sotto (v. openChat nella casa); quella
         // di un quaderno porta nel quaderno, con la sua chat sopra. Gli
@@ -1866,6 +1900,7 @@ class MainActivity : AppCompatActivity() {
             "openMap" -> openMap(a.getString(0), a.getString(1), a.getString(2), a.getString(3)).let { null }
             "requestExactAlarmPermission" -> requestExactAlarmPermission()
             "openBatterySettings" -> openBatterySettings()
+            "takePairLink" -> takePairLink()
             "extensionCall" -> extensionCall(a).let { null }
             else -> throw IllegalArgumentException("unknown native command")
         }
@@ -2430,6 +2465,13 @@ class MainActivity : AppCompatActivity() {
                 Intents.tryStart(this@MainActivity, intent, TAG, "exact alarm permission request")
             }
             return reachable
+        }
+
+        /** Il link d'abbinamento in attesa, una volta sola; `""` se non c'è. */
+        fun takePairLink(): String {
+            val link = pendingPairLink ?: return ""
+            pendingPairLink = null
+            return link
         }
 
         /** Porta l'utente dove la restrizione si toglie davvero.

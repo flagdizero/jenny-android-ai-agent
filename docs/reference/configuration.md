@@ -144,6 +144,17 @@ A number outside its range in a file written by an older version is **clamped to
 
 `gateway.heartbeat` no longer exists: a periodic check is a recurring `monitor` job with its own interval (see [Scheduling and proactivity](../using/scheduling.md)). An old `config.json` that still has the block loads fine, and the block is dropped on the next write.
 
+## peers
+
+Your other Jennys (a work phone and a personal phone, say), reached directly over Tailscale. Set it from the workshop (Hands → Other Jennys).
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `peers.enabled` | bool | `false` | Keeps the Tailscale listener up for other Jennys even when `gateway.remoteAccess` is off. On that listener they get only the `/peer` path, and only a paired Jenny gets past the handshake; the WebView is never served to them. Turning it on also arms the `peers` system job, which retries waiting messages every 15 minutes. |
+| `peers.peers[]` | list | `[]` | One entry per paired Jenny: `id`, `name` (what you call it), `host` (its MagicDNS name), `ip` (its `100.x` address, tried when the name doesn't resolve) and `port`. Pairing writes it; you rename or unlink from the panel. |
+
+The secret each pair shares is **not** in this file: it lives in `<runtime_root>/peers/<id>.key` (mode 0600), outside the workspace, so it never travels in snapshots or backups. A phone restored from a backup shows the other Jenny as "link again" and needs a new code.
+
 ## websocket
 
 The channel the WebUI talks over. On-device, the runtime forces `host` and `port` onto this section too, so the WebView reaches chat and the HTTP API from one origin.

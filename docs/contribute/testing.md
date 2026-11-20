@@ -57,7 +57,7 @@ Jenny uses `pyright` in `basic` mode (config in `pyrightconfig.json`, `include: 
 
 ```bash
 # BLOCKING subset — must stay green, this is what CI fails the build on:
-npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
+npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/peers jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 
 # Full-perimeter visibility — informational, does not fail the build:
 npx pyright || true
@@ -70,7 +70,7 @@ The blocking subset (`jenny/bus`, `jenny/command`, `jenny/db`, `jenny/db_migrati
 One command, straight from `AGENTS.md`, runs everything CI runs before a PR is considered:
 
 ```bash
-ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q -n auto --dist worksteal
+ruff check jenny/ jenny_extensions/ tests/ && npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/peers jenny/gateway_runtime.py jenny/extensions.py jenny_extensions && pytest -q -n auto --dist worksteal
 ```
 
 Run this before committing or opening a PR. It's exactly the lint + blocking-type-check + test sequence, without the non-blocking full-perimeter pyright pass (visibility-only in CI, not a gate).

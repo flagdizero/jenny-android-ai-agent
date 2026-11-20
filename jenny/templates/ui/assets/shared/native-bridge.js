@@ -76,6 +76,9 @@
     'saveToDownloads',
     'requestExactAlarmPermission',
     'openBatterySettings',
+    /* `takePairLink()`: il link `jenny://pair` del QR d'abbinamento fra due
+       Jenny, una volta sola (`shared/peer-link.js`); `""` se non c'è. */
+    'takePairLink',
   ];
 
   const info = win.JennyNativeInfo;

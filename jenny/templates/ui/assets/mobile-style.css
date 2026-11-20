@@ -5209,6 +5209,28 @@ dialog.image-lightbox::backdrop { background: transparent; }
 .remote-peer i { font-size: 18px; color: var(--text-muted); }
 .remote-peer-ip { font: 11px var(--font-mono, monospace); color: var(--text-faint); }
 .remote-peer-when { font-size: 12px; color: var(--text-faint); }
+/* «Altre Jenny» (`mobile-peers.js`): una scheda per Jenny collegata, e i
+   dati da scrivere a mano sotto il QR. Riusa i pezzi di «Da altri dispositivi». */
+.peer-card {
+  padding: 10px 0;
+  border-top: 0.5px solid var(--border);
+}
+.peer-card-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.peer-card-head i { font-size: 18px; color: var(--text-muted); }
+.peer-card-name { color: var(--text); }
+.peer-card-state { margin: 2px 0 6px 26px; font-size: 12px; color: var(--text-faint); }
+.peer-pair-facts {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.peer-pair-facts > div { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.peer-pair-facts span { color: var(--text-muted); }
+.peer-pair-facts code { font: 12.5px var(--font-mono, monospace); color: var(--text); word-break: break-all; }
+.peer-pair-facts code.peer-pair-code { color: var(--text-accent); letter-spacing: 0.08em; }
 /* Due classi: `.settings-btn-add` sta piu' in basso nel file e, a pari
    specificita', vincerebbe col suo colore. */
 .settings-btn-add.remote-danger {

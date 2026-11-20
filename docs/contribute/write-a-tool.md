@@ -194,7 +194,7 @@ Run the full check from [Code style](code-style.md):
 
 ```bash
 ruff check jenny/ jenny_extensions/ tests/
-npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
+npx pyright jenny/bus jenny/command jenny/db jenny/db_migration jenny/plan jenny/runtime jenny/session jenny/snapshot jenny/peers jenny/gateway_runtime.py jenny/extensions.py jenny_extensions
 pytest -q
 ```
 
