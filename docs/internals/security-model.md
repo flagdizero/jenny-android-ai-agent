@@ -152,6 +152,8 @@ Two Jennys of the same person can be linked ([Your other Jenny](../using/other-j
 
 What the request changes is written to undo journals: `peer-<qid>` for its own turns, each helper's own journal (recorded on the request). **Undo** runs them back as one chain and removes the reminders the request created. It puts back only files still as the request left them, and it can be started from the acting phone (notification, panel) or asked by the other one (an `undo` frame, honoured only while `act` is still on). The answer to the asking phone carries a list of what was touched, built from the journals and the job list, not written by the model.
 
+**The answer is untrusted on the asking side too.** The card's text was written by the other Jenny's model, so its row in the personal chat's history carries her as a source (`tool_taint_sources`, as a `web_fetch` result does). While it is in the unconsolidated part of the conversation, what the asking Jenny starts is born untrusted. Cards written by code (refusals, undo results) carry none.
+
 **No ping-pong.** A turn answering the other Jenny can't ask her anything (`peer_ask` is not in its tools), and `peer_ask` refuses whenever a request's gate is bound: its turn, its helpers, the reminders it created.
 
 **What stays open — read this before turning `act` on.**
@@ -160,7 +162,7 @@ What the request changes is written to undo journals: `peer-<qid>` for its own t
 - **With `confirm`, Allow is per host, not per URL.** The notification shows the site, not the path or query, and what goes in them is not checked. Inside a turn one Allow covers that host for the rest of the turn.
 - **The buttons are a notification.** An app granted notification access can press **Allow** or **Undo**, like the direct-reply action above. The confirmation id is random and single-use, and what it allows is held by the gateway, not in the notification, but the press itself can't be told apart from yours.
 - **The pair secret proves the phone, not you.** If the other phone is compromised, or its Jenny was steered by something she read, her requests carry the same authority as yours. The permission levels are there to bound what that is worth.
-- **An answer is not tainted on the asking side.** It lands in the personal chat as a card, and in the model's history as a quoted message from that Jenny (`Name: «…»`), not as untrusted content. Text the other Jenny was steered into writing reaches your personal Jenny's context as something said by your other Jenny, and from there can reach memory at consolidation.
+- **An answer is untrusted, but still read.** It reaches the asking Jenny's context as a quoted message from the other one (`Name: «…»`), so text the other Jenny was steered into writing is in front of the model. The taint limits what follows (helpers born untrusted, J1), not what the model makes of the words, and like any untrusted row it can reach memory at consolidation (see the laundering note above).
 - **Read-only is enforced by tool refusals** (see [the read-only turn](#smaller-boundaries-and-where-they-stop)), and with `agents.defaults.orchestratorMode` off the acting turn holds the web tools itself: the gate still applies to them, J1 does not.
 
 ## What the agent can and cannot do on the phone

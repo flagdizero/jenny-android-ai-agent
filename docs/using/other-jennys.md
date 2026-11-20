@@ -34,7 +34,7 @@ The other Jenny answers in a **read-only turn**: she looks at her own chats, not
 
 What she can see is what passed through *her*: her chats, her notebooks, her reminders and files in her workspace. She does not read the work phone's email, WhatsApp or other apps.
 
-The answer becomes part of the personal chat. Your personal Jenny sees it in later turns ("so the printer confirmed, what next?") and it goes into her memory with the rest of the conversation, as something Work said.
+The answer becomes part of the personal chat. Your personal Jenny sees it in later turns ("so the printer confirmed, what next?") and it goes into her memory with the rest of the conversation, as something Work said. She treats it as she would a page she read: while it is fresh in the chat, the helpers she starts are born untrusted.
 
 A question nobody answers within 24 hours expires, and the chat says so.
 
@@ -99,7 +99,7 @@ The secret the two phones share is kept outside the workspace. It is not in snap
 
 - The two Jennys talk on the Tailscale listener of [Jenny from your other devices](remote-access.md), on a path of their own that only accepts other Jennys, and only from your tailnet. A browser can't use that path, and another Jenny can't use the browser's.
 - Every connection is proved both ways with the shared secret before anything is said.
-- What arrives from the other Jenny is treated as data, not as orders. Her turn starts marked as untrusted, which brings in the same limits as a page read from the web.
+- What arrives from the other Jenny is treated as data, not as orders, on both sides. The turn that answers starts marked as untrusted, and so does the answer once it lands: the same limits as a page read from the web.
 
 The details: [Security model](../internals/security-model.md#other-jennys). The config keys: [`peers`](../reference/configuration.md#peers).
 
