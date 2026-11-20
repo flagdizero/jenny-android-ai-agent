@@ -376,6 +376,54 @@ async def test_an_unanswered_confirmation_is_a_no():
     assert await conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x") is False
 
 
+async def test_a_confirmation_expires_on_the_real_clock(monkeypatch):
+    # Il telefono che dorme: il tempo di asyncio quasi non passa, l'ora vera sì.
+    # Prima la scadenza era un solo ``wait_for`` sul tempo del loop, e su
+    # jenny_square una conferma era ancora in attesa dopo 684 s su 600.
+    import jenny.peers.confirm as confirm_mod
+
+    clock = {"ms": 1_000_000}
+    monkeypatch.setattr(confirm_mod, "now_ms", lambda: clock["ms"])
+    monkeypatch.setattr(confirm_mod, "CHECK_EVERY_S", 0.01)
+    cleared: list[str] = []
+    conf = Confirmations(clear=cleared.append, ttl_s=600)
+    task = asyncio.create_task(conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x"))
+    await wait_until(lambda: conf.pending(), timeout=2)
+    await asyncio.sleep(0.05)
+    assert not task.done()
+    clock["ms"] += 601_000
+    assert await asyncio.wait_for(task, 2) is False
+    assert conf.pending() == [] and len(cleared) == 1
+
+
+async def test_the_peers_round_closes_a_confirmation_that_expired_in_sleep():
+    conf = Confirmations(ttl_s=600)
+    task = asyncio.create_task(conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x"))
+    await wait_until(lambda: conf.pending(), timeout=2)
+    at = conf.pending()[0]["at_ms"]
+    assert conf.expire_due(now=at + 599_000) == 0
+    assert conf.expire_due(now=at + 600_000) == 1
+    assert await asyncio.wait_for(task, 2) is False
+    assert conf.pending() == []
+
+
+async def test_the_container_round_expires_confirmations():
+    from types import SimpleNamespace
+
+    from jenny.runtime.container import GatewayContainer
+
+    conf = Confirmations(ttl_s=600)
+    task = asyncio.create_task(conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x"))
+    await wait_until(lambda: conf.pending(), timeout=2)
+    conf._pending[conf.pending()[0]["cid"]].at_ms -= 601_000
+    woken: list[bool] = []
+    link = SimpleNamespace(wake=lambda: woken.append(True),
+                           acts=SimpleNamespace(confirmations=conf))
+    GatewayContainer._wake_peers(SimpleNamespace(_peer_link=lambda: link))  # type: ignore[arg-type]
+    assert woken == [True]
+    assert await asyncio.wait_for(task, 2) is False
+
+
 async def test_turning_the_permission_off_denies_what_waits():
     conf = Confirmations(ttl_s=5)
     task = asyncio.create_task(conf.ask(peer="p" * 32, peer_name="P", qid="q" * 32, what="x"))

@@ -281,8 +281,14 @@ class GatewayContainer:
 
     def _wake_peers(self) -> None:
         link = self._peer_link()
-        if link is not None:
-            link.wake()
+        if link is None:
+            return
+        link.wake()
+        # Il giro passa anche da telefono addormentato: è qui che una conferma
+        # scaduta nel sonno diventa un no (``Confirmations.expire_due``).
+        acts = getattr(link, "acts", None)
+        if acts is not None:
+            acts.confirmations.expire_due()
 
     def _register_peers_job(self, config: Config) -> None:
         from jenny.cron.types import CronJob, CronPayload, CronSchedule
