@@ -51,3 +51,6 @@ def test_peer_ask_steers_a_request_to_do_towards_act():
     mode = PeerAskTool().parameters["properties"]["mode"]["description"]
     assert "Use 'act' whenever the user wants something done" in mode
     assert "web page" in mode
+    # Ma un file o un'informazione restano una domanda (sui due emulatori «mandami
+    # il preventivo» partì come richiesta di fare).
+    assert "for a file she has is 'read'" in mode

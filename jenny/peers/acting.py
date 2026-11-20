@@ -182,6 +182,7 @@ class PeerActs:
         level = self.level(peer.id)
         agent = self._get_agent()
         status, reply = "ok", ""
+        infos: list[dict[str, Any]] = []
         if level == "off":
             status = "refused"
         elif too_many:
@@ -190,9 +191,10 @@ class PeerActs:
             status = "unavailable"
         else:
             try:
-                reply = await asyncio.wait_for(
+                reply, attachments = await asyncio.wait_for(
                     self._run_turn(agent, peer, qid, text), timeout=ACT_TURN_TIMEOUT_S
                 )
+                infos = await self._send_files(peer, attachments)
             except asyncio.TimeoutError:
                 status = "failed"
             except asyncio.CancelledError:
@@ -200,39 +202,66 @@ class PeerActs:
             except Exception:
                 logger.opt(exception=True).warning("peers: acting for {} failed", peer.name)
                 status = "failed"
-        await self._send_answer(peer.id, qid, status=status, text=reply, update=False)
+        await self._send_answer(
+            peer.id, qid, status=status, text=reply, update=False, files=infos
+        )
 
-    async def _run_turn(self, agent: Any, peer: Any, qid: str, text: str) -> str:
+    async def _send_files(self, peer: Any, attachments: list[Path]) -> list[dict[str, Any]]:
+        """I file che il turno ha allegato con ``peer_attach``, se i file sono permessi."""
+        from .questions import MAX_FILES
+
+        infos: list[dict[str, Any]] = []
+        for path in attachments[:MAX_FILES] if peer.send_files else []:
+            try:
+                info = await self._link.send_file(peer.id, path)
+            except PeerError as exc:
+                logger.info("peers: {} not sent ({})", path.name, exc.code)
+                continue
+            infos.append({"fid": info["fid"], "name": info["name"], "size": info["size"]})
+        return infos
+
+    async def _run_turn(
+        self, agent: Any, peer: Any, qid: str, text: str
+    ) -> tuple[str, list[Path]]:
         from jenny.bus.events import WEBSOCKET_CHANNEL
         from jenny.session.turn_visibility import TurnVisibility, silent_progress
         from jenny.utils.prompt_templates import render_template
 
-        from .questions import _fence
+        from .questions import MAX_FILES, PEER_TURN, PeerTurn, _fence
 
+        # Come per le domande: ``peer_attach`` manda i file con la risposta. Senza,
+        # sui due emulatori Lavoro allegò il preventivo con ``message`` — che arriva
+        # all'utente di questo telefono, non all'altra Jenny — e rispose «inviato»
+        # (20/11/2026).
+        turn = PeerTurn(peer_id=peer.id, peer_name=peer.name, allow_files=bool(peer.send_files))
         prompt = render_template(
             "agent/peer_request.md",
             peer_name=peer.name,
             question=_fence(text),
             act=True,
             confirm=self.level(peer.id) == "confirm",
-            allow_files=False,
-            max_files=0,
+            allow_files=turn.allow_files,
+            max_files=MAX_FILES,
         )
         session_key = act_session_key(peer.id)
-        outcome = await agent.process_direct_outcome(
-            prompt,
-            session_key=session_key,
-            channel=WEBSOCKET_CHANNEL,
-            chat_id="default",
-            on_progress=silent_progress,
-            visibility=TurnVisibility.SILENT,
-            metadata={
-                "_taint": [f"peer:{peer.name}"],
-                gate.PEER_ACT_META: {"peer": peer.id, "qid": qid},
-            },
-        )
+        token = PEER_TURN.set(turn)
+        try:
+            outcome = await agent.process_direct_outcome(
+                prompt,
+                session_key=session_key,
+                channel=WEBSOCKET_CHANNEL,
+                chat_id="default",
+                on_progress=silent_progress,
+                visibility=TurnVisibility.SILENT,
+                metadata={
+                    "_taint": [f"peer:{peer.name}"],
+                    gate.PEER_ACT_META: {"peer": peer.id, "qid": qid},
+                },
+            )
+        finally:
+            PEER_TURN.reset(token)
         self._trim(agent, session_key)
-        return (outcome.final_text or "").strip()
+        return (outcome.final_text or "").strip(), list(turn.attachments)
 
     @staticmethod
     def _trim(agent: Any, session_key: str) -> None:
@@ -266,7 +295,8 @@ class PeerActs:
         )
 
     async def _send_answer(
-        self, peer_id: str, qid: str, *, status: str, text: str, update: bool
+        self, peer_id: str, qid: str, *, status: str, text: str, update: bool,
+        files: list[dict[str, Any]] | None = None,
     ) -> None:
         from .questions import KIND_ANSWER, MAX_ANSWER_CHARS
 
@@ -279,7 +309,7 @@ class PeerActs:
             self.store.set_question, peer_id, "in", qid, state=state, answer=text
         )
         await self._link.send(peer_id, KIND_ANSWER, {
-            "qid": qid, "status": status, "text": text, "files": [],
+            "qid": qid, "status": status, "text": text, "files": list(files or []),
             "mode": "act", "done": done, "working": working, "update": update,
         })
         await asyncio.to_thread(

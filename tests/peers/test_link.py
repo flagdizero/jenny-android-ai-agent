@@ -249,3 +249,38 @@ async def test_only_tailnet_addresses_are_dialled(tmp_path):
         await link.join(host="nas.local", ip="", port=18790, code="ABCD-EFGH", name="x")
     assert err.value.code == "unreachable"
     assert dialled == []
+
+
+async def test_linking_again_keeps_the_rows_and_their_permissions(two):
+    """Una Jenny che ha perso la sua identità (un ripristino) e si ricollega.
+
+    Sui due emulatori (20/11/2026) chi mostrava il QR teneva la riga vecchia,
+    che non avrebbe più risposto, accanto alla nuova; e chi si ricollegava
+    riscriveva la sua riga coi permessi di partenza.
+    """
+    import shutil
+
+    from jenny.peers.store import peers_dir
+
+    a, b = two
+    await pair(a, b)
+    old_b = b.id
+    await a.link.rename(old_b, "Personale")
+    await a.link.set_permissions(old_b, act="confirm", send_files=True)
+    await b.link.set_permissions(a.id, can_ask=False)
+
+    # b perde segreti e identità, come un telefono nuovo ripristinato da backup.
+    await b.close()
+    shutil.rmtree(peers_dir(b.workspace))
+    b.link = None
+    await b.start()
+    assert b.id != old_b
+    await pair(a, b)
+
+    rows = a.peers()
+    assert [p.id for p in rows] == [b.id]
+    assert (rows[0].name, rows[0].act, rows[0].send_files) == ("Personale", "confirm", True)
+    assert read_secret(a.workspace, old_b) is None
+    mine = b.peers()
+    assert [p.id for p in mine] == [a.id]
+    assert mine[0].can_ask is False and mine[0].name == "Personale"

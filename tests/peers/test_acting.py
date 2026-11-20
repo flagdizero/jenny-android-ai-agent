@@ -179,6 +179,60 @@ async def test_undo_asked_from_the_other_phone_puts_the_file_back(two):
     assert note.read_text(encoding="utf-8") == "prima\n"
 
 
+class AttachingAgent(ActingAgent):
+    """Fa la richiesta e allega *attach* con ``peer_attach`` vero, come il modello."""
+
+    def __init__(self, workspace: Path, attach: str) -> None:
+        super().__init__(workspace, reply="Eccolo, te l'ho allegato.", write=None)
+        self.attach = attach
+        self.attached: str = ""
+
+    async def process_direct_outcome(self, prompt: str, **kwargs: Any):
+        from jenny.agent.tools.peer import PeerAttachTool
+
+        self.attached = await PeerAttachTool(self.workspace).execute(path=self.attach)
+        return await super().process_direct_outcome(prompt, **kwargs)
+
+
+async def test_a_request_to_act_can_send_a_file_back(two):
+    # Sui due emulatori il preventivo partì con ``message`` (all'utente di
+    # Lavoro) e mai verso Personale: ``peer_attach`` lì non era legato.
+    a, b = two
+    await pair(a, b)
+    _set_peer(b, act="free", send_files=True)
+    doc = b.workspace / "documenti" / "preventivo.txt"
+    doc.parent.mkdir(parents=True)
+    doc.write_text("Cataloghi A4: 1.240 euro\n", encoding="utf-8")
+    qa, _, delivered = _wire(a)
+    agent = AttachingAgent(b.workspace, "documenti/preventivo.txt")
+    _wire(b, agent)
+
+    await qa.ask("", "Mandami il preventivo Bianchi", mode="act")
+    await wait_until(lambda: delivered, timeout=10)
+    assert agent.attached.startswith("Attached preventivo.txt")
+    assert "peer_attach" in agent.calls[0]["prompt"]
+    msg = delivered[0]
+    assert len(msg.media) == 1
+    assert Path(msg.media[0]).read_text(encoding="utf-8") == "Cataloghi A4: 1.240 euro\n"
+
+
+async def test_a_request_to_act_sends_no_file_without_permission(two):
+    a, b = two
+    await pair(a, b)
+    _set_peer(b, act="free")
+    (b.workspace / "documenti").mkdir()
+    (b.workspace / "documenti" / "preventivo.txt").write_text("x\n", encoding="utf-8")
+    qa, _, delivered = _wire(a)
+    agent = AttachingAgent(b.workspace, "documenti/preventivo.txt")
+    _wire(b, agent)
+
+    await qa.ask("", "Mandami il preventivo Bianchi", mode="act")
+    await wait_until(lambda: delivered, timeout=10)
+    assert agent.attached.startswith("Files can't be sent")
+    assert "Files can't be sent" in agent.calls[0]["prompt"]
+    assert delivered[0].media == []
+
+
 async def test_the_undone_notice_has_no_undo_button(two):
     # Sui due emulatori la notifica «annullato» teneva ancora «Annulla».
     a, b = two
