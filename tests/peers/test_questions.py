@@ -112,6 +112,8 @@ async def test_a_question_comes_back_as_a_card(two):
     # Una consegna proattiva, registrata in sessione.
     assert delivered[0].metadata["_record_channel_delivery"] is True
     assert delivered[0].metadata["_proactive_fanout"] is True
+    # Il testo l'ha scritto l'altra Jenny: la riga in sessione sarà non fidata.
+    assert delivered[0].metadata["_record_taint"] == ["peer:127"]
 
     call = agent.calls[0]
     assert call["session_key"] == f"peer:{a.id}"
@@ -135,6 +137,8 @@ async def test_without_permission_no_turn_runs(two):
     await wait_until(lambda: delivered, timeout=10)
     assert _card(delivered[0])["status"] == "refused"
     assert agent.calls == []
+    # Un rifiuto scritto dal codice non porta testo dell'altra: niente taint.
+    assert "_record_taint" not in delivered[0].metadata
 
 
 async def test_no_agent_yet_says_unavailable(two):
