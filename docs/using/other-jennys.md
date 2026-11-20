@@ -81,7 +81,7 @@ The card arrives even on a quiet day. A monitor ("only tell me if Work has news"
 
 The other side doesn't have to be a phone. If you use [opencode](https://opencode.ai) on your Mac, the `opencode-jenny` plugin links it the same way, so your Jenny can ask questions about your code: "is the CI of PR 85 green?", "what changed on main today?". opencode does the work on the Mac; Jenny stays the one you talk to.
 
-- **Installing.** On the Mac, with opencode and Tailscale already there, run `npx opencode-jenny`. It installs the plugin, keeps opencode running in the background, and prints a QR in the Terminal. Scan it with the phone's camera and tap **Link**, as above.
+- **Installing.** On the Mac, with opencode and Tailscale already there, run `npx opencode-jenny`. It asks which folder opencode may read and which model answers, installs the plugin, keeps opencode running in the background, and prints a QR in the Terminal. Scan it with the phone's camera and tap **Link**, as above; the Terminal then asks what you call the phone.
 - **What it can read.** One folder you choose when installing (by default `~/Documents/GitHub`), and only to read: `git status`, `log`, `diff`, and GitHub's PRs, checks and runs through `gh`. It can't edit files, run other commands or open web pages. Each question is a session you can open in opencode to see what it did.
 - **Regular checks** are reminders, set in words: "every hour, ask the Mac whether the CI of PR 85 is green, and tell me only if it changes". Nothing to set up on the Mac.
 
