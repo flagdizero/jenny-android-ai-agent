@@ -78,6 +78,11 @@ class ActGate:
     # Le destinazioni già consentite in questo contesto: la stessa pagina due
     # volte non si chiede due volte.
     allowed: set[str] = field(default_factory=set)
+    # E quelle negate (un «No», o nessuna risposta): lo stesso sito chiesto con
+    # un altro strumento non si richiede. Sui due emulatori, dopo il no a
+    # ``browser_open`` l'aiutante ha riprovato con ``web_fetch``, e la notifica
+    # è tornata (20/11/2026).
+    denied: set[str] = field(default_factory=set)
 
 
 _GATE: ContextVar[ActGate | None] = ContextVar("jenny_peer_act_gate", default=None)
@@ -217,6 +222,9 @@ async def before_tool(name: str, params: Any) -> str | None:
         return _refusal(gate, what, "the user of this phone has turned off requests to act.")
     if target in gate.allowed:
         return None
+    if target in gate.denied:
+        return _refusal(gate, what, "the user of this phone already said no to it for this "
+                        "request: don't try it again, with this tool or another.")
     assert _AUTHORITY is not None  # _level è "confirm" solo con un'autorità
     try:
         ok = await _AUTHORITY.confirm(gate.peer, gate.qid, action, target)
@@ -224,6 +232,7 @@ async def before_tool(name: str, params: Any) -> str | None:
         ok = False
     _note(gate, {"kind": "egress", "label": target, "undoable": False, "allowed": ok})
     if not ok:
+        gate.denied.add(target)
         return _refusal(gate, what, "the user of this phone did not allow it.")
     gate.allowed.add(target)
     return None

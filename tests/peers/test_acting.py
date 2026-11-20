@@ -329,6 +329,28 @@ async def test_confirm_asks_once_per_host_and_refuses_on_no():
             assert await gate.before_tool(name, {}) is None
 
 
+async def test_a_no_is_asked_once_per_site_whatever_the_tool():
+    # Sui due emulatori: no a browser_open, poi web_fetch sullo stesso sito, e
+    # la notifica tornava.
+    auth = FakeAuthority(level="confirm", answer=False)
+    gate.install(auth)
+    with gate.entered(ACT):
+        assert await gate.before_tool("browser_open", {"url": "https://example.net"})
+        again = await gate.before_tool("web_fetch", {"url": "https://Example.NET/page"})
+        assert again is not None and "already said no" in again
+        assert await gate.before_tool("download_file", {"url": "https://example.net/a.pdf"})
+        assert auth.asked == [("open", "example.net")]
+        # Un altro sito si chiede ancora.
+        auth.answer = True
+        assert await gate.before_tool("web_fetch", {"url": "https://bianchi.it"}) is None
+        assert auth.asked[-1] == ("open", "bianchi.it")
+    # Il no vale per questo contesto: un altro (un aiutante) chiede per sé.
+    auth.answer = False
+    with gate.entered(ACT):
+        await gate.before_tool("web_fetch", {"url": "https://example.net"})
+    assert auth.asked[-1] == ("open", "example.net") and len(auth.asked) == 3
+
+
 async def test_free_passes_and_notes_what_left():
     auth = FakeAuthority(level="free")
     gate.install(auth)
