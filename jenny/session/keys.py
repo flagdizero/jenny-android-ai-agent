@@ -14,18 +14,21 @@ __all__ = [
     "GARDENER_SESSION_PREFIX",
     "INTERNAL_SESSION_PREFIX",
     "NOTEBOOK_CRON_SESSION_PREFIX",
+    "PEER_ACT_SESSION_SUFFIX",
     "PEER_SESSION_PREFIX",
     "PROJECT_SESSION_PREFIX",
     "SUBAGENT_SESSION_PREFIX",
     "UNIFIED_SESSION_KEY",
     "internal_session_kind",
     "is_internal_session_key",
+    "is_peer_act_session_key",
     "is_personal_session_key",
     "is_project_session_key",
     "is_valid_project_name",
     "normalize_user_session_key",
     "notebook_cron_session_key",
     "notebook_of_cron_session",
+    "peer_act_session_key",
     "project_session_key",
     "session_key_for_channel",
     "session_kind",
@@ -110,6 +113,19 @@ INTERNAL_SESSION_PREFIX = "internal:"
 # ``peer:<id>``, una sessione per ogni Jenny abbinata. Interna: chi scrive lì non
 # è l'utente, e la memoria di Dream non la legge come sua.
 PEER_SESSION_PREFIX = "peer:"
+# Le richieste di *fare* della stessa Jenny hanno una sessione a parte,
+# ``peer:<id>:act``: altri strumenti (tutti, non solo guardare), e la cache del
+# provider tiene se la lista non cambia da un turno all'altro.
+PEER_ACT_SESSION_SUFFIX = ":act"
+
+
+def peer_act_session_key(peer_id: str) -> str:
+    """La sessione delle richieste di fare di *peer_id*."""
+    return f"{PEER_SESSION_PREFIX}{peer_id}{PEER_ACT_SESSION_SUFFIX}"
+
+
+def is_peer_act_session_key(key: str) -> bool:
+    return key.startswith(PEER_SESSION_PREFIX) and key.endswith(PEER_ACT_SESSION_SUFFIX)
 
 # Vocabolario delle sessioni interne (lavoro del sistema, non conversazione con
 # l'utente): prefisso -> *kind*. Elencare le sessioni e per definizione

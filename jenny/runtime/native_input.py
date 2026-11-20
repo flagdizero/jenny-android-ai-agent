@@ -31,11 +31,20 @@ dispatcher non conosce. Il motivo è lo stesso per cui
 ``session_key_for_channel`` tiene un elenco chiuso di forme riconosciute — qui
 il chiamante è codice nostro, ma la regola che vale è che un nome di canale non
 si accetta da fuori.
+
+**Non solo testo: i pulsanti dell'altra Jenny.** «Consenti»/«No» su una
+conferma e «Annulla» su una richiesta conclusa (le notifiche di
+``notifier.post_peer_confirm``/``post_peer_done``) entrano da
+:func:`on_native_peer_action`, con la stessa grammatica — thread JNI, mai
+solleva, solo ``call_soon_threadsafe`` — ma non diventano un messaggio: vanno
+al gestore registrato con :func:`set_peer_action_handler`.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -109,6 +118,20 @@ _BUS: Any = None
 # ``notifier._TASKS``.
 _TASKS: set[asyncio.Task[Any]] = set()
 
+# I tre pulsanti delle notifiche dell'altra Jenny (``notifier.post_peer_confirm``
+# e ``post_peer_done``). Valori di protocollo condivisi con Kotlin
+# (``PeerActionReceiver.ACTION_*``): elenco chiuso, come le sorgenti del testo.
+PEER_ACTIONS = frozenset({"allow", "deny", "undo"})
+
+# L'identificativo che accompagna il tocco: il ``cid`` di una conferma o il
+# ``qid`` di una richiesta, 32 cifre esadecimali minuscole (``uuid4().hex``).
+_PEER_IDENT = re.compile(r"[0-9a-f]{32}")
+
+# Chi riceve i tocchi: lo registra il lato Python delle richieste dell'altra
+# Jenny con :func:`set_peer_action_handler`. Globale di modulo per la stessa
+# ragione di ``_LOOP``: Kotlin arriva qui col solo nome del modulo.
+_PEER_HANDLER: Callable[[str, str], None] | None = None
+
 
 def reset_native_input() -> None:
     """Slega loop e bus a un nuovo start del gateway.
@@ -118,9 +141,12 @@ def reset_native_input() -> None:
     del giro precedente puntano a un loop morto, e un ``call_soon_threadsafe``
     su quello solleverebbe — o peggio, accoderebbe per nessuno.
     """
-    global _LOOP, _BUS
+    global _LOOP, _BUS, _PEER_HANDLER
     _LOOP = None
     _BUS = None
+    # Il gestore dei tocchi sulle notifiche dell'altra Jenny è legato agli
+    # oggetti del giro precedente: lo ri-registra chi costruisce il nuovo.
+    _PEER_HANDLER = None
     # I task rimasti appartengono al loop morto: nessuno li completerà e
     # tenerli referenziati terrebbe in vita quel loop. Si lasciano andare.
     _TASKS.clear()
@@ -271,4 +297,69 @@ def on_native_text(
         # Loop chiuso fra il controllo e la chiamata: nessun destinatario.
         logger.opt(exception=True).warning("Native text could not reach the event loop")
         return False
+    return True
+
+
+def set_peer_action_handler(fn: Callable[[str, str], None] | None) -> None:
+    """Registra (o toglie, con ``None``) chi riceve i tocchi sulle notifiche
+    dell'altra Jenny: «Consenti»/«No» su una conferma, «Annulla» su una
+    richiesta conclusa.
+
+    *fn* gira **sul loop del gateway**, mai sul thread JNI, con ``(action,
+    ident)`` già validati. Un ``reset_native_input`` lo toglie: a un nuovo start
+    del gateway lo ri-registra chi lo costruisce.
+    """
+    global _PEER_HANDLER
+    _PEER_HANDLER = fn
+
+
+def _run_peer_action(fn: Callable[[str, str], None], action: str, ident: str) -> None:
+    """Esegue il gestore sul loop. Un suo guasto si logga e finisce qui: un
+    callback che solleva dentro ``call_soon_threadsafe`` finirebbe solo
+    nell'exception handler del loop, lontano da chi lo deve leggere."""
+    try:
+        fn(action, ident)
+    except Exception:  # noqa: BLE001 — v. docstring
+        logger.opt(exception=True).error(
+            "Peer action handler failed (action={}, ident={})", action, ident,
+        )
+
+
+def on_native_peer_action(action: str, ident: str) -> bool:
+    """Riceve il tocco su un pulsante di una notifica dell'altra Jenny. Chiamata
+    da Kotlin (``GatewayService``, thread di lavoro JNI).
+
+    **Mai solleva verso Kotlin**, come ``on_native_text``. *action* è uno di
+    ``PEER_ACTIONS`` (``allow``/``deny`` per una conferma, ``undo`` per una
+    richiesta conclusa) e *ident* il ``cid`` o il ``qid`` — 32 cifre esadecimali
+    minuscole; tutto il resto si scarta.
+
+    ``True`` vuol dire "accettato e in viaggio verso il gestore", che girerà sul
+    loop del gateway. ``False`` vuol dire che il tocco non è arrivato: o è
+    malformato (e allora riprovare non serve — ``PeerActionReceiver`` controlla
+    la stessa forma prima di partire, quindi in pratica non succede), o il
+    gateway non è ancora agganciato, o nessuno ha registrato il gestore. Gli
+    ultimi due sono la finestra d'avvio a freddo, ed è ciò che il retry di
+    ``GatewayService`` esiste per aspettare.
+    """
+    try:
+        if action not in PEER_ACTIONS:
+            logger.warning("Peer action rejected: unknown action {!r}", action)
+            return False
+        if not isinstance(ident, str) or _PEER_IDENT.fullmatch(ident) is None:
+            logger.warning("Peer action rejected: malformed ident (action={})", action)
+            return False
+        loop = _LOOP
+        fn = _PEER_HANDLER
+        if loop is None or loop.is_closed():
+            logger.info("Peer action dropped: no gateway bound yet (action={})", action)
+            return False
+        if fn is None:
+            logger.info("Peer action dropped: no handler registered (action={})", action)
+            return False
+        loop.call_soon_threadsafe(_run_peer_action, fn, action, ident)
+    except Exception:  # noqa: BLE001 — loop chiuso fra il controllo e la chiamata, o peggio
+        logger.opt(exception=True).warning("Peer action could not reach the event loop")
+        return False
+    logger.info("Peer action accepted (action={}, ident={})", action, ident)
     return True

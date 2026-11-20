@@ -18,24 +18,40 @@ CARD = (ASSETS / "shared" / "peer-card.js").read_text(encoding="utf-8")
 DOM = (ASSETS / "shared" / "dom.js").read_text(encoding="utf-8")
 
 
-def _render(card: object) -> dict:
+def _render(card: object, click: str | None = None, before: str | None = None) -> dict:
     script = (
         "import { createRequire } from 'module';\n"
         "const require = createRequire(import.meta.url);\n"
         "const { JSDOM } = require('jsdom');\n"
         "globalThis.document = new JSDOM('').window.document;\n"
         "const i18n = { locale: 'it', t: (k, p) => p ? `${k} ${JSON.stringify(p)}` : k };\n"
-        "const STATUSES = new Set(['ok', 'refused', 'too_many', 'unavailable', 'failed', "
-        "'expired']);\n"
+        "const calls = [];\n"
+        "const rpc = { peer: async (m, p) => { calls.push([m, p]); return {}; } };\n"
+        "const showToast = () => {};\n"
+        + _consts() + "\n"
         + function(DOM, "el") + "\n"
         + function(DOM, "icon") + "\n"
+        + function(DOM, "button") + "\n"
         + function(CARD, "timeOf") + "\n"
+        + function(CARD, "headText") + "\n"
+        + function(CARD, "doneNode") + "\n"
+        + function(CARD, "undoButton") + "\n"
+        + function(CARD, "markUndone") + "\n"
         + function(CARD, "peerCardNode") + "\n"
+        + (before or "")
         + f"const node = peerCardNode({json.dumps(card)});\n"
-        "console.log(JSON.stringify(node ? { cls: node.className, html: node.innerHTML, "
-        "text: node.textContent } : null));\n"
+        + (click or "")
+        + "console.log(JSON.stringify(node ? { cls: node.className, html: node.innerHTML, "
+        "text: node.textContent, calls } : null));\n"
     )
     return json.loads(run_js(script))
+
+
+def _consts() -> str:
+    """Le costanti in testa al modulo, prese dal file vero (``STATUSES`` e seguenti)."""
+    start = CARD.index("const STATUSES")
+    end = CARD.index("function timeOf")
+    return CARD[start:end]
 
 
 @requires_node
@@ -91,3 +107,96 @@ def test_a_plain_message_carries_no_card() -> None:
     lines = [{"event": "message", "chat_id": "default", "text": "ciao", "turn_id": "t1",
               "turn_phase": "answer"}]
     assert "peerAnswer" not in replay_transcript_to_ui_messages(lines)[-1]
+
+
+ACT = {
+    "peer": "Lavoro", "status": "ok", "question": "Mettimi un promemoria", "text": "Fatto.",
+    "at": 1_700_000_000_000, "mode": "act", "qid": "a" * 32, "peerId": "b" * 32,
+    "working": False,
+    "done": [
+        {"kind": "file", "label": "note/bianchi.md", "undoable": True},
+        {"kind": "job", "label": "Richiamare Bianchi", "undoable": True},
+        {"kind": "egress", "label": "bianchi.it", "undoable": False, "allowed": False},
+        {"kind": "weird", "label": "x"},
+    ],
+}
+
+
+@requires_node
+@requires_jsdom
+def test_a_request_where_nothing_was_allowed_does_not_say_it_did() -> None:
+    # Con l'unica uscita negata, la scheda diceva «Lavoro did it» sopra
+    # «non sono riuscita».
+    denied = {**ACT, "done": [{"kind": "egress", "label": "example.com",
+                               "undoable": False, "allowed": False}]}
+    out = _render(denied)
+    assert 'home.peer.fromAt {"name":"Lavoro"' in out["text"]
+    assert "home.peer.didAt" not in out["text"]
+    assert "home.peer.denied" in out["text"]
+    allowed = {**ACT, "done": [{"kind": "egress", "label": "example.com",
+                                "undoable": False, "allowed": True}]}
+    assert 'home.peer.didAt {"name":"Lavoro"' in _render(allowed)["text"]
+
+
+@requires_node
+@requires_jsdom
+def test_a_request_lists_what_it_touched_and_offers_to_undo() -> None:
+    out = _render(ACT)
+    assert out["cls"] == "home-peer-card is-ok is-act"
+    assert 'home.peer.didAt {"name":"Lavoro"' in out["text"]
+    assert "note/bianchi.md" in out["text"] and "Richiamare Bianchi" in out["text"]
+    assert "bianchi.it" in out["text"] and "home.peer.denied" in out["text"]
+    assert "weird" not in out["text"]
+    assert "home.peer.askUndo" in out["text"]
+
+
+@requires_node
+@requires_jsdom
+def test_the_undo_button_asks_the_other_jenny() -> None:
+    click = ("node.querySelector('.home-peer-undo').click();\n"
+             "await new Promise((r) => setTimeout(r, 0));\n")
+    out = _render(ACT, click)
+    assert out["calls"] == [["undo_remote", {"id": "b" * 32, "qid": "a" * 32}]]
+
+
+@requires_node
+@requires_jsdom
+def test_still_working_has_no_undo_and_nothing_undoable_neither() -> None:
+    out = _render({**ACT, "working": True})
+    assert 'home.peer.workingAt' in out["text"]
+    assert "home.peer.askUndo" not in out["text"]
+    only_out = {**ACT, "done": [{"kind": "egress", "label": "x.it", "undoable": False}]}
+    assert "home.peer.askUndo" not in _render(only_out)["text"]
+
+
+@requires_node
+@requires_jsdom
+def test_once_undone_the_old_card_stops_offering_undo() -> None:
+    # Sui due emulatori la scheda «ha fatto» teneva «Chiedi di annullare» anche
+    # dopo la scheda «annullato». Qui la vecchia è costruita fuori dal documento,
+    # come nel replay, e la nuova arriva dopo.
+    undone = {"peer": "Lavoro", "status": "undone", "mode": "act", "qid": "a" * 32,
+              "question": "x", "undo": {"restored": 1, "kept": 0, "jobs": 0}}
+    before = (
+        f"const old = peerCardNode({json.dumps(ACT)});\n"
+        "const hadIt = !!old.querySelector('.home-peer-undo');\n"
+        f"peerCardNode({json.dumps(undone)});\n"
+        "const keptIt = !!old.querySelector('.home-peer-undo');\n"
+    )
+    click = "calls.push(['old', hadIt, keptIt]);\n"
+    out = _render(ACT, click, before)
+    assert ["old", True, False] in out["calls"]
+    # E un ridisegno della stessa richiesta non lo rimette.
+    assert "home.peer.askUndo" not in out["text"]
+
+
+@requires_node
+@requires_jsdom
+def test_a_refused_request_and_an_undo_say_so() -> None:
+    refused = _render({"peer": "Lavoro", "status": "refused", "mode": "act", "question": "x"})
+    assert 'home.peer.status.refused_act {"name":"Lavoro"}' in refused["text"]
+    undone = _render({"peer": "Lavoro", "status": "undone", "mode": "act", "question": "x",
+                      "undo": {"restored": 2, "kept": 1, "jobs": 1}})
+    assert undone["cls"] == "home-peer-card is-undone is-act"
+    assert '"files":2' in undone["text"] and '"jobs":1' in undone["text"]
+    assert 'home.peer.kept {"count":1}' in undone["text"]

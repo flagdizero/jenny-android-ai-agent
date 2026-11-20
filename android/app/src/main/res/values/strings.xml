@@ -32,6 +32,12 @@
          non si traduce; quello dell'utente sì. -->
     <string name="reply_bot_name">Jenny</string>
     <string name="reply_user_name">You</string>
+    <!-- I pulsanti delle notifiche dell'altra Jenny: la conferma prima che
+         qualcosa esca dal telefono, e l'annullamento di una richiesta fatta.
+         Titolo e testo li scrive Python. -->
+    <string name="peer_allow_label">Allow</string>
+    <string name="peer_deny_label">No</string>
+    <string name="peer_undo_label">Undo</string>
 
     <!-- Mascotte flottante: il campo che si apre al tocco e i due modi in cui
          una risposta può non arrivare. Sono le uniche stringhe di quella

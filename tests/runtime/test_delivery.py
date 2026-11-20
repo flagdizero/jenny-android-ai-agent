@@ -173,6 +173,32 @@ async def test_deliver_routes_recording_through_the_hook_when_present(tmp_path: 
     assert bus.outbound == [msg]
 
 
+async def test_a_tainted_delivery_reaches_the_hook_and_the_row(tmp_path: Path) -> None:
+    """La risposta di un'altra Jenny: le fonti vanno all'hook (agente vivo) e
+    sulla riga scritta da sé (prima dell'agente), e mai sul bus."""
+    from jenny.session.history_meta import TOOL_TAINT_META
+
+    calls: list[dict[str, Any]] = []
+
+    async def _hook(**kwargs: Any) -> None:
+        calls.append(kwargs)
+
+    bus = FakeBus()
+    sessions = SessionManager(tmp_path)
+    deliverer = ChannelDeliverer(bus=bus, session_manager=sessions, record_hook=lambda: _hook)
+    meta = {"_record_channel_delivery": True, "_record_taint": ["peer:Lavoro"]}
+    await deliverer.deliver(OutboundMessage(
+        channel="websocket", chat_id="1", content="Lavoro: «sì»", metadata=dict(meta)))
+    assert calls[0]["taint"] == ["peer:Lavoro"]
+    assert "_record_taint" not in bus.outbound[0].metadata
+
+    deliverer._record_hook = lambda: None
+    await deliverer.deliver(OutboundMessage(
+        channel="websocket", chat_id="1", content="Lavoro: «sì»", metadata=dict(meta)))
+    row = sessions.get_or_create(UNIFIED_SESSION_KEY).messages[0]
+    assert row[TOOL_TAINT_META] == ["peer:Lavoro"]
+
+
 async def test_deliver_falls_back_to_direct_write_when_hook_is_unset(tmp_path: Path) -> None:
     """Prima dell'onboarding l'agente non esiste ancora: il getter torna None e
     la registrazione resta quella diretta."""

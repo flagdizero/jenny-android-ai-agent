@@ -281,8 +281,14 @@ class GatewayContainer:
 
     def _wake_peers(self) -> None:
         link = self._peer_link()
-        if link is not None:
-            link.wake()
+        if link is None:
+            return
+        link.wake()
+        # Il giro passa anche da telefono addormentato: è qui che una conferma
+        # scaduta nel sonno diventa un no (``Confirmations.expire_due``).
+        acts = getattr(link, "acts", None)
+        if acts is not None:
+            acts.confirmations.expire_due()
 
     def _register_peers_job(self, config: Config) -> None:
         from jenny.cron.types import CronJob, CronPayload, CronSchedule
@@ -927,7 +933,12 @@ class GatewayContainer:
         """Il servizio delle domande fra Jenny, sopra il collegamento del canale."""
         from pathlib import Path
 
+        from jenny.peers import gate
+        from jenny.peers.acting import PeerActs
+        from jenny.peers.confirm import Confirmations
         from jenny.peers.questions import PeerQuestions
+        from jenny.runtime import native_input, notifier, ui_events
+        from jenny.runtime.user_text import say
 
         questions = PeerQuestions(
             link,
@@ -935,6 +946,46 @@ class GatewayContainer:
             get_agent=lambda: self._agent,
             deliver=self._deliver_to_channel,
         )
+
+        def confirmations_changed() -> None:
+            # Il pannello dell'Officina si ridisegna: una conferma è arrivata o è finita.
+            try:
+                asyncio.get_running_loop().create_task(ui_events.emit({"_peer_changed": True}))
+            except RuntimeError:
+                pass
+
+        confirmations = Confirmations(
+            post=lambda cid, name, what: notifier.post_peer_confirm(
+                cid, say("peer.confirm_title", peer=name, what=what),
+                say("peer.confirm_body", peer=name),
+            ),
+            clear=lambda cid: notifier.clear_peer_notice("confirm", cid),
+            on_change=confirmations_changed,
+        )
+        acts = PeerActs(
+            link,
+            Path(config.workspace_path),
+            get_agent=lambda: self._agent,
+            get_cron=lambda: self.cron,
+            notify_done=notifier.post_peer_done,
+            clear_done=lambda qid: notifier.clear_peer_notice("done", qid),
+            notify_undone=notifier.post_peer_undone,
+            confirmations=confirmations,
+        )
+        acts.deliver_card = questions._deliver_card
+        questions.acts = acts
+        link.acts = acts
+        # Il cancello sulle uscite chiede a loro: livelli, conferme, cosa è uscito.
+        gate.install(acts)
+
+        def on_peer_action(action: str, ident: str) -> None:
+            # Un tasto di una notifica (``PeerActionReceiver``), già sul loop.
+            if action in ("allow", "deny"):
+                confirmations.resolve(ident, action == "allow")
+            elif action == "undo":
+                acts.undo_from_notice(ident)
+
+        native_input.set_peer_action_handler(on_peer_action)
         self._peer_questions = questions
         if self._agent is not None:
             self._agent.attach_peer_questions(questions)

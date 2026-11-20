@@ -29,12 +29,12 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.channels.ws_remote import is_tailnet_ip
+from jenny.channels.ws_remote import is_tailnet_ip, parse_ip
 from jenny.snapshot.crypto import decrypt_container, encrypt_container
 from jenny.snapshot.crypto_backends.base import CryptoAuthError
 
 from . import auth, files, model
-from .model import KIND_PING, KIND_UNPAIR, FrameError, is_id, text_field
+from .model import ACT_LEVELS, KIND_PING, KIND_UNPAIR, FrameError, is_id, text_field
 from .store import (
     SECRET_BYTES,
     PeerStore,
@@ -163,6 +163,9 @@ class PeerLink:
         # Dopo un abbinamento o uno scollegamento: chi possiede l'ascoltatore lo
         # riporta allo stato di config (``WebSocketChannel.apply_remote_access``).
         self.on_change: Callable[[], Awaitable[None]] | None = None
+        # Le richieste di fare (``jenny.peers.acting.PeerActs``): le lega il
+        # composition root, e i comandi ``peer.*`` le raggiungono da qui.
+        self.acts: Any = None
 
     # -- Config ---------------------------------------------------------------
 
@@ -250,15 +253,19 @@ class PeerLink:
                 "port": p.port,
                 "can_ask": p.can_ask,
                 "send_files": p.send_files,
+                "act": p.act,
                 "has_secret": read_secret(self._workspace, p.id) is not None,
                 "queued": queued,
                 **state,
             })
         pairing = self._live_pairing()
+        # Le conferme che aspettano l'utente di qui (le richieste di fare).
+        pending = self.acts.pending() if self.acts is not None else []
         return {
             "enabled": cfg.enabled,
             "self_id": self.self_id(),
             "peers": peers,
+            "pending": pending,
             "pairing": (
                 {"code": auth.format_pair_code(pairing.code), "expires_ms": pairing.expires_ms}
                 if pairing is not None
@@ -301,19 +308,24 @@ class PeerLink:
         await self._mutate(apply)
 
     async def set_permissions(
-        self, peer_id: str, *, can_ask: bool | None = None, send_files: bool | None = None
+        self, peer_id: str, *, can_ask: bool | None = None, send_files: bool | None = None,
+        act: str | None = None,
     ) -> None:
         """Cosa può fare *peer_id* su questa Jenny: lo decide chi riceve."""
+        if act is not None and act not in ACT_LEVELS:
+            raise PeerError("bad_level")
 
         def apply(peers: Any) -> bool:
             for p in peers.peers:
                 if p.id == peer_id:
-                    before = (p.can_ask, p.send_files)
+                    before = (p.can_ask, p.send_files, p.act)
                     if can_ask is not None:
                         p.can_ask = can_ask
                     if send_files is not None:
                         p.send_files = send_files
-                    return (p.can_ask, p.send_files) != before
+                    if act is not None:
+                        p.act = act
+                    return (p.can_ask, p.send_files, p.act) != before
             raise PeerError("not_found")
 
         await self._mutate(apply)
@@ -449,6 +461,9 @@ class PeerLink:
             host=text_field(first, "host", limit=253),
             ip=remote_ip or text_field(first, "ip", limit=45),
             port=port if isinstance(port, int) and 0 < port < 65536 else self.port,
+            # Il nome qui lo dà l'altra Jenny, non l'utente: se era già sua,
+            # resta quello che l'utente le aveva dato.
+            keep_name=True,
         )
 
     # -- Abbinamento: chi ha il codice ---------------------------------------------
@@ -520,19 +535,50 @@ class PeerLink:
         return {"id": peer_id, "name": name}
 
     async def _save_peer(
-        self, peer_id: str, secret: bytes, *, name: str, host: str, ip: str, port: int
+        self, peer_id: str, secret: bytes, *, name: str, host: str, ip: str, port: int,
+        keep_name: bool = False,
     ) -> None:
+        """Registra la Jenny appena abbinata, al posto di quella che era già lei.
+
+        «Già lei» è la stessa riga (stesso id: un ricollegamento dopo un
+        ripristino) o lo stesso telefono sulla tailnet (stesso indirizzo o nome:
+        quella Jenny ha perso la sua identità e se n'è fatta una nuova). Sui due
+        emulatori, il 20/11/2026, il secondo caso lasciava la riga vecchia, che
+        non avrebbe più risposto, accanto alla nuova; e il primo riscriveva la
+        riga da capo, coi permessi di partenza. Ora la nuova prende i permessi
+        della vecchia, e — con *keep_name*, quando il nome non l'ha scelto
+        l'utente — anche il nome.
+        """
         from jenny.config.schema import PeerConfig
 
         write_secret(self._workspace, peer_id, secret)
+        replaced: list[str] = []
+
+        def same_phone(p: Any) -> bool:
+            if p.id == peer_id:
+                return True
+            if ip and p.ip and parse_ip(p.ip) == parse_ip(ip):
+                return True
+            return bool(host and p.host and p.host.lower() == host.lower())
 
         def apply(peers: Any) -> bool:
+            old = next((p for p in peers.peers if p.id == peer_id), None)
+            old = old or next((p for p in peers.peers if same_phone(p)), None)
             entry = PeerConfig(id=peer_id, name=name, host=host, ip=ip, port=port)
-            peers.peers = [p for p in peers.peers if p.id != peer_id] + [entry]
+            if old is not None:
+                entry.can_ask, entry.send_files, entry.act = old.can_ask, old.send_files, old.act
+                if keep_name:
+                    entry.name = old.name
+            replaced.extend(p.id for p in peers.peers if p.id != peer_id and same_phone(p))
+            peers.peers = [p for p in peers.peers if not same_phone(p)] + [entry]
             peers.enabled = True
             return True
 
         await self._mutate(apply)
+        for old_id in replaced:
+            delete_secret(self._workspace, old_id)
+            await asyncio.to_thread(self.store.drop_peer, old_id)
+            logger.info("peers: {} replaced by {}", old_id[:8], peer_id[:8])
         await asyncio.to_thread(self.store.note_seen, peer_id, now_ms())
         await asyncio.to_thread(self.store.log, peer_id, "sys", "paired", {"name": name})
         logger.info("peers: paired with {} ({})", name, peer_id[:8])

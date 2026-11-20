@@ -23,6 +23,7 @@ from jenny.bus.events import (
     OutboundMessage,
 )
 from jenny.cron.session_turns import CRON_MIRROR_META
+from jenny.session.history_meta import TOOL_TAINT_META
 from jenny.session.keys import (
     is_project_session_key,
     project_name,
@@ -37,6 +38,10 @@ if TYPE_CHECKING:
 # Firma dell'hook di registrazione fornito dall'AgentLoop
 # (``AgentLoop.record_channel_delivery``).
 RecordHook = Callable[..., Awaitable[None]]
+
+# Nei metadata di una consegna da registrare: le fonti non fidate del testo,
+# che la riga in sessione porterà come ``TOOL_TAINT_META``.
+RECORD_TAINT_META = "_record_taint"
 
 # Un testo che apre con un blocco markdown (titolo, elenco, citazione, codice):
 # il prefisso sulla stessa riga lo romperebbe, quindi va sulla riga sopra.
@@ -164,6 +169,10 @@ class ChannelDeliverer:
         session_manager = self._session_manager
         metadata = dict(msg.metadata or {})
         record = record or bool(metadata.pop("_record_channel_delivery", False))
+        # Le fonti non fidate del testo registrato (la risposta di un'altra
+        # Jenny, ``jenny.peers.questions``): la riga in sessione le porta.
+        raw_taint = metadata.pop(RECORD_TAINT_META, None)
+        taint = [str(s) for s in raw_taint if s] if isinstance(raw_taint, list) else []
         proactive = proactive or bool(metadata.pop("_proactive_fanout", False))
         # Ogni consegna proattiva è un turno a sé, e deve dirlo. Il turno che la
         # produce è interno (cron, Dream) e i suoi metadata non
@@ -201,11 +210,14 @@ class ChannelDeliverer:
                 # all'utente parte comunque, e perdere la riga di cronologia è
                 # meno grave che perdere l'avviso.
                 try:
-                    await hook(
-                        session_key=key,
-                        content=msg.content,
-                        media=list(msg.media) if msg.media else None,
-                    )
+                    kwargs: dict[str, Any] = {
+                        "session_key": key,
+                        "content": msg.content,
+                        "media": list(msg.media) if msg.media else None,
+                    }
+                    if taint:
+                        kwargs["taint"] = taint
+                    await hook(**kwargs)
                 except Exception:
                     logger.exception("Failed to record channel delivery for session {}", key)
             elif hasattr(session_manager, "get_or_create") and hasattr(session_manager, "save"):
@@ -213,6 +225,8 @@ class ChannelDeliverer:
                 extra: dict[str, Any] = {"_channel_delivery": True}
                 if msg.media:
                     extra["media"] = list(msg.media)
+                if taint:
+                    extra[TOOL_TAINT_META] = list(taint)
                 session.add_message("assistant", msg.content, **extra)
                 session_manager.save(session)
 

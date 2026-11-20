@@ -41,3 +41,16 @@ def test_helpers_never_get_the_peer_tools(tmp_path):
     registry = _load(tmp_path, "subagent")
     assert not registry.has("peer_ask")
     assert not registry.has("peer_attach")
+
+
+def test_peer_ask_steers_a_request_to_do_towards_act():
+    # «Chiedi a Lavoro di aprire…» partiva come domanda, e Lavoro rispondeva
+    # che non poteva (prova sui due emulatori, 20/11/2026).
+    from jenny.agent.tools.peer import PeerAskTool
+
+    mode = PeerAskTool().parameters["properties"]["mode"]["description"]
+    assert "Use 'act' whenever the user wants something done" in mode
+    assert "web page" in mode
+    # Ma un file o un'informazione restano una domanda (sui due emulatori «mandami
+    # il preventivo» partì come richiesta di fare).
+    assert "for a file she has is 'read'" in mode

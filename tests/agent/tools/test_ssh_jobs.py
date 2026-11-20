@@ -296,7 +296,10 @@ async def test_a_job_that_keeps_writing_is_delivered_once_byte_for_byte(tmp_path
             env, job.job_id, until=lambda _t, j: j.status == STATUS_FINISHED
         )
         written = Path(job.log_path).read_text()
-        assert written.count("\n") > 12
+        # Dodici poll con output danno almeno dodici righe, non più di dodici: su
+        # un runner lento ogni poll ne vede una sola, e ``> 12`` falliva (CI 3.12,
+        # 20/11/2026). Quello che il test prova è l'uguaglianza qui sotto.
+        assert written.count("\n") >= 12
         assert delivered == written
 
 

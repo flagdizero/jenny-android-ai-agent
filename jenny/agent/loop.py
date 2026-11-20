@@ -109,6 +109,7 @@ from jenny.session.history_meta import (
 )
 from jenny.session.keys import (
     CRON_SESSION_PREFIX,
+    NOTEBOOK_CRON_SESSION_PREFIX,
     is_project_session_key,
     is_valid_project_name,
     project_name,
@@ -635,6 +636,37 @@ class AgentLoop(
         tool = self.tools.get("peer_ask")
         if tool is not None and hasattr(tool, "bind_questions"):
             tool.bind_questions(questions)
+        # Gli aiutanti di una richiesta di fare: il loro registro è della
+        # richiesta, e lei sa di avere ancora qualcuno al lavoro.
+        acts = getattr(questions, "acts", None)
+        subagents = getattr(self, "subagents", None)
+        if acts is not None and hasattr(subagents, "set_peer_act_listener"):
+            subagents.set_peer_act_listener(acts.helper_started)
+
+    def _peer_act_journal(self, act: dict[str, str]) -> Any:
+        """Il registro dell'annulla di una richiesta di un'altra Jenny (``peer-<qid>``)."""
+        from jenny.agent.write_journal import journal_for, journal_key
+
+        try:
+            return journal_for(Path(self.workspace), journal_key("peer", act["qid"]))
+        except Exception:  # noqa: BLE001 — senza registro il turno lavora lo stesso
+            logger.opt(exception=True).warning("Peer request {}: no undo journal", act["qid"])
+            return None
+
+    async def _peer_turn_ended(self, msg: InboundMessage, outcome: Any) -> None:
+        """La fine di un turno di una richiesta di un'altra Jenny, detta a ``PeerActs``."""
+        acts = getattr(getattr(self, "peer_questions", None), "acts", None)
+        meta = msg.metadata if isinstance(msg.metadata, dict) else None
+        if acts is None or meta is None:
+            return
+        from jenny.peers.gate import act_of
+
+        if act_of(meta) is None:
+            return
+        try:
+            await acts.turn_ended(meta, getattr(outcome, "final_text", "") or "")
+        except Exception:  # noqa: BLE001 — il turno è comunque finito
+            logger.opt(exception=True).warning("Peer request: end-of-turn hook failed")
 
     def _peers_available(self) -> bool:
         questions = getattr(self, "peer_questions", None)
@@ -784,10 +816,20 @@ class AgentLoop(
         lettura le controlla l'esecutore (``apps/permissions.py``).
         """
         from jenny.agent.tools.registry import ToolRegistryView
-        from jenny.session.keys import is_personal_session_key
+        from jenny.session.keys import is_peer_act_session_key, is_personal_session_key
 
         in_project = is_project_session_key(session_key)
         personal = is_personal_session_key(session_key)
+        # Le richieste di fare di un'altra Jenny: tutto, tranne quel che non si
+        # fa su richiesta di un altro telefono (sempre gli stessi, per la cache).
+        peer_act_session = is_peer_act_session_key(session_key)
+        # Il giro di un monitor personale (``cron:<job>``) può chiedere all'altra
+        # Jenny come la chat da cui è nato: «ogni sera chiedi a Lavoro…» è un
+        # promemoria come un altro. Quello di un quaderno no: ha il suo recinto.
+        personal_cron = (
+            session_key.startswith(CRON_SESSION_PREFIX)
+            and not session_key.startswith(NOTEBOOK_CRON_SESSION_PREFIX)
+        )
         root: Path | None = None
         if in_project:
             from jenny.utils.wiki_paths import is_wiki_root
@@ -821,12 +863,15 @@ class AgentLoop(
             # stessa radice che il tool risolve (``NotebookReadTool._root``).
             if name == "notebook":
                 return root is None
-            # Le altre Jenny: si chiede dalla chat personale, e solo quando ce
-            # n'e' una abbinata (cambia con un abbinamento, come una config).
-            # ``peer_attach`` vive solo nel turno di risposta, che ha la sua vista.
+            # Le altre Jenny: si chiede dalla chat personale (e dai suoi
+            # monitor), e solo quando ce n'e' una abbinata (cambia con un
+            # abbinamento, come una config). ``peer_attach`` vive solo nel turno
+            # di risposta, che ha la sua vista.
             if name == "peer_ask":
-                return not personal or not self._peers_available()
+                return not (personal or personal_cron) or not self._peers_available()
             if name == "peer_attach":
+                return True
+            if peer_act_session and name == "install_update":
                 return True
             if not in_project:
                 return False
@@ -1627,7 +1672,16 @@ class AgentLoop(
         # (``plan.work``), col passo: il ritorno toglie il suo lavoro. Gli
         # aiutanti che lancia scrivono nei loro (``_run_subagent`` li lega).
         plan_journal, plan_step = self._plan_journal_of(metadata)
+        # Un turno che lavora per la richiesta di un'altra Jenny (``jenny.peers``):
+        # le sue scritture nel registro della richiesta, e il cancello sulle
+        # uscite legato per tutto il turno (anche gli aiutanti che lancia).
+        from jenny.peers import gate as peer_gate
+
+        peer_act = peer_gate.act_of(metadata)
+        if plan_journal is None and peer_act is not None:
+            plan_journal = self._peer_act_journal(peer_act)
         journal_token = set_journal(plan_journal, step=plan_step)
+        peer_gate_token = peer_gate.bind(peer_act)
         async def _on_context_overflow(new_window: int) -> None:
             """Called by the runner when a context_length error occurs.
 
@@ -1692,6 +1746,7 @@ class AgentLoop(
             ))
         finally:
             reset_journal(journal_token)
+            peer_gate.reset(peer_gate_token)
             reset_turn_taint(turn_taint_token)
             reset_workspace_scope(workspace_token)
             reset_request_context(request_token)
@@ -2051,6 +2106,9 @@ class AgentLoop(
                             msg, session_key,
                             stop_reason=getattr(outcome, "stop_reason", ""),
                         )
+                        # Il rientro di un aiutante di una richiesta di un'altra
+                        # Jenny: se era l'ultimo, l'aggiornamento parte.
+                        await self._peer_turn_ended(msg, outcome)
                     self._cron_turns.complete(msg, outcome=outcome)
                 except asyncio.CancelledError:
                     self._cron_turns.complete(
@@ -2952,21 +3010,29 @@ class AgentLoop(
         )
 
     def _append_channel_delivery(
-        self, session_key: str, content: str, media: list[str] | None
+        self, session_key: str, content: str, media: list[str] | None,
+        taint: list[str] | None = None,
     ) -> None:
         """Append the proactive delivery to *session_key* (caller holds the lock)."""
         session = self.sessions.get_or_create(session_key)
         extra: dict[str, Any] = {"_channel_delivery": True}
         if media:
             extra["media"] = list(media)
+        if taint:
+            # Un testo che non viene da Jenny (la risposta di un'altra Jenny):
+            # la riga porta le sue fonti come un risultato di ``web_fetch``,
+            # così finché resta in vista i lavori che Jenny avvia nascono
+            # contaminati (``turn_taint_for``).
+            extra[TOOL_TAINT_META] = list(taint)
         session.add_message("assistant", content, **extra)
         self.sessions.save(session)
 
     async def _record_channel_delivery_locked(
-        self, session_key: str, content: str, media: list[str] | None
+        self, session_key: str, content: str, media: list[str] | None,
+        taint: list[str] | None = None,
     ) -> None:
         async with self._session_locks.get(session_key):
-            self._append_channel_delivery(session_key, content, media)
+            self._append_channel_delivery(session_key, content, media, taint)
 
     async def record_channel_delivery(
         self,
@@ -2974,6 +3040,7 @@ class AgentLoop(
         session_key: str,
         content: str,
         media: list[str] | None = None,
+        taint: list[str] | None = None,
     ) -> None:
         """Register a proactive delivery as an ``assistant`` message in the session.
 
@@ -3012,7 +3079,7 @@ class AgentLoop(
             # ``Lock.acquire()`` su un lock libero non cede il controllo, quindi
             # qui non c'è finestra in cui un turno possa infilarsi: e anche se
             # cedesse, l'append avverrebbe comunque sotto lock.
-            await self._record_channel_delivery_locked(session_key, content, media)
+            await self._record_channel_delivery_locked(session_key, content, media, taint)
             return
         logger.debug(
             "Channel delivery for session {} deferred: session busy",
@@ -3023,7 +3090,7 @@ class AgentLoop(
         self._schedule_session_write(
             session_key,
             functools.partial(
-                self._record_channel_delivery_locked, session_key, content, media
+                self._record_channel_delivery_locked, session_key, content, media, taint
             ),
         )
 

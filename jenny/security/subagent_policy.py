@@ -427,6 +427,13 @@ def _refusal(what: str) -> str:
 
 def egress_refusal(url: str) -> str | None:
     """Il rifiuto per un'uscita verso *url*, o None se è permessa."""
+    # Prima il cancello di una richiesta di un'altra Jenny: chiude la rete dal
+    # codice in qualunque contesto, aiutante o no (``jenny.peers.gate``).
+    from jenny.peers.gate import network_refusal
+
+    refusal = network_refusal()
+    if refusal is not None:
+        return refusal
     policy = current_subagent_policy()
     if policy is None or not policy.junction:
         return None
@@ -470,6 +477,11 @@ def socket_egress_refusal() -> str | None:
     (le helper ``http_get``/``http_post``); un socket aperto a mano non ha un
     URL da confrontare con il compito.
     """
+    from jenny.peers.gate import network_refusal
+
+    refusal = network_refusal()
+    if refusal is not None:
+        return refusal
     policy = current_subagent_policy()
     if policy is None or not policy.junction or getattr(_EGRESS_STATE, "approved", False):
         return None

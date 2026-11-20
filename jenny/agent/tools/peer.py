@@ -1,9 +1,12 @@
 """Gli strumenti delle altre Jenny: ``peer_ask`` per chiedere, ``peer_attach`` per rispondere con un file.
 
-``peer_ask`` è nella chat personale, e solo quando c'è un'altra Jenny abbinata
-(``AgentLoop._turn_tool_view``): mette la domanda in coda e torna subito. La
-risposta non passa da qui: arriva più tardi come una scheda a sé nella chat
-(``jenny.peers.questions``).
+``peer_ask`` è nella chat personale e nei giri dei suoi promemoria, e solo
+quando c'è un'altra Jenny abbinata (``AgentLoop._turn_tool_view``): mette la
+domanda in coda e torna subito. La risposta non passa da qui: arriva più tardi
+come una scheda a sé nella chat (``jenny.peers.questions``). Così anche un
+resoconto serale è solo un promemoria che chiede («ogni sera alle 19 chiedi a
+Lavoro com'è andata»), non una funzione a parte. Un lavoro nato da una
+richiesta dell'altra Jenny non chiede mai: il blocco dei giri.
 
 ``peer_attach`` esiste solo nel turno con cui questa Jenny risponde a un'altra
 (``ANSWER_TOOLS``): segna un file del workspace da mandare insieme alla risposta,
@@ -29,6 +32,8 @@ _REFUSALS = {
     "not_found": "There is no linked Jenny with that name.",
     "bad_question": "Write the question to ask.",
     "disabled": "Linking with other Jennys is turned off.",
+    "from_peer": "This work was asked for by another Jenny, so it can't ask a Jenny in turn: "
+                 "only the user of this phone starts questions.",
 }
 
 
@@ -40,8 +45,18 @@ _REFUSALS = {
             nullable=True,
         ),
         question=StringSchema(
-            "The question, written for that Jenny: self-contained, with the names, dates "
-            "and details she needs, since she can't see this conversation."
+            "The question or request, written for that Jenny: self-contained, with the "
+            "names, dates and details she needs, since she can't see this conversation."
+        ),
+        mode=StringSchema(
+            "'read' (default): she looks at what she already has and answers; asking her for "
+            "information or for a file she has is 'read' (she can attach files). 'act': she "
+            "does something on her phone (open or read a web page there, set a reminder, "
+            "write a note, save a file, give her helpers a task), if the user allowed "
+            "requests to act there. Use 'act' whenever the user wants something done there, "
+            "even when they say 'ask her to…': in 'read' she can't do anything.",
+            enum=("read", "act"),
+            nullable=True,
         ),
         required=["question"],
     )
@@ -67,32 +82,53 @@ class PeerAskTool(Tool):
     def description(self) -> str:
         return (
             "Ask the user's other Jenny (on another of their phones, e.g. the work phone) "
-            "something only she can see: her chats, notebooks, reminders and files. She "
-            "can only look and answer; she won't do things. The question is queued and "
-            "this returns at once: her answer shows up later in this chat as a separate "
-            "quoted card, by itself. Don't wait for it and never guess what she'll say."
+            "something only she can see: her chats, notebooks, reminders and files. With "
+            "mode='act' you ask her to do something on her phone instead; she may refuse "
+            "if the user hasn't allowed it there, and the user of that phone may have to "
+            "allow anything that leaves it. The request is queued and this returns at "
+            "once: her answer, with what she did, shows up later in this chat as a "
+            "separate card, by itself. Don't wait for it and never guess what she'll say."
         )
 
     @property
     def read_only(self) -> bool:
         return False
 
-    async def execute(self, peer: Any = None, question: Any = None, **kwargs: Any) -> str:
+    async def execute(
+        self, peer: Any = None, question: Any = None, mode: Any = None, **kwargs: Any
+    ) -> str:
+        from jenny.agent.tools.context import current_request_session_key
+        from jenny.peers.gate import current_act
         from jenny.peers.link import PeerError
+        from jenny.session.keys import CRON_SESSION_PREFIX
 
         if self._questions is None:
             return _REFUSALS["no_peers"]
+        # Il blocco dei giri: un lavoro nato da una richiesta dell'altra Jenny
+        # (il suo turno, i suoi aiutanti, un promemoria che ha creato) non
+        # rimanda domande indietro da solo. Il cancello è legato in tutti e tre.
+        if current_act() is not None:
+            return _REFUSALS["from_peer"]
+        mode = "act" if mode == "act" else "read"
         try:
-            asked = await self._questions.ask(str(peer or ""), str(question or ""))
+            asked = await self._questions.ask(str(peer or ""), str(question or ""), mode)
         except PeerError as exc:
             if exc.code == "which_peer":
                 names = ", ".join(p.name for p in await self._questions.peers())
                 return f"Say which Jenny to ask: {names}."
             return _REFUSALS.get(exc.code, f"Could not ask: {exc.code}.")
         name = asked["peer"]
+        verb = "Asked" if mode == "read" else "Sent the request to"
+        if (current_request_session_key() or "").startswith(CRON_SESSION_PREFIX):
+            # Il giro silenzioso di un monitor: la scheda arriva nella chat
+            # personale da sola, un ``message`` per dire «ho chiesto» è rumore.
+            return (
+                f"{verb} {name}. Her answer will reach the user's chat by itself, as its own "
+                "card, when it arrives. Don't message the user about having asked."
+            )
         return (
-            f"Asked {name}. Her answer will appear in this chat as its own quoted card when "
-            f"it arrives: in seconds if {name} is reachable, otherwise when her phone is back "
+            f"{verb} {name}. Her answer will appear in this chat as its own card when it "
+            f"arrives: in seconds if {name} is reachable, otherwise when her phone is back "
             "online. Tell the user you asked; don't repeat or guess the answer."
         )
 

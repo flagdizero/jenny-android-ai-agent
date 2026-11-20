@@ -16,12 +16,22 @@ ogni quaderno ha così la sua notifica invece di coalizzare con la chat personal
 Segue il pattern lazy-bridge di ``jenny.webui.android_apps_api``: la classe
 Kotlin è risolta via Chaquopy alla prima chiamata; senza contesto Android
 (desktop/test) ogni chiamata è un no-op silenzioso.
+
+**Le notifiche dell'altra Jenny** (``post_peer_confirm``, ``post_peer_done``,
+``post_peer_undone``, ``clear_peer_notice``) passano dallo stesso bridge ma non sono alert: hanno
+pulsanti («Consenti»/«No», «Annulla») e non tacciono con la chat a schermo,
+perché sono una decisione da prendere o un'azione da poter disfare, non un
+messaggio da leggere. Il tocco su un pulsante torna da
+``jenny.runtime.native_input.on_native_peer_action``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any
+
+from loguru import logger
 
 from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_MESSAGE_SOURCE_METADATA_KEY
 from jenny.runtime.chaquopy_bridge import BridgeCache
@@ -239,3 +249,119 @@ def notify_alarm(text: str, label: str) -> None:
     notify_delivery(
         text, {WEBUI_MESSAGE_SOURCE_METADATA_KEY: {"kind": "cron", "label": label}}
     )
+
+
+# --- Notifiche dell'altra Jenny ------------------------------------------------
+
+# I due tipi di notifica con pulsanti, e il nome con cui Kotlin ne deriva il tag
+# (``NotifierBridge.peerTag``). Valori di protocollo: un tipo che diverge
+# lascerebbe in tendina una notifica che ``clear_peer_notice`` non trova.
+PEER_NOTICE_KINDS = frozenset({"confirm", "done"})
+
+# ``cid``/``qid``: 32 cifre esadecimali minuscole, la stessa forma che
+# ``native_input.on_native_peer_action`` esige al ritorno. Si controlla anche
+# qui perché l'identificativo finisce nel tag e negli extra del PendingIntent.
+_PEER_IDENT = re.compile(r"[0-9a-f]{32}")
+
+_PEER_TITLE_MAX_CHARS = 120
+# Più lungo del corpo di un alert: chi deve dire «Consenti» deve poter leggere
+# che cosa esce dal telefono (l'indirizzo intero, non i suoi primi 200 caratteri).
+_PEER_BODY_MAX_CHARS = 600
+
+
+async def _peer_bridge_call(method: str, *args: Any) -> None:
+    """La chiamata al bridge, sul loop. ``BridgeCache.call`` non solleva mai."""
+    ok = await _BRIDGE.call(_get_bridge, get_android_context(), method, *args,
+                            timeout=_ALERT_TIMEOUT_S, default=False)
+    if not ok:
+        logger.info("NotifierBridge.{} did not post or clear the peer notice", method)
+
+
+def _peer_fire(method: str, *args: Any) -> None:
+    """Pianifica la chiamata (fire-and-forget), come ``notify_delivery``.
+
+    No-op fuori da Android e senza un loop in corsa: queste funzioni le chiama
+    codice sul loop del gateway, e da un thread qualunque non c'è dove
+    accodarle.
+    """
+    if get_android_context() is None:
+        return
+    try:
+        task = asyncio.get_running_loop().create_task(_peer_bridge_call(method, *args))
+    except RuntimeError:
+        logger.info("Peer notice {} skipped: no running event loop", method)
+        return
+    _TASKS.add(task)
+    task.add_done_callback(_TASKS.discard)
+
+
+def _peer_ident_ok(ident: Any) -> bool:
+    return isinstance(ident, str) and _PEER_IDENT.fullmatch(ident) is not None
+
+
+def _peer_text(title: str, body: str) -> tuple[str, str]:
+    """Titolo su una riga e corpo, ciascuno col suo tetto. Il corpo resta com'è
+    dentro (a capo compresi): lo scrive il codice, e l'indirizzo va letto intero."""
+    clean_title = clip(" ".join(str(title or "").split()), _PEER_TITLE_MAX_CHARS)
+    clean_body = clip(str(body or "").strip(), _PEER_BODY_MAX_CHARS)
+    return clean_title or current_bot_name(), clean_body
+
+
+def post_peer_confirm(cid: str, title: str, body: str) -> None:
+    """Posta la domanda «Consenti»/«No» per la conferma *cid*. Mai solleva.
+
+    Il tocco torna da ``native_input.on_native_peer_action("allow"|"deny", cid)``.
+    Ripostare con lo stesso *cid* sostituisce la notifica.
+    """
+    try:
+        if not _peer_ident_ok(cid):
+            logger.warning("Peer confirm notice not posted: malformed cid")
+            return
+        title, body = _peer_text(title, body)
+        _peer_fire("postPeerConfirm", cid, title, body)
+    except Exception:  # noqa: BLE001 — mai un'eccezione al chiamante
+        logger.opt(exception=True).warning("Peer confirm notice failed")
+
+
+def post_peer_done(qid: str, title: str, body: str) -> None:
+    """Posta «fatto», col pulsante «Annulla», per la richiesta *qid*. Mai solleva.
+
+    Il tocco torna da ``native_input.on_native_peer_action("undo", qid)``.
+    Ripostare con lo stesso *qid* sostituisce la notifica.
+    """
+    try:
+        if not _peer_ident_ok(qid):
+            logger.warning("Peer done notice not posted: malformed qid")
+            return
+        title, body = _peer_text(title, body)
+        _peer_fire("postPeerDone", qid, title, body)
+    except Exception:  # noqa: BLE001 — mai un'eccezione al chiamante
+        logger.opt(exception=True).warning("Peer done notice failed")
+
+
+def post_peer_undone(qid: str, title: str, body: str) -> None:
+    """Riposta la notifica di ``post_peer_done`` per *qid*, senza «Annulla». Mai solleva.
+
+    Dopo l'annullamento il pulsante non ha più niente da fare: lasciato sotto
+    «annullato», invitava a un secondo tocco a vuoto.
+    """
+    try:
+        if not _peer_ident_ok(qid):
+            logger.warning("Peer undone notice not posted: malformed qid")
+            return
+        title, body = _peer_text(title, body)
+        _peer_fire("postPeerUndone", qid, title, body)
+    except Exception:  # noqa: BLE001 — mai un'eccezione al chiamante
+        logger.opt(exception=True).warning("Peer undone notice failed")
+
+
+def clear_peer_notice(kind: str, ident: str) -> None:
+    """Toglie la notifica postata da ``post_peer_confirm`` (*kind* ``"confirm"``)
+    o da ``post_peer_done`` (``"done"``) per *ident*. Mai solleva."""
+    try:
+        if kind not in PEER_NOTICE_KINDS or not _peer_ident_ok(ident):
+            logger.warning("Peer notice not cleared: bad kind {!r} or ident", kind)
+            return
+        _peer_fire("clearPeerNotice", kind, ident)
+    except Exception:  # noqa: BLE001 — mai un'eccezione al chiamante
+        logger.opt(exception=True).warning("Peer notice clear failed")
