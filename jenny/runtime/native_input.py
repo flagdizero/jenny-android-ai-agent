@@ -130,7 +130,7 @@ _TASKS: set[asyncio.Task[Any]] = set()
 # I tre pulsanti delle notifiche dell'altra Jenny (``notifier.post_peer_confirm``
 # e ``post_peer_done``). Valori di protocollo condivisi con Kotlin
 # (``PeerActionReceiver.ACTION_*``): elenco chiuso, come le sorgenti del testo.
-PEER_ACTIONS = frozenset({"allow", "deny", "undo"})
+PEER_ACTIONS = frozenset({"allow", "deny", "undo", "always", "stop"})
 
 # L'identificativo che accompagna il tocco: il ``cid`` di una conferma o il
 # ``qid`` di una richiesta, 32 cifre esadecimali minuscole (``uuid4().hex``).
@@ -141,6 +141,12 @@ _PEER_IDENT = re.compile(r"[0-9a-f]{32}")
 # ragione di ``_LOOP``: Kotlin arriva qui col solo nome del modulo.
 _PEER_HANDLER: Callable[[str, str], None] | None = None
 
+# Le domande delle mani di Jenny (``jenny.phone.consent``) usano la stessa
+# notifica e la stessa porta: il loro gestore viene interpellato per primo e
+# dice se il tocco era suo. ``always`` («Sempre per quest'app») e ``stop``
+# («Ferma») sono solo suoi.
+_PHONE_HANDLER: Callable[[str, str], bool] | None = None
+
 
 def reset_native_input() -> None:
     """Slega loop e bus a un nuovo start del gateway.
@@ -150,8 +156,9 @@ def reset_native_input() -> None:
     del giro precedente puntano a un loop morto, e un ``call_soon_threadsafe``
     su quello solleverebbe — o peggio, accoderebbe per nessuno.
     """
-    global _LOOP, _BUS, _PEER_HANDLER
+    global _LOOP, _BUS, _PEER_HANDLER, _PHONE_HANDLER
     _LOOP = None
+    _PHONE_HANDLER = None
     _BUS = None
     # Il gestore dei tocchi sulle notifiche dell'altra Jenny è legato agli
     # oggetti del giro precedente: lo ri-registra chi costruisce il nuovo.
@@ -322,12 +329,26 @@ def set_peer_action_handler(fn: Callable[[str, str], None] | None) -> None:
     _PEER_HANDLER = fn
 
 
-def _run_peer_action(fn: Callable[[str, str], None], action: str, ident: str) -> None:
+def set_phone_action_handler(fn: Callable[[str, str], bool] | None) -> None:
+    """Registra (o toglie) chi riceve i tocchi sulle domande delle mani di
+    Jenny. *fn* gira sul loop del gateway e torna vero se il tocco era suo;
+    altrimenti passa al gestore dell'altra Jenny."""
+    global _PHONE_HANDLER
+    _PHONE_HANDLER = fn
+
+
+def _run_peer_action(
+    fn: Callable[[str, str], None] | None, action: str, ident: str,
+) -> None:
     """Esegue il gestore sul loop. Un suo guasto si logga e finisce qui: un
     callback che solleva dentro ``call_soon_threadsafe`` finirebbe solo
     nell'exception handler del loop, lontano da chi lo deve leggere."""
     try:
-        fn(action, ident)
+        phone = _PHONE_HANDLER
+        if phone is not None and phone(action, ident):
+            return
+        if fn is not None:
+            fn(action, ident)
     except Exception:  # noqa: BLE001 — v. docstring
         logger.opt(exception=True).error(
             "Peer action handler failed (action={}, ident={})", action, ident,
@@ -363,7 +384,7 @@ def on_native_peer_action(action: str, ident: str) -> bool:
         if loop is None or loop.is_closed():
             logger.info("Peer action dropped: no gateway bound yet (action={})", action)
             return False
-        if fn is None:
+        if fn is None and _PHONE_HANDLER is None:
             logger.info("Peer action dropped: no handler registered (action={})", action)
             return False
         loop.call_soon_threadsafe(_run_peer_action, fn, action, ident)

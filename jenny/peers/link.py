@@ -273,6 +273,7 @@ class PeerLink:
                 "port": p.port,
                 "can_ask": p.can_ask,
                 "send_files": p.send_files,
+                "phone_confirm": p.phone_confirm,
                 "act": p.act,
                 "kind": peer_kind(p.kind),
                 "has_secret": read_secret(self._workspace, p.id) is not None,
@@ -331,7 +332,7 @@ class PeerLink:
 
     async def set_permissions(
         self, peer_id: str, *, can_ask: bool | None = None, send_files: bool | None = None,
-        act: str | None = None,
+        act: str | None = None, phone_confirm: bool | None = None,
     ) -> None:
         """Cosa può fare *peer_id* su questa Jenny: lo decide chi riceve."""
         if act is not None and act not in ACT_LEVELS:
@@ -340,14 +341,16 @@ class PeerLink:
         def apply(peers: Any) -> bool:
             for p in peers.peers:
                 if p.id == peer_id:
-                    before = (p.can_ask, p.send_files, p.act)
+                    before = (p.can_ask, p.send_files, p.act, p.phone_confirm)
+                    if phone_confirm is not None:
+                        p.phone_confirm = phone_confirm
                     if can_ask is not None:
                         p.can_ask = can_ask
                     if send_files is not None:
                         p.send_files = send_files
                     if act is not None:
                         p.act = act
-                    return (p.can_ask, p.send_files, p.act) != before
+                    return (p.can_ask, p.send_files, p.act, p.phone_confirm) != before
             raise PeerError("not_found")
 
         await self._mutate(apply)
@@ -627,6 +630,7 @@ class PeerLink:
             entry = PeerConfig(id=peer_id, name=name, host=host, ip=ip, port=port, kind=kind)
             if old is not None:
                 entry.can_ask, entry.send_files, entry.act = old.can_ask, old.send_files, old.act
+                entry.phone_confirm = old.phone_confirm
                 if keep_name:
                     entry.name = old.name
             if kind == KIND_OPENCODE:
@@ -635,6 +639,7 @@ class PeerLink:
                 # permessi, e il pannello non ne mostra (né li eredita da una
                 # riga che aveva prima lo stesso indirizzo).
                 entry.can_ask, entry.send_files, entry.act = False, False, "off"
+                entry.phone_confirm = False
             replaced.extend(p.id for p in peers.peers if p.id != peer_id and same_phone(p))
             peers.peers = [p for p in peers.peers if not same_phone(p)] + [entry]
             peers.enabled = True

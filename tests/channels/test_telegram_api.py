@@ -41,7 +41,7 @@ async def test_get_updates_sends_offset_and_timeout() -> None:
     assert updates[0]["update_id"] == 7
     assert seen["offset"] == 5
     assert seen["timeout"] == 30
-    assert seen["allowed_updates"] == ["message"]
+    assert seen["allowed_updates"] == ["message", "callback_query"]
     await api.close()
 
 

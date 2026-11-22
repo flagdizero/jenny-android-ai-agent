@@ -90,6 +90,12 @@ export const rpc = {
     return send(`apps.${method}`, params);
   },
 
+  /** «Usa il telefono» (`phone.update`: la modalita', o un'app da togliere da
+   *  «Sempre»): `jenny/webui/phone_commands.py`. */
+  phone(method, params = {}) {
+    return send(`phone.${method}`, params);
+  },
+
   /** Le bozze che aspettano un tuo tocco (`staged.list`, `staged.install`,
    *  `staged.discard`): `jenny/webui/staged_commands.py`. */
   staged(method, params = {}) {

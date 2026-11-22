@@ -33,6 +33,7 @@ import { BoardDrawer } from './home-board-drawer.js';
 import { HomeReader } from './home-reader.js';
 import { HomeAudit, reportMessage } from './home-audit.js';
 import { HomeJenny } from './home-jenny.js';
+import { HomePhone } from './home-phone.js';
 import { HomeModel } from './home-model.js';
 import { HomeUpdates } from './home-updates.js';
 import { HomeWakes } from './home-wakes.js';
@@ -293,6 +294,7 @@ class HomeApp {
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
+    this.phoneRows = new HomePhone();
     this.jennyRoom = new HomeJenny({
       onChange: () => this.you.sayJenny(this.jennyRoom.value()),
       onFloating: (floating) => this._keepFloating(floating),
@@ -1314,6 +1316,7 @@ class HomeApp {
      di `/api/settings` (`null` = lettura fallita, cioe' «non lo so»). */
   _paintSettings(data) {
     this.jennyRoom.setFloating(data?.floating || null);
+    this.phoneRows?.set(data?.phone || null);
     /* Lettura fallita: `null`, cioe' «non lo so», non un nome vuoto. */
     this.jennyRoom.setName(data ? data.agent?.bot_name || '' : null);
     if (data) this._applyBotName(data.agent?.bot_name);

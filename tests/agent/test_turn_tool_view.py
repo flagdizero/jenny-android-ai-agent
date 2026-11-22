@@ -198,3 +198,43 @@ async def test_the_personal_chat_offers_one_tool_list_from_every_channel(noteboo
         lists.append(_offered_names(captured))
     assert all(names == lists[0] for names in lists), lists
     assert {"screen", "suggest_notebook", "use_app"} <= lists[0]
+
+
+@pytest.mark.parametrize(
+    ("channel", "chat_id", "key", "offered"),
+    [
+        # La chat personale, da ogni porta: app, Telegram, mascotte, notifica, orologio.
+        ("websocket", "default", "unified:default", True),
+        ("telegram", "42", "unified:default", True),
+        ("floating", "shade", "unified:default", True),
+        ("notification", "shade", "unified:default", True),
+        ("wear", "wrist", "unified:default", True),
+        # Un promemoria personale, e la richiesta di fare di un'altra Jenny.
+        ("websocket", "default", "cron:job1", True),
+        ("websocket", "default", "peer:" + "a" * 32 + ":act", True),
+        # Un quaderno e il suo promemoria: no.
+        ("websocket", "project:codice", "project:codice", False),
+        ("websocket", "default", "cron:nb:codice:job1", False),
+    ],
+)
+def test_the_phone_tools_are_offered_where_the_plan_says(
+    notebook: Path, channel: str, chat_id: str, key: str, offered: bool,
+) -> None:
+    """Le mani sul telefono: dalla chat personale per ogni canale, dai suoi
+    promemoria e su richiesta di un'altra Jenny; mai da un quaderno. Se in quel
+    turno si possa davvero lo decide il consenso, che risponde col motivo."""
+    from jenny.agent.tools.phone import PhoneDoTool, PhoneSnapshotTool
+
+    (notebook / "wikis" / "codice").mkdir(parents=True)
+    loop, _captured = _loop_with_capture(notebook)
+    loop.tools.register(PhoneSnapshotTool())
+    loop.tools.register(PhoneDoTool())
+    session = loop.sessions.get_or_create(key)
+    view = loop._turn_tool_view(
+        InboundMessage(channel=channel, sender_id="u", chat_id=chat_id, content="ciao",
+                       session_key_override=key),
+        session, key, silent=False,
+    )
+    names = set((view or loop.tools).tool_names)
+    assert ({"phone_snapshot", "phone_do"} <= names) is offered
+    assert bool({"phone_snapshot", "phone_do"} & names) is offered

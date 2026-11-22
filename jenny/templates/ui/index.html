@@ -493,6 +493,24 @@
         <div class="home-card-note" id="home-jenny-screen-note" hidden></div>
       </div>
 
+      <!-- «Usa il telefono»: le mani di Jenny sulle altre app (`home-phone.js`).
+           Fuori da Android non c'e' un telefono da usare, e la sezione non
+           compare: `phone.available` lo dice il server. -->
+      <div class="home-rows" id="home-jenny-phone" hidden>
+        <div class="home-row home-row-stack">
+          <span class="home-row-label" id="home-jenny-phone-label"></span>
+          <div class="home-seg" id="home-jenny-phone-mode" role="radiogroup"
+               aria-labelledby="home-jenny-phone-label"></div>
+        </div>
+        <div class="home-card-note" id="home-jenny-phone-note"></div>
+        <!-- Il servizio si accende da una pagina di sistema: il bottone porta
+             li', e c'e' solo quando serve. -->
+        <button class="home-save home-note-action" id="home-jenny-phone-allow" type="button"
+                hidden></button>
+        <div class="home-card-note" id="home-jenny-phone-trusted-title" hidden></div>
+        <div id="home-jenny-phone-trusted" hidden></div>
+      </div>
+
       <!-- Chi e'. Non e' `SOUL.md` intero: e' **la tua parte** di quel file.
            Il resto lo tiene Dream, che lo riscrive circa una volta al giorno
            (misurato, v. `agent/soul_rules.py`) — quindi quel che scrivi qui

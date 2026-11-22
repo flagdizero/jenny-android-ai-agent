@@ -127,6 +127,8 @@ class WebUISettingsRouter:
             return await self._handle_screen_settings_open(request)
         if path == "/api/settings/floating/permission-settings":
             return await self._handle_overlay_permission_open(request)
+        if path == "/api/settings/phone/service-settings":
+            return await self._handle_phone_service_open(request)
         if path == "/api/settings/power/update":
             return await self._handle_settings_power_update(request)
         if path == "/api/settings/power/diagnostics":
@@ -193,6 +195,12 @@ class WebUISettingsRouter:
         # attraversa Chaquopy; il costo è una chiamata per apertura del
         # pannello.
         await _enrich_floating(payload)
+        # «Usa il telefono»: la modalità, le app su «Sempre» e lo stato del
+        # servizio di accessibilità, chiesto a ogni lettura per la stessa
+        # ragione della mascotte — lo si accende e spegne fuori da qui.
+        from jenny.webui.phone_api import phone_section
+
+        payload["phone"] = await phone_section()
         return self._json_response(payload)
 
     async def _handle_settings_update(self, request: WsRequest) -> Response:
@@ -289,6 +297,18 @@ class WebUISettingsRouter:
         from jenny.runtime.screen import open_screen_settings
 
         return self._json_response({"opened": await open_screen_settings()})
+
+    async def _handle_phone_service_open(self, request: WsRequest) -> Response:
+        """Apre Impostazioni → Accessibilità, dove si accende «Jenny — usa il
+        telefono». Come per la lettura dello schermo: un'app non accende da sé
+        un servizio di accessibilità."""
+        if not self._authorized(request):
+            return self._unauthorized()
+        if (refused := refuse_if_remote()) is not None:
+            return refused
+        from jenny.runtime.phone import open_phone_settings
+
+        return self._json_response({"opened": await open_phone_settings()})
 
     async def _handle_overlay_permission_open(self, request: WsRequest) -> Response:
         """Apre la pagina di sistema del permesso «Mostra sopra altre app»: come

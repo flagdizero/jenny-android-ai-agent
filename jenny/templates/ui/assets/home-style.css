@@ -6411,3 +6411,18 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-history-snap > .ti { color: var(--accent); font-size: 17px; }
 .home-history-snap.is-more { display: block; color: var(--accent); font-weight: 500; }
 .home-history-empty { padding: 10px 16px 10px 50px; font-size: 13px; color: var(--text-muted); }
+
+/* «Usa il telefono» (`home-phone.js`): il tasto che toglie un'app da «Sempre». */
+.home-phone-forget {
+  flex: none;
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+}
+.home-phone-forget:active { background: var(--active); }
+.home-card-note.is-warn { color: var(--warning); }

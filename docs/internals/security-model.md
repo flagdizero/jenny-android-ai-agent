@@ -178,6 +178,7 @@ What the request changes is written to undo journals: `peer-<qid>` for its own t
 - Send you notifications and schedule reminders (`cron`).
 - Read your last-known device location, or request a fresh GPS fix, if the location toggle and the Android permission are both granted.
 - Read what was on the screen when you tapped the floating mascot — the app underneath, once, at the tap — if you turned on its accessibility service (Android 14+). Only the agent you talk to, only in that turn; apps that block screenshots are skipped, text included.
+- Use the other apps on the phone — open, read the screen, tap, type, scroll — if you turned on **Uses the phone** and its accessibility service (Android 14+, a second service, separate from the reading one). She asks before using an app (Ok for that request, Always for that app), asks **every time** before a tap that pays, buys, deletes or transfers, never types passwords, and skips apps that block screenshots. You can stop her at any moment. See [Using the phone](../using/phone-use.md).
 - Send and receive messages over Telegram, if you've paired a bot.
 - Run Python code in-process (unless you disable `python_exec`) — only through a subagent, typically a `coder` or an `analyst`.
 - Spawn subagents, steer and stop them, and run long-running background tasks.
@@ -185,7 +186,9 @@ What the request changes is written to undo journals: `peer-<qid>` for its own t
 
 **Cannot:**
 - Read or write any other app's data — the Android sandbox stops this regardless of any Jenny-level toggle. The one exception is what another app *shows on screen*, read at a tap on the floating mascot with the accessibility service on; that is reading the screen, not the app's storage.
-- Look at the screen on its own: there is no reading without a tap on the mascot, none from Telegram or a reminder, and the service can neither touch nor type.
+- Look at the screen or touch it behind your back: reading under the mascot happens only at your tap, and using the phone happens only inside a turn you (or another Jenny you allowed, or a reminder limited to the apps you marked Always) started, with a pill on screen while it lasts. With **Uses the phone** off, or its accessibility service off, nothing can touch or type; the reading service alone never can.
+- Unlock the phone: with a PIN, pattern or fingerprint lock on, she refuses. She neither knows nor keeps those.
+- Undo what she did in another app: a sent message is sent. That is why she asks first.
 - Use the camera directly, or read contacts, SMS, or call logs — these permissions are never requested.
 - Reach private/loopback/link-local network addresses with its web tools, unless you've added them to `security.ssrfWhitelist`.
 - Meaningfully resist a compromised or adversarial model once inside `python_exec` — that boundary is the Android sandbox, not Jenny's own guardrails.

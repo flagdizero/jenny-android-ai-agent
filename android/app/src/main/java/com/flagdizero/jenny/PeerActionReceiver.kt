@@ -77,6 +77,12 @@ class PeerActionReceiver : BroadcastReceiver() {
         internal const val ACTION_DENY = "deny"
         internal const val ACTION_UNDO = "undo"
 
+        /** Le due azioni delle mani di Jenny (`jenny/phone/consent.py`), che
+         *  passano dalla stessa porta: «Sempre per quest'app» su una domanda,
+         *  «Ferma» mentre sta usando il telefono. */
+        internal const val ACTION_ALWAYS = "always"
+        internal const val ACTION_STOP = "stop"
+
         /** `cid` e `qid` sono `uuid4().hex`: la stessa forma che Python esige. */
         private val IDENT = Regex("[0-9a-f]{32}")
 
@@ -84,8 +90,8 @@ class PeerActionReceiver : BroadcastReceiver() {
 
         /** Il tipo di notifica da cui viene *action*, o `null` se non è nostra. */
         private fun kindOf(action: String?): String? = when (action) {
-            ACTION_ALLOW, ACTION_DENY -> NotifierBridge.PEER_KIND_CONFIRM
-            ACTION_UNDO -> NotifierBridge.PEER_KIND_DONE
+            ACTION_ALLOW, ACTION_DENY, ACTION_ALWAYS -> NotifierBridge.PEER_KIND_CONFIRM
+            ACTION_UNDO, ACTION_STOP -> NotifierBridge.PEER_KIND_DONE
             else -> null
         }
     }

@@ -12,7 +12,7 @@ There is no fixed tool count. What Jenny actually has available in a given conve
 
 - **The agent's scope** — the main agent loads either the `orchestrator` scope (default, see `agents.defaults.orchestratorMode`) or the historical `core` scope; a subagent loads the `subagent` scope, narrowed further by its agent type. The four SSH tools sit in a scope of their own, `remote`, which **no** agent loads by default — only the `sysadmin` subagent type asks for it. Two more scopes work the same way: `apps` (the `app-builder`'s face of `app`) and `notebook` (the `notebook-editor`'s `board` and its face of `notebook`). The same install therefore exposes different tools to the orchestrator, to a `sysadmin` subagent, and to every other subagent.
 
-A conversation agent can draw on **53** named built-in tools: 52 registered through the standard loader (55 classes: a few names have one class per scope — `app` has three, see [The `app` tool and who writes apps](#the-app-tool-and-who-writes-apps), and [`notebook`](#notebook) two) (`jenny/agent/tools/loader.py`, which imports 28 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `use_app` (`UseAppTool` in `app_actions.py`), the one tool every Jenny App action runs through, re-synced every turn and present while at least one app has an action. No single agent sees all 53 at once — see the scope note above. If you ask Jenny to list its tools, expect the number to vary between installs.
+A conversation agent can draw on **55** named built-in tools: 54 registered through the standard loader (57 classes: a few names have one class per scope — `app` has three, see [The `app` tool and who writes apps](#the-app-tool-and-who-writes-apps), and [`notebook`](#notebook) two) (`jenny/agent/tools/loader.py`, which imports 29 modules — `self.py` among them, with an empty `TOOLS` list) plus `my`, which is registered by hand in `jenny/agent/loop.py` because it needs a live reference to the running agent loop. Two more tool classes are built outside the loader too, so the loader's module list is not a complete inventory of the tool surface: `memory` (`MemoryEntryTool` in `memory_entries.py`), which needs the memory store and is given only to Dream's own runs (see [The internal registry: Dream](#the-internal-registry-dream)), and `use_app` (`UseAppTool` in `app_actions.py`), the one tool every Jenny App action runs through, re-synced every turn and present while at least one app has an action. No single agent sees all 53 at once — see the scope note above. If you ask Jenny to list its tools, expect the number to vary between installs.
 
 Below, tools are grouped into eleven categories. Each entry gives the exact tool name the model calls, what it does for you in practice, the parameters worth knowing, hard numeric limits, the config toggle that controls it, and any gotcha worth knowing before you rely on it.
 
@@ -239,7 +239,7 @@ Config: no dedicated toggle (always registered) — but **subagent-only** in the
 
 ## 4. Device
 
-`get_location`, `find_place` and `screen` are Android-only — they need the platform location bridge, Android's `Geocoder` and the accessibility service. `ui_view` is not gated on Android as such: it registers whenever a WebUI query service exists, which in the normal Android runtime is always, but the condition is the service, not the platform. All four are available to the orchestrator; `screen` is available to nobody else.
+`get_location`, `find_place`, `screen`, `phone_snapshot` and `phone_do` are Android-only — they need the platform location bridge, Android's `Geocoder` and the accessibility service. `ui_view` is not gated on Android as such: it registers whenever a WebUI query service exists, which in the normal Android runtime is always, but the condition is the service, not the platform. All four are available to the orchestrator; `screen` is available to nobody else.
 
 ### get_location
 
@@ -290,6 +290,43 @@ What was on the phone's screen when you wrote to Jenny from the **floating masco
 
 Config: the **Reads the screen** switch under **Floating mascot** (home **Settings → Jenny**), which leads to Android's Accessibility settings — Android lets only you turn an accessibility service on. Requires Android 14 or newer.
 
+
+### phone_snapshot
+
+What is on the phone's screen **right now**, in whatever app is open: one line per element that can be acted on — `- button "Network & internet · Mobile, Wi‑Fi, hotspot" [ref=3:e4]` — and the text around them. Every interactive window is read, so a permission dialog, the notification shade and the lock screen are there too; the status bar and the keys of the keyboard are not.
+
+| Parameter | Behavior |
+|---|---|
+| `filter` | Keep only the lines containing this text |
+
+- A `ref` carries the snapshot's version and dies with it: after an action the screen is another one.
+- A clickable row with no name of its own is named after what it contains, and that content is not repeated under it.
+- **Apps that block screenshots are not read**, and password fields never come through — the same rules as `screen`.
+- Capped at `tools.phone.maxSnapshotChars` (4,000); past it the snapshot says it was cut.
+- Everything it returns is untrusted, and marks the turn.
+
+### phone_do
+
+Use the phone like a person. `goal` is one sentence saying what and where — it is what you read when asked to confirm. `steps` run in order and stop at the first failure; the call returns what each step did and **the new screen**.
+
+| Step | Fields |
+|---|---|
+| `open_app` | `app` — a name ("WhatsApp") or a package |
+| `open_link` | `url` — opened by the app that handles it |
+| `tap`, `long_press` | `ref` |
+| `type` | `text`, optional `ref` (else the field with the cursor), optional `enter` |
+| `scroll` | `direction` (`up`/`down`), optional `ref` |
+| `swipe` | `direction` (`up`/`down`/`left`/`right`) |
+| `back`, `home`, `recents`, `notifications` | — |
+| `wait` | `ms`, at most 5,000 |
+
+- **Consent comes first, and is not the tool's to give.** Before the first step the runner asks `jenny/phone/consent.py`: off, an app to confirm (Ok / Always / No), a tap that pays or deletes (always asked), a password field (always refused). A refusal comes back as an ordinary result.
+- At most 12 steps per call.
+- With the screen off it turns it on first, if that takes no PIN, and turns it off when the turn ends.
+- While it runs, a pill on screen offers Stop; a touch of yours pauses the steps.
+- Only the agent you talk to has these two tools — no subagent — in the personal chat (from every channel), in its reminders and in a request to act from another Jenny. In a notebook they are not listed.
+
+Config: `tools.phone.mode` (`off`, `confirm`, `free`) and `tools.phone.trustedApps`, both set from **Settings → Jenny → Uses the phone**; plus the "Jenny — using the phone" accessibility service, which only you can turn on. See [Using the phone](../using/phone-use.md).
 ---
 
 ## 5. Remote machines (SSH)

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Configurazione di HandsService: legge le finestre e può agire.
+
+     `canPerformGestures` è quello che ScreenService non chiede. Gli eventi
+     (cambio di finestra e di contenuto) servono solo a sapere quando lo schermo
+     si è fermato dopo un'azione. Niente `isAccessibilityTool`: non è uno
+     strumento per la disabilità, e dichiararlo sarebbe falso. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:description="@string/hands_service_description"
+    android:notificationTimeout="50"
+    android:summary="@string/hands_service_summary" />

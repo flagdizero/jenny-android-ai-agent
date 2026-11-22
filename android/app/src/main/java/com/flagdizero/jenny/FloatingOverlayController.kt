@@ -1438,6 +1438,15 @@ object FloatingOverlayController {
         }
     }
 
+    /** Chiude la chat flottante da fuori: Jenny sta per usare l'app che c'è
+     *  sotto, e con la chat aperta quell'app per il servizio di accessibilità
+     *  non esiste (v. [expand]). `false` se era già chiusa. Sul main thread. */
+    fun collapseForDriving(): Boolean {
+        if (!expanded) return false
+        collapse()
+        return true
+    }
+
     /**
      * Ritorno a parcheggiata: via il fuoco, via lo scrim, via il fumetto.
      *

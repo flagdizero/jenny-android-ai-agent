@@ -571,6 +571,14 @@ class ApiClient {
     return res.json();
   }
 
+  /** Apre Impostazioni → Accessibilità, dove si accende «Jenny — usa il
+   *  telefono»: un'app non puo' accenderlo da se'. */
+  async openPhoneService() {
+    const res = await this._postWithQuery('/api/settings/phone/service-settings', {});
+    if (!res.ok) throw new Error(`Phone service settings failed: ${res.status}`);
+    return res.json();
+  }
+
   async openFloatingPermission() {
     const res = await this._postWithQuery('/api/settings/floating/permission-settings', {});
     if (!res.ok) throw new Error(`Overlay permission settings failed: ${res.status}`);

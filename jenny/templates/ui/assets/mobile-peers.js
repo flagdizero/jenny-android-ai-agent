@@ -202,6 +202,7 @@ export class PeersPanel {
         ${mac ? '' : this._permHtml(p, 'can_ask', 'canAsk', 'canAskHint')}
         ${mac ? '' : this._permHtml(p, 'send_files', 'sendFiles', 'sendFilesHint')}
         ${mac ? '' : this._actHtml(p)}
+        ${mac ? '' : this._permHtml(p, 'phone_confirm', 'phoneConfirm', 'phoneConfirmHint')}
         ${this._pendingHtml((s.pending || []).filter((c) => c.peer === p.id))}
         <div class="remote-actions">
           <button class="settings-btn-add" type="button" data-peers="ping" ${p.has_secret ? '' : 'disabled'}>

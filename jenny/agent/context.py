@@ -785,7 +785,15 @@ class ContextBuilder:
                 parts.append(render_template("agent/readonly.md"))
 
         if orchestrating:
-            parts.append(render_template("agent/orchestrator.md"))
+            # ``phone``: le mani sulle altre app sono dell'orchestratore, non di
+            # un aiutante. Va detto qui, perché questo template dice «i tuoi
+            # strumenti leggono e trovano» e «tutto il resto è uno spawn», ed è
+            # l'ultima prosa del prompt: senza la riga, il telefono sarebbe
+            # l'unica cosa che l'orchestratore fa da sé senza che nessuno glielo
+            # dica.
+            parts.append(render_template(
+                "agent/orchestrator.md", phone=self._tool_predicate(tool_names)("phone_do"),
+            ))
 
         # Il blocco memoria ha due sottosezioni con due proprietari distinti:
         # "Long-term Memory" (MEMORY.md, scritto da Dream) e "Wikis" (l'elenco

@@ -33,6 +33,7 @@ PHONE_ONLY_ROUTES = (
     "/api/settings/floating/update",
     "/api/settings/floating/screen-settings",
     "/api/settings/floating/permission-settings",
+    "/api/settings/phone/service-settings",
     "/api/updates/install",
     "/api/webui/apps/<slug>/view",
 )

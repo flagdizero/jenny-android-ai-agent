@@ -1558,6 +1558,8 @@ _COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
     "apps": ("jenny.webui.apps_commands", "APPS_COMMANDS"),
     # Le bozze dei subagent non fidati: solo l'interfaccia le installa.
     "staged": ("jenny.webui.staged_commands", "STAGED_COMMANDS"),
+    # «Usa il telefono»: la modalità e le app su «Sempre».
+    "phone": ("jenny.webui.phone_commands", "PHONE_COMMANDS"),
 }
 
 

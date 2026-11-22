@@ -40,6 +40,9 @@ class GatewayContainer:
         # Le domande fra Jenny (``jenny.peers.questions``): nascono col
         # collegamento, cioè col canale WebSocket, e si legano all'agente.
         self._peer_questions: Any = None
+        # Le domande in attesa delle mani di Jenny (``jenny.phone.consent``).
+        self._phone_asks: Any = None
+        self._phone_tasks: set[asyncio.Task[Any]] = set()
         self.onboarding_event = asyncio.Event()
 
         # Collaboratori popolati da build().
@@ -861,6 +864,7 @@ class GatewayContainer:
 
             link.on_change = peers_changed
             self._wire_peer_questions(link, config)
+        self._wire_phone()
 
         # I giri delle estensioni impacchettate in questa build. Registrati
         # **sempre**: il loro interruttore si gira dalla WebUI a gateway acceso,
@@ -991,6 +995,165 @@ class GatewayContainer:
         self._peer_questions = questions
         if self._agent is not None:
             self._agent.attach_peer_questions(questions)
+
+    def _wire_phone(self) -> None:
+        """Le mani di Jenny: lega il consenso (``jenny.phone.consent``) alle
+        scelte dell'utente in ``config.json`` e ai posti in cui la domanda
+        compare. Sempre, anche senza altre Jenny: il cancello legge la
+        modalità a ogni azione, e con ``off`` risponde col motivo."""
+        from jenny.phone import consent, drive
+        from jenny.runtime import native_input, notifier
+        from jenny.runtime import phone as phone_runtime
+        from jenny.runtime.user_text import current_bot_name, say
+
+        settings = consent.ConfigSettings()
+        asks = consent.PhoneAsks(ttl_s=settings.ask_timeout_s)
+
+        def notice(ask: consent.Ask) -> None:
+            name = current_bot_name()
+            if ask.kind == "costly":
+                title = say("phone.costly_title", name=name, what=ask.what, app=ask.app)
+                body = say("phone.costly_body", goal=ask.goal)
+            else:
+                title = say("phone.ask_title", name=name, app=ask.app)
+                body = say("phone.ask_body", goal=ask.goal)
+            notifier.post_phone_ask(ask.cid, title, body, always="always" in ask.options)
+
+        def spawn(coro: Any) -> None:
+            task = asyncio.get_running_loop().create_task(coro)
+            self._phone_tasks.add(task)
+            task.add_done_callback(self._phone_tasks.discard)
+
+        def pill(ask: consent.Ask) -> None:
+            # Sopra l'app, per chi è davanti al telefono. La notifica resta
+            # comunque: la pillola non c'è a schermo spento.
+            name = current_bot_name()
+            if ask.kind == "costly":
+                title = say("phone.costly_title", name=name, what=ask.what, app=ask.app)
+            else:
+                title = say("phone.ask_title", name=name, app=ask.app)
+            spawn(phone_runtime.pill_ask(
+                ask.cid, title, f"«{ask.goal}»" if ask.goal else "",
+                always="always" in ask.options,
+            ))
+
+        telegram_messages: dict[str, int] = {}
+
+        def telegram_channel() -> Any:
+            return (getattr(self.channels, "channels", None) or {}).get("telegram")
+
+        def telegram(ask: consent.Ask) -> None:
+            # Chi ha chiesto da Telegram non è davanti al telefono: la domanda
+            # gli arriva lì, con gli stessi tasti.
+            channel = telegram_channel()
+            if ask.origin != "telegram" or channel is None:
+                return
+            name = current_bot_name()
+            if ask.kind == "costly":
+                text = say("phone.costly_title", name=name, what=ask.what, app=ask.app)
+                text += "\n" + say("phone.costly_body", goal=ask.goal)
+            else:
+                text = say("phone.ask_title", name=name, app=ask.app)
+                text += "\n" + say("phone.ask_body", goal=ask.goal)
+            labels = {"no": say("phone.no"), "always": say("phone.always"), "ok": say("phone.ok")}
+            buttons = [
+                (labels[c], f"ph:{ask.cid}:{c}") for c in ("no", "always", "ok")
+                if c in ask.options
+            ]
+
+            async def send() -> None:
+                message_id = await channel.send_buttons(text, buttons)
+                if message_id is not None:
+                    telegram_messages[ask.cid] = message_id
+
+            spawn(send())
+
+        def telegram_clear(ask: consent.Ask) -> None:
+            channel = telegram_channel()
+            message_id = telegram_messages.pop(ask.cid, None)
+            if channel is not None and message_id is not None:
+                spawn(channel.clear_buttons(message_id))
+
+        async def telegram_button(data: str) -> str | None:
+            kind, _, rest = data.partition(":")
+            cid, _, choice = rest.partition(":")
+            if kind != "ph" or not asks.resolve(cid, choice):
+                return say("phone.too_late")
+            return None
+
+        if self.channels is not None:
+            self.channels.telegram_on_button = telegram_button
+        channel = telegram_channel()
+        if channel is not None:
+            channel.on_button = telegram_button
+
+        asks.posters.extend([notice, pill, telegram])
+        asks.clearers.append(telegram_clear)
+        asks.clearers.append(lambda ask: notifier.clear_peer_notice("confirm", ask.cid))
+        asks.clearers.append(lambda ask: spawn(phone_runtime.pill_ask_done()))
+        consent.install(settings, asks)
+
+        async def stop_turn(driving: drive.Drive) -> None:
+            # La stessa strada di chi scrive «/stop» in quella chat.
+            from jenny.bus.events import InboundMessage
+
+            await self.bus.publish_inbound(InboundMessage(
+                channel=driving.channel, sender_id="user", chat_id=driving.chat_id,
+                content="/stop",
+            ))
+
+        drive.install(
+            stopper=stop_turn,
+            notice=lambda ident, text: notifier.post_phone_driving(
+                ident, say("phone.driving_title", name=current_bot_name()), text,
+            ),
+            clear=lambda ident: notifier.clear_peer_notice("done", ident),
+        )
+
+        # Le domande che attraversano il collegamento con un'altra Jenny: chi
+        # ha chiesto da lontano risponde dal suo telefono, se qui gli è concesso.
+        peer_phone: Any = None
+        link = self._peer_link()
+        if link is not None:
+            from jenny.peers.phone_consent import PeerPhoneConsent
+
+            def show_remote(cid: str, peer_name: str, ask: dict[str, Any]) -> None:
+                name = current_bot_name()
+                title = say("phone.peer_ask_title", peer=peer_name or "Jenny", name=name,
+                            app=ask["app"])
+                if ask["kind"] == "costly":
+                    body = say("phone.costly_title", name=name, what=ask["what"], app=ask["app"])
+                    body += "\n" + say("phone.costly_body", goal=ask["goal"])
+                else:
+                    body = say("phone.ask_body", goal=ask["goal"])
+                always = "always" in ask["options"]
+                notifier.post_phone_ask(cid, title, body, always=always)
+                spawn(phone_runtime.pill_ask(cid, title, f"«{ask['goal']}»", always=always))
+
+            def hide_remote(cid: str) -> None:
+                notifier.clear_peer_notice("confirm", cid)
+                spawn(phone_runtime.pill_ask_done())
+
+            peer_phone = PeerPhoneConsent(
+                link, asks, show=show_remote, hide=hide_remote, spawn=spawn,
+            )
+
+        def on_phone_action(action: str, ident: str) -> bool:
+            # Un tasto della pillola o di una notifica, già sul loop. Vero se era nostro.
+            if action == "stop":
+                if not any(d.ident == ident for d in drive.active()):
+                    return False
+                spawn(drive.stop(ident))
+                return True
+            choice = {"allow": "ok", "always": "always", "deny": "no"}.get(action)
+            if choice is None:
+                return False
+            if asks.resolve(ident, choice):
+                return True
+            return peer_phone is not None and peer_phone.answer(ident, choice)
+
+        native_input.set_phone_action_handler(on_phone_action)
+        self._phone_asks = asks
 
     def _wire_plan_driver(self, agent: Any, config: Config) -> None:
         """Il driver dei piani a lista: nasce con l'agente, perché lo guida.

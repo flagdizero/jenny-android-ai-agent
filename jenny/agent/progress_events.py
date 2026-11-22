@@ -70,7 +70,7 @@ TOOL_FAMILIES: dict[str, str] = {
             "read_file", "list_dir", "get_source", "recall", "recall_history", "recall_chat",
             "memory",
             "ui_view", "my", "subagent_status", "list_exec_sessions", "update_status",
-            "ssh_hosts", "get_recent_logs", "notebook", "screen",
+            "ssh_hosts", "get_recent_logs", "notebook", "screen", "phone_snapshot",
         ),
         "read",
     ),
@@ -90,7 +90,7 @@ TOOL_FAMILIES: dict[str, str] = {
         "out",
     ),
     # Esegue: fa girare qualcosa.
-    **dict.fromkeys(("python_exec", "write_stdin"), "run"),
+    **dict.fromkeys(("python_exec", "write_stdin", "phone_do"), "run"),
     # Delega: manda una mini-me. Solo i subagent.
     **dict.fromkeys(
         ("spawn", "subagent_send", "subagent_cancel", "subagent_restart"), "delegate"

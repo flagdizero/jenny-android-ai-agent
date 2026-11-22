@@ -119,6 +119,7 @@ _UNTRUSTED_DIRS = (
 UNTRUSTED_TOOLS = frozenset({
     "web_search", "web_fetch",
     "browser_open", "browser_snapshot", "browser_do", "browser_read",
+    "phone_snapshot", "phone_do",
 })
 # ``find_place`` è qui perché il suo risultato dice quanto è lontano un posto
 # dall'utente, e cerca prima attorno a dove si trova.

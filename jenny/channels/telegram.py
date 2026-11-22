@@ -223,6 +223,10 @@ class TelegramChannel(NonStreamingChannelMixin):
         self.bus = bus
         self.api = api or TelegramAPI(config.bot_token or "")
         self._on_paired = on_paired
+        # Chi riceve i tasti in linea premuti (v. ``send_buttons``): gli arriva
+        # il dato del tasto e torna l'avviso breve da mostrare, o ``None``. Lo
+        # lega chi costruisce il gateway (le domande di ``jenny.phone.consent``).
+        self.on_button: Callable[[str], Awaitable[str | None]] | None = None
         # ``None``: la lingua configurata, letta a ogni frase (``user_text.say``),
         # così un cambio vale senza ricreare il canale.
         self._language = language
@@ -365,7 +369,56 @@ class TelegramChannel(NonStreamingChannelMixin):
     # Inbound                                                            #
     # ------------------------------------------------------------------ #
 
+    async def send_buttons(self, text: str, buttons: list[tuple[str, str]]) -> int | None:
+        """Manda alla chat abbinata una domanda con tasti in linea. Torna l'id
+        del messaggio (per togliere i tasti dopo), o ``None`` se non è partito."""
+        if not self._paired_chat_id:
+            return None
+        try:
+            sent = await self.api.send_message(str(self._paired_chat_id), text, buttons=buttons)
+        except Exception:
+            logger.exception("Telegram: a question with buttons was not sent")
+            return None
+        message_id = sent.get("message_id") if isinstance(sent, dict) else None
+        return message_id if isinstance(message_id, int) else None
+
+    async def clear_buttons(self, message_id: int) -> None:
+        """Toglie i tasti dal messaggio *message_id* della chat abbinata. Mai solleva."""
+        if not self._paired_chat_id:
+            return
+        try:
+            await self.api.clear_buttons(str(self._paired_chat_id), message_id)
+        except Exception:
+            logger.debug("Telegram: could not clear the buttons of message {}", message_id)
+
+    async def _handle_callback(self, query: dict[str, Any]) -> None:
+        """Un tasto in linea premuto. Vale solo dalla persona abbinata, nella
+        sua chat: stessa regola dei messaggi, perché un tasto è un ordine."""
+        callback_id = str(query.get("id") or "")
+        sender = str((query.get("from") or {}).get("id", ""))
+        chat = str(((query.get("message") or {}).get("chat") or {}).get("id", ""))
+        paired = str(self._paired_chat_id or "")
+        if not paired or sender != paired or chat != paired:
+            logger.warning("Telegram: ignoring a button press from outside the paired chat")
+            return
+        handler = self.on_button
+        toast: str | None = None
+        if handler is not None:
+            try:
+                toast = await handler(str(query.get("data") or ""))
+            except Exception:
+                logger.exception("Telegram: button handler failed")
+        if callback_id:
+            try:
+                await self.api.answer_callback(callback_id, toast)
+            except Exception:
+                logger.debug("Telegram: could not answer a button press")
+
     async def _handle_update(self, update: dict[str, Any]) -> None:
+        query = update.get("callback_query")
+        if isinstance(query, dict):
+            await self._handle_callback(query)
+            return
         message = update.get("message")
         if not isinstance(message, dict):
             return
