@@ -67,6 +67,14 @@ ASK_TTL_S = 600.0
 #: Ogni quanto, del tempo da sveglio, l'attesa guarda l'ora vera.
 CHECK_EVERY_S = 30.0
 
+#: Il telefono chiede PIN, sequenza o impronta: Jenny non li ha, per scelta.
+LOCKED = (
+    "The phone is locked with a PIN, pattern or fingerprint, and I never unlock it: I do "
+    "not know those and do not keep them. The user unlocks it, or — to let me work while "
+    "they are away — keeps this phone without a secure lock, or unlocked by Android in a "
+    "trusted place. Say so; do not try another way."
+)
+
 #: Le azioni che cadono sull'app in primo piano.
 _TOUCHING = frozenset({"tap", "long_press", "type", "scroll", "swipe"})
 
@@ -299,6 +307,8 @@ async def availability() -> str | None:
         )
     if state != "on":
         return "Using the phone is not supported on this device (it needs Android 14)."
+    if (await runtime.screen_state()).get("deviceLocked"):
+        return LOCKED
     return None
 
 

@@ -51,6 +51,10 @@ def phone(monkeypatch: pytest.MonkeyPatch):
     async def label(package: str) -> str:
         return {"com.whatsapp": "WhatsApp", "com.clock": "Clock"}.get(package, package)
 
+    async def screen() -> dict[str, bool]:
+        return {"on": True, "locked": False, "secure": False, "deviceLocked": False}
+
+    monkeypatch.setattr(rt, "screen_state", screen)
     index = {"1:e1": ("button", "Send"), "1:e2": ("button", "Paga ora"),
              "1:e3": ("password", "")}
     monkeypatch.setattr(rt, "phone_state", state)
@@ -114,6 +118,20 @@ async def test_service_off_says_where_to_turn_it_on(phone, turn, monkeypatch) ->
     turn()
     refusal = await consent.before_tool("phone_do", TAP)
     assert refusal is not None and "Accessibility" in refusal
+
+
+async def test_a_pin_locked_phone_is_never_unlocked(phone, turn, monkeypatch) -> None:
+    _settings, asks = phone
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+
+    async def locked() -> dict[str, bool]:
+        return {"on": False, "locked": True, "secure": True, "deviceLocked": True}
+
+    monkeypatch.setattr(consent.runtime, "screen_state", locked)
+    turn()
+    refusal = await consent.before_tool("phone_do", TAP)
+    assert refusal == consent.LOCKED and seen == []
 
 
 async def test_confirm_asks_once_per_app_per_turn(phone, turn) -> None:

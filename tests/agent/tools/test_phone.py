@@ -52,6 +52,10 @@ def fake(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return calls.get("results", [{"action": s["action"], "ok": True, "detail": "done"}
                                      for s in steps])
 
+    async def wake() -> str:
+        return calls.get("wake", "ready")
+
+    monkeypatch.setattr(tool.runtime, "wake", wake)
     monkeypatch.setattr(tool.consent, "availability", availability)
     monkeypatch.setattr(tool.runtime, "snapshot", snapshot)
     monkeypatch.setattr(tool.runtime, "act", act)
@@ -113,6 +117,13 @@ async def test_do_refused_does_not_act(fake) -> None:
     fake["available"] = "The accessibility service is off."
     out = await tool.PhoneDoTool().execute(goal="", steps=[{"action": "back"}])
     assert out.startswith("Error:") and fake["acted"] == []
+
+
+@pytest.mark.parametrize("state,needle", [("locked", "never unlock"), ("failed", "did not turn on")])
+async def test_do_does_nothing_when_the_phone_cannot_be_woken(fake, state, needle) -> None:
+    fake["wake"] = state
+    out = await tool.PhoneDoTool().execute(goal="", steps=[{"action": "back"}])
+    assert out.startswith("Error:") and needle in out and fake["acted"] == []
 
 
 def test_only_jenny_has_the_tools_and_they_run_one_at_a_time() -> None:

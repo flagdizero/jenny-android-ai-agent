@@ -117,6 +117,8 @@ async def end_turn(ctx: RequestContext | None) -> None:
             _CLEAR(drive.ident)
         _ENDED = (drive.origin, time.monotonic())
         await runtime.pill_done(None)
+        # Se lo schermo l'aveva acceso Jenny, lo rispegne.
+        await runtime.sleep_again()
         if drive.origin == "app":
             # Era partita dalla chat dell'app: la risposta è lì.
             await runtime.open_chat()

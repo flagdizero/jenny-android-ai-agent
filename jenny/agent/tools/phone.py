@@ -171,6 +171,13 @@ class PhoneDoTool(_PhoneToolBase):
         from jenny.agent.tools.context import current_request_context
 
         await drive.begin(current_request_context(), goal)
+        # Da lontano il telefono è spesso a schermo spento: si accende, se si
+        # può fare senza credenziali, e ``drive.end_turn`` lo rispegne.
+        awake = await runtime.wake()
+        if awake == "locked":
+            return f"Error: {consent.LOCKED}"
+        if awake == "failed":
+            return "Error: the screen did not turn on, so nothing was done."
         results = await runtime.act(steps)
         if results is None:
             return "Error: the phone did not answer (is the accessibility service on?)"

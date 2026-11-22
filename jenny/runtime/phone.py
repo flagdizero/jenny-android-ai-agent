@@ -71,8 +71,21 @@ async def screen_state() -> dict[str, bool]:
     """Schermo acceso, bloccato, con blocco sicuro. Senza Android: acceso e libero."""
     data = _json(await _call("screen"))
     if not isinstance(data, dict):
-        return {"on": True, "locked": False, "secure": False}
-    return {key: bool(data.get(key)) for key in ("on", "locked", "secure")}
+        return {"on": True, "locked": False, "secure": False, "deviceLocked": False}
+    return {key: bool(data.get(key)) for key in ("on", "locked", "secure", "deviceLocked")}
+
+
+async def wake() -> str:
+    """Accende lo schermo e toglie un blocco senza credenziali. ``"ready"``,
+    ``"woken"``, ``"locked"`` (serve il PIN) o ``"failed"``; senza Android
+    ``"ready"``."""
+    state = await _call("wake")
+    return str(state) if state else "ready"
+
+
+async def sleep_again() -> bool:
+    """Rispegne lo schermo, se a svegliarlo era stata :func:`wake`."""
+    return bool(await _call("sleepAgain"))
 
 
 async def snapshot(filter_text: str | None, max_chars: int) -> dict[str, Any] | None:

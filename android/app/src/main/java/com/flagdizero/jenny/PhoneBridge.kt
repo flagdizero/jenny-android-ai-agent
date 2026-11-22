@@ -27,6 +27,15 @@ class PhoneBridge(context: Context) {
 
     private val appContext = context.applicationContext
 
+    private companion object {
+        /** Tetto del wake lock: una guida non dura più di così. */
+        const val WAKE_MAX_MS = 10 * 60_000L
+        val wakeLockGuard = Any()
+
+        /** Preso da [wake] quando lo schermo era spento, lasciato da [sleepAgain]. */
+        var wakeLock: PowerManager.WakeLock? = null
+    }
+
     /** `"on"`, `"off"` (servizio spento in Accessibilità) o `"unsupported"`
      *  (Android sotto il 14: manca lo screenshot di finestra che dice se
      *  un'app vieta di essere letta). */
@@ -44,7 +53,65 @@ class PhoneBridge(context: Context) {
             .put("on", pm.isInteractive)
             .put("locked", km.isKeyguardLocked)
             .put("secure", km.isDeviceSecure)
+            .put("deviceLocked", km.isDeviceLocked)
             .toString()
+    }
+
+    /**
+     * Rende il telefono usabile se si può fare senza credenziali: accende lo
+     * schermo e toglie un blocco che non chiede niente (nessuno, scorrimento, o
+     * un blocco sicuro tenuto aperto da Android in un luogo o con un
+     * dispositivo fidato).
+     *
+     * Torna `"ready"` (era già acceso e libero), `"woken"` (l'ha acceso
+     * Jenny: [sleepAgain] lo rispegne), `"locked"` (serve PIN, sequenza o
+     * impronta: Jenny non li conosce e non li conserva) o `"failed"`.
+     *
+     * Misurato su `jenny_s22` il 22/11/2026: senza blocco, a schermo acceso si
+     * è già nell'app; col blocco a scorrimento basta uno swipe verso l'alto.
+     */
+    @Suppress("DEPRECATION")
+    fun wake(): String {
+        val km = appContext.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isInteractive && !km.isKeyguardLocked) return "ready"
+        if (km.isDeviceLocked) return "locked"
+        val svc = HandsService.instance ?: return "failed"
+        synchronized(wakeLockGuard) {
+            if (wakeLock == null) {
+                // Il wake lock «di schermo» è deprecato ma è l'unico che accende
+                // lo schermo senza una schermata nostra davanti; tiene anche
+                // acceso finché Jenny lavora. Ha comunque una scadenza.
+                wakeLock = pm.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "jenny:phone-use",
+                ).also { it.acquire(WAKE_MAX_MS) }
+            }
+        }
+        if (!waitUntil(2_000) { pm.isInteractive }) return "failed"
+        if (km.isKeyguardLocked) {
+            PhoneActions.run(svc, JSONArray().put(JSONObject().put("action", "swipe").put("direction", "up")))
+            if (!waitUntil(3_000) { !km.isKeyguardLocked }) return "failed"
+        }
+        return "woken"
+    }
+
+    /** Rispegne lo schermo, se a svegliarlo era stata [wake]. Vero se l'ha fatto. */
+    fun sleepAgain(): Boolean {
+        val held = synchronized(wakeLockGuard) { wakeLock.also { wakeLock = null } } ?: return false
+        runCatching { if (held.isHeld) held.release() }
+        return HandsService.instance
+            ?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+            ?: false
+    }
+
+    private fun waitUntil(timeoutMs: Long, done: () -> Boolean): Boolean {
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        while (android.os.SystemClock.elapsedRealtime() - t0 < timeoutMs) {
+            if (done()) return true
+            Thread.sleep(80)
+        }
+        return done()
     }
 
     /** La lettura dello schermo in JSON ([PhoneTree.Snapshot.json]); `null` a
