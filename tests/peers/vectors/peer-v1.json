@@ -1,0 +1,257 @@
+{
+  "version": 1,
+  "constants": {
+    "path": "/peer",
+    "max_frame_bytes": 262144,
+    "id_hex_chars": 32,
+    "pair_code_len": 8,
+    "pair_alphabet": "23456789ABCDEFGHJKMNPQRSTUVWXYZ",
+    "pair_ttl_ms": 600000,
+    "pair_max_attempts": 5,
+    "pair_kdf_iterations": 200000,
+    "salt_bytes": 16,
+    "nonce_bytes": 16,
+    "secret_bytes": 32,
+    "seal_kdf_iterations": 1,
+    "handshake_timeout_s": 15.0,
+    "ack_timeout_s": 30.0,
+    "done_timeout_s": 30.0,
+    "retry_delays_s": [
+      30,
+      60,
+      120,
+      300,
+      600,
+      1800
+    ],
+    "inbox_keep_ms": 604800000,
+    "max_question_chars": 4000,
+    "max_answer_chars": 8000,
+    "max_answer_files": 3,
+    "answer_statuses": [
+      "ok",
+      "refused",
+      "too_many",
+      "unavailable",
+      "failed",
+      "expired"
+    ],
+    "ask_modes": [
+      "read",
+      "act"
+    ],
+    "file_part_bytes": 163840,
+    "max_file_bytes": 20971520
+  },
+  "pair_code": {
+    "code": "K7Q4MZP2",
+    "shown": "K7Q4-MZP2",
+    "normalize": [
+      {
+        "input": "k7q4-mzp2",
+        "output": "K7Q4MZP2"
+      },
+      {
+        "input": " K7Q4 MZP2 ",
+        "output": "K7Q4MZP2"
+      },
+      {
+        "input": "K7Q4MZP2",
+        "output": "K7Q4MZP2"
+      },
+      {
+        "input": "K7Q4MZP0",
+        "output": ""
+      },
+      {
+        "input": "K7Q4MZP",
+        "output": ""
+      },
+      {
+        "input": "",
+        "output": ""
+      }
+    ],
+    "link": "jenny://pair?host=mac.tail0000.ts.net&ip=100.64.0.1&port=18790&code=K7Q4MZP2"
+  },
+  "mac": {
+    "doc": "HMAC-SHA256(key, utf8(label + '\\x1f' + part1 + '\\x1f' + ...)), lowercase hex",
+    "example": {
+      "key_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "l",
+      "parts": [
+        "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "00112233445566778899aabbccddeeff",
+        "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+        "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
+      ],
+      "message_utf8": "l\u001f0f1e2d3c4b5a69788796a5b4c3d2e1f0\u001f00112233445566778899aabbccddeeff\u001fd0d1d2d3d4d5d6d7d8d9dadbdcdddedf\u001fc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "mac": "5b43a5acede8b719df27e8634098d511ca7b33cd49f53ecf6941eb8dda4e37d5"
+    }
+  },
+  "container": {
+    "doc": "JNBK v1: 'JNBK' | 0x01 | uint32 BE iterations | salt[16] | nonce[12] | AES-256-GCM(key=PBKDF2-SHA256(utf8(passphrase), salt, iterations, 32), nonce, plaintext, aad=header) as ciphertext||tag[16]",
+    "passphrase": "04d735930f8f6c6023de997a5b85b8356bc0f24f36373316899bf274d951644a",
+    "iterations": 1,
+    "salt_hex": "101112131415161718191a1b1c1d1e1f",
+    "nonce_hex": "202122232425262728292a2b",
+    "plaintext_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+    "container_b64": "Sk5CSwEAAAABEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqK24nkOP2ZM9iRU1xdiI9bHNJHW6nMkj2SQKtxqceFnwNwXjk/2LD5OAf4MjCgP8jCQ=="
+  },
+  "pairing": {
+    "doc": "A is an opencode plugin showing the code, B a Jenny joining it",
+    "shower_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "joiner_id": "00112233445566778899aabbccddeeff",
+    "code": "K7Q4MZP2",
+    "salt": "000102030405060708090a0b0c0d0e0f",
+    "code_key_hex": "04d735930f8f6c6023de997a5b85b8356bc0f24f36373316899bf274d951644a",
+    "secret_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+    "frames": [
+      {
+        "frame": {
+          "type": "pair",
+          "v": 1,
+          "from": "00112233445566778899aabbccddeeff",
+          "nonce": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+          "name": "phone",
+          "host": "phone.tail0000.ts.net",
+          "ip": "100.64.0.2",
+          "port": 18790,
+          "agent": "jenny"
+        },
+        "wire": "{\"type\":\"pair\",\"v\":1,\"from\":\"00112233445566778899aabbccddeeff\",\"nonce\":\"b0b1b2b3b4b5b6b7b8b9babbbcbdbebf\",\"name\":\"phone\",\"host\":\"phone.tail0000.ts.net\",\"ip\":\"100.64.0.2\",\"port\":18790,\"agent\":\"jenny\"}"
+      },
+      {
+        "frame": {
+          "type": "pair_challenge",
+          "from": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "nonce": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+          "salt": "000102030405060708090a0b0c0d0e0f",
+          "agent": "opencode"
+        },
+        "wire": "{\"type\":\"pair_challenge\",\"from\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"nonce\":\"a0a1a2a3a4a5a6a7a8a9aaabacadaeaf\",\"salt\":\"000102030405060708090a0b0c0d0e0f\",\"agent\":\"opencode\"}"
+      },
+      {
+        "frame": {
+          "type": "pair_proof",
+          "mac": "67b735dea8e14087e240b35e0240a01de6b5bf1edbe03449f2a2efefbebb03f0"
+        },
+        "wire": "{\"type\":\"pair_proof\",\"mac\":\"67b735dea8e14087e240b35e0240a01de6b5bf1edbe03449f2a2efefbebb03f0\"}"
+      },
+      {
+        "frame": {
+          "type": "pair_ok",
+          "mac": "4572dedbf6684f763b65581a2e0f0ec5272ed7ca7808db119de94713e0aa2f44",
+          "sealed": "Sk5CSwEAAAABEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqK24nkOP2ZM9iRU1xdiI9bHNJHW6nMkj2SQKtxqceFnwNwXjk/2LD5OAf4MjCgP8jCQ==",
+          "agent": "opencode"
+        },
+        "wire": "{\"type\":\"pair_ok\",\"mac\":\"4572dedbf6684f763b65581a2e0f0ec5272ed7ca7808db119de94713e0aa2f44\",\"sealed\":\"Sk5CSwEAAAABEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqK24nkOP2ZM9iRU1xdiI9bHNJHW6nMkj2SQKtxqceFnwNwXjk/2LD5OAf4MjCgP8jCQ==\",\"agent\":\"opencode\"}"
+      },
+      {
+        "frame": {
+          "type": "pair_done",
+          "mac": "5c2c7fe2601b88a1c6947e712b43881197707d00b5aeb99059c9eaf97dfdf5d9"
+        },
+        "wire": "{\"type\":\"pair_done\",\"mac\":\"5c2c7fe2601b88a1c6947e712b43881197707d00b5aeb99059c9eaf97dfdf5d9\"}"
+      }
+    ]
+  },
+  "session": {
+    "dialer_id": "00112233445566778899aabbccddeeff",
+    "listener_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "secret_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+    "frames": [
+      {
+        "frame": {
+          "type": "hello",
+          "v": 1,
+          "from": "00112233445566778899aabbccddeeff",
+          "to": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "nonce": "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
+        },
+        "wire": "{\"type\":\"hello\",\"v\":1,\"from\":\"00112233445566778899aabbccddeeff\",\"to\":\"0f1e2d3c4b5a69788796a5b4c3d2e1f0\",\"nonce\":\"d0d1d2d3d4d5d6d7d8d9dadbdcdddedf\"}"
+      },
+      {
+        "frame": {
+          "type": "challenge",
+          "nonce": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+          "mac": "5b43a5acede8b719df27e8634098d511ca7b33cd49f53ecf6941eb8dda4e37d5"
+        },
+        "wire": "{\"type\":\"challenge\",\"nonce\":\"c0c1c2c3c4c5c6c7c8c9cacbcccdcecf\",\"mac\":\"5b43a5acede8b719df27e8634098d511ca7b33cd49f53ecf6941eb8dda4e37d5\"}"
+      },
+      {
+        "frame": {
+          "type": "proof",
+          "mac": "99afc08994375e4e51afbd644cbb07ed95f1aab36763850ec5e131798bed2b77"
+        },
+        "wire": "{\"type\":\"proof\",\"mac\":\"99afc08994375e4e51afbd644cbb07ed95f1aab36763850ec5e131798bed2b77\"}"
+      },
+      {
+        "frame": {
+          "type": "ready"
+        },
+        "wire": "{\"type\":\"ready\"}"
+      }
+    ]
+  },
+  "exchange": {
+    "frames": [
+      {
+        "frame": {
+          "type": "msg",
+          "id": "11111111111111111111111111111111",
+          "kind": "ask",
+          "body": {
+            "qid": "22222222222222222222222222222222",
+            "text": "Is the CI of PR 85 green?",
+            "mode": "read"
+          },
+          "created_ms": 1795000000000
+        },
+        "wire": "{\"type\":\"msg\",\"id\":\"11111111111111111111111111111111\",\"kind\":\"ask\",\"body\":{\"qid\":\"22222222222222222222222222222222\",\"text\":\"Is the CI of PR 85 green?\",\"mode\":\"read\"},\"created_ms\":1795000000000}"
+      },
+      {
+        "frame": {
+          "type": "ack",
+          "id": "11111111111111111111111111111111"
+        },
+        "wire": "{\"type\":\"ack\",\"id\":\"11111111111111111111111111111111\"}"
+      },
+      {
+        "frame": {
+          "type": "done"
+        },
+        "wire": "{\"type\":\"done\"}"
+      },
+      {
+        "frame": {
+          "type": "msg",
+          "id": "33333333333333333333333333333333",
+          "kind": "answer",
+          "body": {
+            "qid": "22222222222222222222222222222222",
+            "status": "ok",
+            "text": "Yes: all 4 checks passed.",
+            "files": []
+          },
+          "created_ms": 1795000004000
+        },
+        "wire": "{\"type\":\"msg\",\"id\":\"33333333333333333333333333333333\",\"kind\":\"answer\",\"body\":{\"qid\":\"22222222222222222222222222222222\",\"status\":\"ok\",\"text\":\"Yes: all 4 checks passed.\",\"files\":[]},\"created_ms\":1795000004000}"
+      },
+      {
+        "frame": {
+          "type": "nack",
+          "id": "33333333333333333333333333333333",
+          "reason": "unsupported"
+        },
+        "wire": "{\"type\":\"nack\",\"id\":\"33333333333333333333333333333333\",\"reason\":\"unsupported\"}"
+      },
+      {
+        "frame": {
+          "type": "done"
+        },
+        "wire": "{\"type\":\"done\"}"
+      }
+    ]
+  }
+}

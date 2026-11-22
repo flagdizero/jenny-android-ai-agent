@@ -156,6 +156,8 @@ What the request changes is written to undo journals: `peer-<qid>` for its own t
 
 **No ping-pong.** A turn answering the other Jenny can't ask her anything (`peer_ask` is not in its tools), and `peer_ask` refuses whenever a request's gate is bound: its turn, its helpers, the reminders it created.
 
+**A computer with opencode only answers.** A linked side that pairs as `opencode` (the `opencode-jenny` plugin on the user's Mac) is saved with `canAsk`, `sendFiles` and `act` off, and any `ask` it sends is answered `refused` without running a turn, whatever its row in `config.json` says. The panel shows no permission rows for it because there is nothing to turn on. What a side is, it says itself while pairing and outside the MACs: declaring `opencode` can only remove permissions, and a side that lies the other way is a Jenny like any other, with a Jenny's defaults and switches.
+
 **What stays open — read this before turning `act` on.**
 
 - **With `free`, nothing is held.** The request can open any page, download, and use the network from code. What remains is the taint (a helper it starts is born untrusted with no task sites, so J1 closes its egress once it reads your private data), the journal and Undo. Undo can't call back what was sent or opened.
@@ -308,6 +310,7 @@ refactor.
 - [Privacy](./privacy.md) — what leaves the device and when.
 - [SSH access](../using/ssh.md) — setting up a remote host, and why a restore does not restore access.
 - [Your other Jenny](../using/other-jennys.md) — linking two Jennys, questions, requests to act, and their permissions.
+- [Peer protocol](./peer-protocol.md) — the wire format between linked Jennys, frame by frame, with test vectors.
 - [Configuration reference](../reference/configuration.md) — the `security.*` and `tools.*` keys in full.
 - [Tool reference](../reference/tools.md) — per-tool limits and behavior.
 - [Local models](../reference/local-models.md) — self-hosted providers, reachability and the HTTPS guidance.

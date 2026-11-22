@@ -37,7 +37,7 @@ from loguru import logger
 
 from . import gate
 from .link import PeerError, PeerLink
-from .model import is_id, text_field
+from .model import KIND_OPENCODE, is_id, peer_kind, text_field
 from .store import new_id, now_ms
 
 KIND_ASK = "ask"
@@ -240,7 +240,10 @@ class PeerQuestions:
             {"qid": qid, "text": text[:300], "mode": mode},
         )
         state = await asyncio.to_thread(self.store.state, peer.id)
-        return {"qid": qid, "peer": peer.name, "last_seen_ms": state["last_seen_ms"]}
+        return {
+            "qid": qid, "peer": peer.name, "kind": peer_kind(peer.kind),
+            "last_seen_ms": state["last_seen_ms"],
+        }
 
     async def _on_answer(self, peer_id: str, body: dict[str, Any]) -> None:
         qid = body.get("qid")
@@ -429,6 +432,9 @@ class PeerQuestions:
             {"qid": qid, "text": text[:300], "mode": mode},
         )
         # In disparte: il messaggio ha già il suo ``ack``, la risposta è un altro.
+        if peer_kind(peer.kind) == KIND_OPENCODE:
+            self._spawn(self._refuse(peer, qid, mode))
+            return
         self._spawn(self._answer(peer, qid, text, mode))
 
     async def recover_interrupted(self) -> int:
@@ -530,6 +536,30 @@ class PeerQuestions:
             self.store.log, peer.id, "out", KIND_ANSWER,
             {"qid": qid, "status": status, "files": len(infos)},
         )
+
+    async def _refuse(self, peer: Any, qid: str, mode: str) -> None:
+        """Una domanda o una richiesta da un collegato che non ne fa: rifiutata, senza turno.
+
+        Vale per opencode sul Mac (``kind``): quel collegato risponde e basta, e
+        il pannello non ne mostra i permessi. Se un giorno chiede — un plugin
+        difettoso, o qualcuno che ha preso il suo segreto dal Mac — questo
+        telefono non legge niente per lui, qualunque cosa dica la riga in config.
+        """
+        logger.warning("peers: {} ({}) asked something, refused", peer.name, peer.kind)
+        try:
+            await asyncio.to_thread(
+                self.store.set_question, peer.id, "in", qid, state="refused", answer=""
+            )
+            body: dict[str, Any] = {"qid": qid, "status": "refused", "text": "", "files": []}
+            if mode == "act":
+                body["mode"] = "act"
+            await self._link.send(peer.id, KIND_ANSWER, body)
+            await asyncio.to_thread(
+                self.store.log, peer.id, "out", KIND_ANSWER, {"qid": qid, "status": "refused"}
+            )
+        finally:
+            # ``_on_ask`` l'ha segnata viva: qui finisce, come in ``_answer``.
+            self._answering.discard(qid)
 
     async def _run_turn(self, agent: Any, peer: Any, text: str) -> tuple[str, list[Path]]:
         """Il turno di risposta: sola lettura, strumenti chiusi, contaminato."""

@@ -606,7 +606,9 @@
         "undone": "Undone"
       },
       "undo": "Undo",
-      "undone": "Undone. Files put back: {files} · reminders removed: {jobs}"
+      "undone": "Undone. Files put back: {files} · reminders removed: {jobs}",
+      "kindOpencode": "Mac · opencode",
+      "opencodeHint": "opencode on your computer. It answers questions about code, git and GitHub, read-only; it never asks this Jenny anything."
     },
     "whoThinksHint": "Each brand holds its models: one tap on a model makes it answer.",
     "answersWith": "answers with {model}",

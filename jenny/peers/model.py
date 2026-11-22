@@ -38,6 +38,14 @@ KNOWN_KINDS = frozenset({KIND_PING, KIND_UNPAIR})
 # I livelli del permesso di *fare* (``PeerConfig.act``), dal più chiuso.
 ACT_LEVELS = ("off", "confirm", "free")
 
+# Cosa può esserci dall'altra parte (il campo ``agent`` di ``pair_challenge`` e
+# ``pair_ok``, salvato come ``PeerConfig.kind``): un'altra Jenny, o opencode sul
+# Mac dell'utente con il plugin ``opencode-jenny``.
+KIND_JENNY = "jenny"
+KIND_OPENCODE = "opencode"
+PEER_KINDS = (KIND_JENNY, KIND_OPENCODE)
+SELF_AGENT = KIND_JENNY
+
 
 class FrameError(ValueError):
     """Un frame che non è del protocollo."""
@@ -72,6 +80,16 @@ def decode(raw: str | bytes, *expected: str) -> dict[str, Any]:
     if kind not in expected:
         raise FrameError(f"unexpected frame type {kind!r}")
     return frame
+
+
+def peer_kind(value: Any) -> str:
+    """Il tipo di peer come lo si usa: uno dei :data:`PEER_KINDS`, ``jenny`` per tutto il resto.
+
+    Vale per il campo ``agent`` che arriva dal filo (un'altra parte che manda un
+    valore che non conosciamo, o nessuno, è una Jenny come le altre) e per
+    ``PeerConfig.kind`` scritto da una versione più nuova.
+    """
+    return value if value in PEER_KINDS else KIND_JENNY
 
 
 def text_field(frame: dict[str, Any], key: str, *, limit: int) -> str:

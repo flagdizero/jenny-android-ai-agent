@@ -36,6 +36,17 @@ _REFUSALS = {
                  "only the user of this phone starts questions.",
 }
 
+# Cos'è un peer ``opencode`` (il plugin ``opencode-jenny`` sul Mac dell'utente),
+# detto al modello accanto al suo nome. Testo fisso: la descrizione del tool non
+# cambia con i peer collegati (la cache del provider parte dalla lista dei tool),
+# il nome e il tipo arrivano solo nei risultati.
+OPENCODE_WHAT = "opencode on the user's computer: code, git, GitHub, read-only"
+
+
+def _label(name: str, kind: str) -> str:
+    """Il nome di un collegato come lo legge il modello, col tipo se non è una Jenny."""
+    return f"{name} ({OPENCODE_WHAT})" if kind == "opencode" else name
+
 
 @tool_parameters(
     tool_parameters_schema(
@@ -85,9 +96,11 @@ class PeerAskTool(Tool):
             "something only she can see: her chats, notebooks, reminders and files. With "
             "mode='act' you ask her to do something on her phone instead; she may refuse "
             "if the user hasn't allowed it there, and the user of that phone may have to "
-            "allow anything that leaves it. The request is queued and this returns at "
-            "once: her answer, with what she did, shows up later in this chat as a "
-            "separate card, by itself. Don't wait for it and never guess what she'll say."
+            "allow anything that leaves it. A linked peer can also be the user's computer "
+            "(opencode on their Mac): ask it about code, git and GitHub; it only reads and "
+            "can't act. The request is queued and this returns at once: the answer, with "
+            "what was done, shows up later in this chat as a separate card, by itself. "
+            "Don't wait for it and never guess what it will say."
         )
 
     @property
@@ -100,6 +113,7 @@ class PeerAskTool(Tool):
         from jenny.agent.tools.context import current_request_session_key
         from jenny.peers.gate import current_act
         from jenny.peers.link import PeerError
+        from jenny.peers.model import peer_kind
         from jenny.session.keys import CRON_SESSION_PREFIX
 
         if self._questions is None:
@@ -114,22 +128,29 @@ class PeerAskTool(Tool):
             asked = await self._questions.ask(str(peer or ""), str(question or ""), mode)
         except PeerError as exc:
             if exc.code == "which_peer":
-                names = ", ".join(p.name for p in await self._questions.peers())
-                return f"Say which Jenny to ask: {names}."
+                names = ", ".join(
+                    _label(p.name, peer_kind(p.kind)) for p in await self._questions.peers()
+                )
+                return f"Say which one to ask: {names}."
             return _REFUSALS.get(exc.code, f"Could not ask: {exc.code}.")
         name = asked["peer"]
+        kind = peer_kind(asked.get("kind"))
+        # Le frasi di ritorno sono neutre («the answer», «it is back online»):
+        # dall'altra parte può esserci un Mac, non solo un'altra Jenny.
+        device = "computer" if kind == "opencode" else "phone"
         verb = "Asked" if mode == "read" else "Sent the request to"
+        who = _label(name, kind)
         if (current_request_session_key() or "").startswith(CRON_SESSION_PREFIX):
             # Il giro silenzioso di un monitor: la scheda arriva nella chat
             # personale da sola, un ``message`` per dire «ho chiesto» è rumore.
             return (
-                f"{verb} {name}. Her answer will reach the user's chat by itself, as its own "
+                f"{verb} {who}. The answer will reach the user's chat by itself, as its own "
                 "card, when it arrives. Don't message the user about having asked."
             )
         return (
-            f"{verb} {name}. Her answer will appear in this chat as its own card when it "
-            f"arrives: in seconds if {name} is reachable, otherwise when her phone is back "
-            "online. Tell the user you asked; don't repeat or guess the answer."
+            f"{verb} {who}. The answer will appear in this chat as its own card when it "
+            f"arrives: in seconds if {name} is reachable, otherwise when that {device} is "
+            "back online. Tell the user you asked; don't repeat or guess the answer."
         )
 
 
