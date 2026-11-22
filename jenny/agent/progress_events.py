@@ -99,7 +99,7 @@ TOOL_FAMILIES: dict[str, str] = {
     **dict.fromkeys(
         (
             "cron", "message", "nothing_to_report", "suggest_notebook", "plan_propose",
-            "plan_step_done", "plan_step_skip", "plan_blocked", "peer_ask", "peer_attach",
+            "plan_step_done", "plan_step_skip", "plan_blocked", "peer_ask", "peer_attach", "peer_line", "line_move",
         ),
         "busy",
     ),

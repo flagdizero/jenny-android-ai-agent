@@ -154,6 +154,9 @@ class PeerQuestions:
         # Le richieste di fare (``jenny.peers.acting.PeerActs``), se il composition
         # root le lega: senza, una richiesta di fare che arriva è rifiutata.
         self.acts: Any = None
+        # Le linee passate (``jenny.peers.line.PeerLines``), legate allo stesso modo:
+        # gli strumenti ``peer_line`` e ``line_move`` le raggiungono da qui.
+        self.lines: Any = None
         link.register(KIND_ASK, self._on_ask)
         link.register(KIND_ANSWER, self._on_answer)
 

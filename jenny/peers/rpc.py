@@ -42,7 +42,21 @@ _CODE_FOR = {
     "closed": "unavailable",
     "refused": "unavailable",
     "no_secret": "unavailable",
+    "no_peers": "not_found",
+    "which_peer": "bad_request",
+    "bad_place": "bad_request",
+    "bad_channel": "bad_request",
+    "no_line": "not_found",
 }
+
+# I comandi della linea passata (``jenny.peers.line``), dalla chat della casa.
+LINE_METHODS = frozenset({
+    "peer.line.status", "peer.line.open", "peer.line.close", "peer.line.move",
+    "peer.line.chats", "peer.line.retry",
+})
+# La chat della WebUI da cui si passa la linea: solo quella di sempre.
+_LINE_CHANNEL = "websocket"
+_LINE_CHAT = "default"
 
 
 def pair_link(*, host: str | None, ip: str | None, port: int, code: str) -> str:
@@ -94,6 +108,25 @@ async def _act_command(link: PeerLink, method: str, params: dict[str, Any]) -> d
     return {"acts": await acts.history(peer_id), "pending": acts.pending(peer_id)}
 
 
+async def _line_command(link: PeerLink, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    lines = link.lines
+    if lines is None:
+        raise CommandError("unavailable", "lines are not running")
+    if method == "peer.line.open":
+        await lines.open(
+            _LINE_CHANNEL, _LINE_CHAT, _peer_id(params), _text(params, "place", limit=64),
+        )
+    elif method == "peer.line.close":
+        await lines.close(_LINE_CHANNEL, _LINE_CHAT)
+    elif method == "peer.line.move":
+        await lines.move(_LINE_CHANNEL, _LINE_CHAT, _text(params, "place", limit=64))
+    elif method == "peer.line.retry":
+        await lines.retry(_LINE_CHANNEL, _LINE_CHAT)
+    elif method == "peer.line.chats":
+        return {"chats": await lines.chats(_peer_id(params))}
+    return {"line": await lines.status(_LINE_CHANNEL, _LINE_CHAT)}
+
+
 async def handle(
     link: PeerLink,
     method: str,
@@ -141,7 +174,7 @@ async def handle(
             await link.remove(_peer_id(params))
         elif method == "peer.permissions":
             flags: dict[str, Any] = {}
-            for key in ("can_ask", "send_files", "phone_confirm"):
+            for key in ("can_ask", "send_files", "phone_confirm", "line", "line_trace"):
                 if key in params:
                     if not isinstance(params[key], bool):
                         raise CommandError("bad_request", f"{key} must be a boolean")
@@ -153,6 +186,8 @@ async def handle(
             await link.set_permissions(_peer_id(params), **flags)
         elif method in ACT_METHODS:
             extra.update(await _act_command(link, method, params))
+        elif method in LINE_METHODS:
+            extra.update(await _line_command(link, method, params))
         elif method == "peer.ping":
             await link.ping(_peer_id(params))
         elif method == "peer.history":

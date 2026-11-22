@@ -634,9 +634,10 @@ class AgentLoop(
         WebSocket, che lo possiede, nasce dopo l'agente al boot normale.
         """
         self.peer_questions = questions
-        tool = self.tools.get("peer_ask")
-        if tool is not None and hasattr(tool, "bind_questions"):
-            tool.bind_questions(questions)
+        for tool_name in ("peer_ask", "peer_line", "line_move"):
+            tool = self.tools.get(tool_name)
+            if tool is not None and hasattr(tool, "bind_questions"):
+                tool.bind_questions(questions)
         # Gli aiutanti di una richiesta di fare: il loro registro è della
         # richiesta, e lei sa di avere ancora qualcuno al lavoro.
         acts = getattr(questions, "acts", None)
@@ -870,6 +871,14 @@ class AgentLoop(
             # di risposta, che ha la sua vista.
             if name == "peer_ask":
                 return not (personal or personal_cron) or not self._peers_available()
+            # Passare la linea: solo dalla chat personale (non dai suoi
+            # promemoria: lo chiede l'utente, adesso). ``line_move`` serve a chi
+            # la linea la riceve, nella chat di sempre e in quelle dei quaderni;
+            # fuori da un turno arrivato da una linea risponde col motivo.
+            if name == "peer_line":
+                return not personal or not self._peers_available()
+            if name == "line_move":
+                return not (personal or in_project) or not self._peers_available()
             if name == "peer_attach":
                 return True
             if peer_act_session and name == "install_update":

@@ -186,6 +186,11 @@ class PeerLink:
         # Le richieste di fare (``jenny.peers.acting.PeerActs``): le lega il
         # composition root, e i comandi ``peer.*`` le raggiungono da qui.
         self.acts: Any = None
+        # Le linee (``jenny.peers.line.PeerLines``), legate allo stesso modo.
+        self.lines: Any = None
+        # Un messaggio che l'altra ha rifiutato per sempre (``nack`` che non è
+        # «riprova»): chi l'aveva mandato può volerlo sapere (tipo, motivo).
+        self.on_nack: Callable[[str, str, str], Awaitable[None]] | None = None
 
     # -- Config ---------------------------------------------------------------
 
@@ -274,6 +279,8 @@ class PeerLink:
                 "can_ask": p.can_ask,
                 "send_files": p.send_files,
                 "phone_confirm": p.phone_confirm,
+                "line": p.line,
+                "line_trace": p.line_trace,
                 "act": p.act,
                 "kind": peer_kind(p.kind),
                 "has_secret": read_secret(self._workspace, p.id) is not None,
@@ -333,6 +340,7 @@ class PeerLink:
     async def set_permissions(
         self, peer_id: str, *, can_ask: bool | None = None, send_files: bool | None = None,
         act: str | None = None, phone_confirm: bool | None = None,
+        line: bool | None = None, line_trace: bool | None = None,
     ) -> None:
         """Cosa può fare *peer_id* su questa Jenny: lo decide chi riceve."""
         if act is not None and act not in ACT_LEVELS:
@@ -341,7 +349,12 @@ class PeerLink:
         def apply(peers: Any) -> bool:
             for p in peers.peers:
                 if p.id == peer_id:
-                    before = (p.can_ask, p.send_files, p.act, p.phone_confirm)
+                    before = (p.can_ask, p.send_files, p.act, p.phone_confirm, p.line,
+                              p.line_trace)
+                    if line is not None:
+                        p.line = line
+                    if line_trace is not None:
+                        p.line_trace = line_trace
                     if phone_confirm is not None:
                         p.phone_confirm = phone_confirm
                     if can_ask is not None:
@@ -350,11 +363,15 @@ class PeerLink:
                         p.send_files = send_files
                     if act is not None:
                         p.act = act
-                    return (p.can_ask, p.send_files, p.act, p.phone_confirm) != before
+                    return (p.can_ask, p.send_files, p.act, p.phone_confirm, p.line,
+                            p.line_trace) != before
             raise PeerError("not_found")
 
         await self._mutate(apply)
         await self._refresh_acts()
+        if line is False and self.lines is not None:
+            # Il permesso tolto chiude la linea aperta da quella Jenny, adesso.
+            await self.lines.permission_revoked(peer_id)
 
     async def _refresh_acts(self) -> None:
         """Il cancello delle richieste rilegge nomi e livelli **adesso**.
@@ -423,6 +440,14 @@ class PeerLink:
         await asyncio.to_thread(self.store.log, peer_id, "sys", "removed", {})
 
     async def _forget(self, peer_id: str) -> None:
+        # Le linee con quella Jenny si chiudono prima che sparisca: la chat
+        # passata torna a casa, e resta detto perché.
+        if self.lines is not None:
+            try:
+                await self.lines.peer_gone(peer_id)
+            except Exception:
+                logger.opt(exception=True).warning("peers: closing the lines failed")
+
         def apply(peers: Any) -> bool:
             before = len(peers.peers)
             peers.peers = [p for p in peers.peers if p.id != peer_id]
@@ -847,6 +872,11 @@ class PeerLink:
                                     {"kind": row["kind"], "reason": reason},
                                 )
                             await asyncio.to_thread(self.store.remove, row["id"])
+                            if verdict == "nack" and self.on_nack is not None:
+                                try:
+                                    await self.on_nack(peer_id, row["kind"], reason)
+                                except Exception:
+                                    logger.opt(exception=True).warning("peers: on_nack failed")
                             if row["kind"] == files.KIND_FILE_PART:
                                 files.part_sent(self._workspace, row["body"])
             await ws.send(model.encode({"type": "done"}))
