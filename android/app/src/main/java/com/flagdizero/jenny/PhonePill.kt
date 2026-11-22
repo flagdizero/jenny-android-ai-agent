@@ -57,8 +57,9 @@ object PhonePill {
     /** Un tocco entro questo tempo da un gesto iniettato è di Jenny. */
     private const val OWN_TOUCH_MS = 600L
 
-    /** Quanto resta a schermo l'esito. */
-    private const val DONE_MS = 8_000L
+    /** Quanto resta a schermo l'esito: il tempo di leggere tre o quattro
+     *  righe. A 8 s, sull'emulatore il 22/11/2026, spariva a metà lettura. */
+    private const val DONE_MS = 20_000L
 
     private val main = Handler(Looper.getMainLooper())
     private var view: LinearLayout? = null
@@ -106,7 +107,12 @@ object PhonePill {
         if (text.isNullOrBlank() || svc == null) {
             remove()
         } else {
-            show(svc, text, null, listOf("✕" to { remove() }))
+            // L'esito è un testo da leggere, non un titolo: va nel corpo, che
+            // tiene più righe. Toccarlo porta alla chat, dove c'è intero.
+            show(svc, null, text, listOf("✕" to { remove() })) {
+                remove()
+                Intents.tryStart(svc, MainActivity.openChatIntent(svc), TAG, "the chat")
+            }
             main.postDelayed(hide, DONE_MS)
         }
         true
@@ -169,9 +175,10 @@ object PhonePill {
 
     private fun show(
         svc: AccessibilityService,
-        title: String,
+        title: String?,
         body: String?,
         buttons: List<Pair<String, () -> Unit>>,
+        onTap: (() -> Unit)? = null,
     ): Boolean {
         remove()
         val pad = dp(svc, 14)
@@ -182,8 +189,9 @@ object PhonePill {
                 cornerRadius = dp(svc, 22).toFloat()
                 setColor(Color.rgb(28, 28, 30))
             }
-            addView(label(svc, title, 14f, bold = true))
+            if (!title.isNullOrBlank()) addView(label(svc, title, 14f, bold = true))
             if (!body.isNullOrBlank()) addView(label(svc, body, 13f, bold = false))
+            if (onTap != null) setOnClickListener { onTap() }
             addView(LinearLayout(svc).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.END
@@ -241,7 +249,8 @@ object PhonePill {
             this.text = text
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
-            maxLines = if (bold) 2 else 4
+            maxLines = if (bold) 2 else 6
+            ellipsize = android.text.TextUtils.TruncateAt.END
             maxWidth = dp(context, 300)
             if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
         }

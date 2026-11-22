@@ -137,7 +137,7 @@ async def show_result(text: str) -> bool:
     if time.monotonic() - ended[1] > RESULT_WINDOW_S:
         return False
     _ENDED = None
-    return await runtime.pill_done(" ".join(text.split())[:220])
+    return await runtime.pill_done(" ".join(text.split())[:320])
 
 
 async def stop(ident: str) -> bool:

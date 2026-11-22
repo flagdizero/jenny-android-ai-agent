@@ -153,7 +153,9 @@ object ScreenSnapshots {
     }
 
     fun detach(svc: AccessibilityService) {
-        if (service === svc) service = null
+        // Se a staccarsi è il servizio di lettura e quello delle mani è acceso,
+        // la lettura passa a lui: legge le finestre allo stesso modo.
+        if (service === svc) service = HandsService.instance?.takeIf { it !== svc }
         clear()
     }
 

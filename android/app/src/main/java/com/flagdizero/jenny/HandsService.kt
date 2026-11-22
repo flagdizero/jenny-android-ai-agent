@@ -21,6 +21,9 @@ class HandsService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        // Chi ha acceso le mani non deve accendere anche gli occhi: la lettura
+        // al tocco sulla mascotte passa da qui, se l'altro servizio è spento.
+        if (!ScreenSnapshots.connected()) ScreenSnapshots.attach(this)
         Log.i(TAG, "Hands service connected")
     }
 
@@ -33,6 +36,7 @@ class HandsService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         if (instance === this) instance = null
         PhonePill.detach()
+        ScreenSnapshots.detach(this)
         PhoneTree.clear()
         Log.i(TAG, "Hands service unbound")
         return super.onUnbind(intent)
