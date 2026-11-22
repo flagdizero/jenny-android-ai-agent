@@ -99,6 +99,12 @@ class FloatingBridge(context: Context) {
         }
     }
 
+    /** Chiude la chat flottante perché Jenny possa usare l'app sotto. `false`
+     *  se non era aperta. */
+    fun collapse(): Boolean = onMain {
+        FloatingOverlayController.collapseForDriving()
+    }
+
     /** Disegna la risposta nel fumetto. `false` se non c'è nessuna finestra. */
     fun showReply(text: String): Boolean = onMain {
         FloatingOverlayController.showReply(text)

@@ -42,6 +42,7 @@ class GatewayContainer:
         self._peer_questions: Any = None
         # Le domande in attesa delle mani di Jenny (``jenny.phone.consent``).
         self._phone_asks: Any = None
+        self._phone_tasks: set[asyncio.Task[Any]] = set()
         self.onboarding_event = asyncio.Event()
 
         # Collaboratori popolati da build().
@@ -1000,8 +1001,9 @@ class GatewayContainer:
         scelte dell'utente in ``config.json`` e ai posti in cui la domanda
         compare. Sempre, anche senza altre Jenny: il cancello legge la
         modalità a ogni azione, e con ``off`` risponde col motivo."""
-        from jenny.phone import consent
+        from jenny.phone import consent, drive
         from jenny.runtime import native_input, notifier
+        from jenny.runtime import phone as phone_runtime
         from jenny.runtime.user_text import current_bot_name, say
 
         asks = consent.PhoneAsks()
@@ -1016,12 +1018,53 @@ class GatewayContainer:
                 body = say("phone.ask_body", goal=ask.goal)
             notifier.post_phone_ask(ask.cid, title, body, always="always" in ask.options)
 
-        asks.posters.append(notice)
+        def spawn(coro: Any) -> None:
+            task = asyncio.get_running_loop().create_task(coro)
+            self._phone_tasks.add(task)
+            task.add_done_callback(self._phone_tasks.discard)
+
+        def pill(ask: consent.Ask) -> None:
+            # Sopra l'app, per chi è davanti al telefono. La notifica resta
+            # comunque: la pillola non c'è a schermo spento.
+            name = current_bot_name()
+            if ask.kind == "costly":
+                title = say("phone.costly_title", name=name, what=ask.what, app=ask.app)
+            else:
+                title = say("phone.ask_title", name=name, app=ask.app)
+            spawn(phone_runtime.pill_ask(
+                ask.cid, title, f"«{ask.goal}»" if ask.goal else "",
+                always="always" in ask.options,
+            ))
+
+        asks.posters.extend([notice, pill])
         asks.clearers.append(lambda ask: notifier.clear_peer_notice("confirm", ask.cid))
+        asks.clearers.append(lambda ask: spawn(phone_runtime.pill_ask_done()))
         consent.install(consent.ConfigSettings(), asks)
 
+        async def stop_turn(driving: drive.Drive) -> None:
+            # La stessa strada di chi scrive «/stop» in quella chat.
+            from jenny.bus.events import InboundMessage
+
+            await self.bus.publish_inbound(InboundMessage(
+                channel=driving.channel, sender_id="user", chat_id=driving.chat_id,
+                content="/stop",
+            ))
+
+        drive.install(
+            stopper=stop_turn,
+            notice=lambda ident, text: notifier.post_phone_driving(
+                ident, say("phone.driving_title", name=current_bot_name()), text,
+            ),
+            clear=lambda ident: notifier.clear_peer_notice("done", ident),
+        )
+
         def on_phone_action(action: str, ident: str) -> bool:
-            # Un tasto di una notifica, già sul loop. Vero se la domanda era nostra.
+            # Un tasto della pillola o di una notifica, già sul loop. Vero se era nostro.
+            if action == "stop":
+                if not any(d.ident == ident for d in drive.active()):
+                    return False
+                spawn(drive.stop(ident))
+                return True
             choice = {"allow": "ok", "always": "always", "deny": "no"}.get(action)
             return choice is not None and asks.resolve(ident, choice)
 

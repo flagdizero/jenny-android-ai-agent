@@ -83,6 +83,12 @@ async def show_reply(text: str) -> bool:
     return await _call("showReply", clean)
 
 
+async def collapse() -> bool:
+    """Chiude la chat flottante: Jenny sta per usare l'app che c'è sotto.
+    ``False`` se non era aperta o la mascotte non c'è."""
+    return bool(await _call("collapse"))
+
+
 async def floating_active() -> bool:
     """La mascotte è accesa **e** Android la lascia esistere?
 

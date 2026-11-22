@@ -412,6 +412,7 @@ _TEXT: dict[str, dict[str, str]] = {
         "retry.gave_up": "Model request failed after {attempts} attempts, giving up.",
         # Le richieste di fare da un'altra Jenny (``jenny.peers.acting``): le
         # notifiche su questo telefono.
+        "phone.driving_title": "{name} is using the phone",
         "phone.ask_title": "{name} is about to use {app}",
         "phone.ask_body": "«{goal}»\nOk lets her go on for this request.",
         "phone.costly_title": "{name} is about to tap «{what}» in {app}",
@@ -823,6 +824,7 @@ _TEXT: dict[str, dict[str, str]] = {
         ),
         "retry.stopped": "Smetto di riprovare: {count} errori uguali di fila.",
         "retry.gave_up": "Il modello non ha risposto dopo {attempts} tentativi: mi fermo.",
+        "phone.driving_title": "{name} sta usando il telefono",
         "phone.ask_title": "{name} sta per usare {app}",
         "phone.ask_body": "«{goal}»\nCon Ok va avanti per questa richiesta.",
         "phone.costly_title": "{name} sta per toccare «{what}» in {app}",

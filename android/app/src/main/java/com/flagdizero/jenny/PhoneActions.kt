@@ -53,6 +53,55 @@ object PhoneActions {
     var injectedAt = 0L
         private set
 
+    /** L'utente ha toccato lo schermo mentre Jenny guidava ([PhonePill]): i
+     *  passi aspettano che dica di continuare. */
+    @Volatile
+    var paused = false
+        private set
+
+    /** L'utente ha premuto «Ferma»: nessun altro passo, fino alla prossima guida. */
+    @Volatile
+    private var stopped = false
+
+    /** Quanto un passo aspetta «Continua» prima di arrendersi. */
+    private const val PAUSE_WAIT_MS = 45_000L
+
+    /** Una guida nuova comincia: niente pausa né stop rimasti da prima. */
+    fun begin() {
+        paused = false
+        stopped = false
+    }
+
+    fun pause() {
+        paused = true
+    }
+
+    fun resume() {
+        paused = false
+    }
+
+    /** «Ferma»: il passo in corso finisce, i successivi no. */
+    fun stop() {
+        stopped = true
+        paused = false
+    }
+
+    /** Prima di ogni passo: fermo se l'utente ha detto ferma, in attesa se ha
+     *  toccato lo schermo. */
+    private fun checkpoint() {
+        val t0 = SystemClock.elapsedRealtime()
+        while (paused && !stopped && SystemClock.elapsedRealtime() - t0 < PAUSE_WAIT_MS) {
+            Thread.sleep(100)
+        }
+        if (stopped) throw Refusal("the user pressed Stop: do nothing else on the phone")
+        if (paused) {
+            throw Refusal(
+                "the user touched the screen, so I paused, and they have not said to continue. " +
+                    "Stop here and tell them where you got to",
+            )
+        }
+    }
+
     /**
      * Esegue i passi in ordine e si ferma al primo che fallisce. Torna un
      * array JSON, una voce per passo eseguito: `{action, ok, detail}`.
@@ -63,6 +112,7 @@ object PhoneActions {
             val step = steps.optJSONObject(i) ?: JSONObject()
             val action = step.optString("action")
             val detail = try {
+                checkpoint()
                 one(svc, action, step)
             } catch (e: Refusal) {
                 results.put(JSONObject().put("action", action).put("ok", false).put("detail", e.message))
@@ -121,6 +171,7 @@ object PhoneActions {
         // Il nodo non accetta il clic: si tocca dov'è.
         val b = Rect().also { element.node.getBoundsInScreen(it) }
         if (b.isEmpty) throw Refusal("${describe(element)} cannot be tapped: it has no place on screen")
+        PhonePill.dodge(b.exactCenterX(), b.exactCenterY())
         val path = Path().apply { moveTo(b.exactCenterX(), b.exactCenterY()) }
         if (!gesture(svc, path, if (long) 700 else 60)) {
             throw Refusal("${describe(element)} did not take the tap")

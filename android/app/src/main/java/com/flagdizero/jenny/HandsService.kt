@@ -32,6 +32,7 @@ class HandsService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         if (instance === this) instance = null
+        PhonePill.detach()
         PhoneTree.clear()
         Log.i(TAG, "Hands service unbound")
         return super.onUnbind(intent)

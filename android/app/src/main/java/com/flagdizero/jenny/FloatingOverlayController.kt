@@ -1446,6 +1446,15 @@ object FloatingOverlayController {
      * riscriverla; il timer di inattività, del resto, non scatta nemmeno
      * finché c'è del testo lì dentro (v. `armHold`).
      */
+    /** Chiude la chat flottante da fuori: Jenny sta per usare l'app che c'è
+     *  sotto, e con la chat aperta quell'app per il servizio di accessibilità
+     *  non esiste (v. [expand]). `false` se era già chiusa. Sul main thread. */
+    fun collapseForDriving(): Boolean {
+        if (!expanded) return false
+        collapse()
+        return true
+    }
+
     private fun collapse() {
         val ctx = appContext ?: return
         main.removeCallbacks(holdRunnable)

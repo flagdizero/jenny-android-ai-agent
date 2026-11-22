@@ -1753,6 +1753,12 @@ class AgentLoop(
                 closed_reasoning_flagged=session is not None,
             ))
         finally:
+            # Se il turno ha usato il telefono, si smette di mostrarlo
+            # (``jenny.phone.drive``): pillola, notifica, ritorno alla chat.
+            from jenny.agent.tools.context import current_request_context
+            from jenny.phone import drive as phone_drive
+
+            await phone_drive.end_turn(current_request_context())
             reset_journal(journal_token)
             peer_gate.reset(peer_gate_token)
             reset_turn_taint(turn_taint_token)

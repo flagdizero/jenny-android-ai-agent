@@ -70,4 +70,10 @@ class FloatingChannel(FinalTextChannel):
         spenta, permesso mancante, app in primo piano (dove la risposta è già a
         schermo in chat), o **finestra chiusa** — il caso volutamente
         silenzioso: la finestra non si riapre da sé."""
-        return await show_reply(content)
+        if await show_reply(content):
+            return True
+        # La chat flottante è chiusa. Se è perché Jenny ha appena usato l'app
+        # sotto (``jenny.phone.drive``), l'esito va sulla pillola.
+        from jenny.phone import drive
+
+        return await drive.show_result(content)

@@ -64,6 +64,8 @@
     <string name="phone_always_label">Always</string>
     <string name="phone_no_label">No</string>
     <string name="phone_stop_label">Stop</string>
+    <string name="phone_continue_label">Continue</string>
+    <string name="phone_paused">Paused: you touched the screen</string>
 
     <string name="hands_service_label">Jenny — using the phone</string>
     <string name="hands_service_summary">Jenny opens apps, taps and types for you, when you ask her</string>

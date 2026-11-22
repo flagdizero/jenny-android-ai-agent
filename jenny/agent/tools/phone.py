@@ -29,7 +29,7 @@ from jenny.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
-from jenny.phone import consent
+from jenny.phone import consent, drive
 from jenny.runtime import phone as runtime
 from jenny.security.subagent_policy import mark_untrusted
 
@@ -168,6 +168,9 @@ class PhoneDoTool(_PhoneToolBase):
             return f"Error: unknown action {unknown[0]!r}: use " + ", ".join(_ACTIONS)
         if (refusal := await consent.availability()) is not None:
             return f"Error: {refusal}"
+        from jenny.agent.tools.context import current_request_context
+
+        await drive.begin(current_request_context(), goal)
         results = await runtime.act(steps)
         if results is None:
             return "Error: the phone did not answer (is the accessibility service on?)"

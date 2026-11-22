@@ -124,6 +124,36 @@ async def app_label(package: str) -> str:
     return str(label) if label else str(package)
 
 
+async def pill_ask(cid: str, title: str, body: str, *, always: bool) -> bool:
+    """La domanda *cid* sulla pillola sopra l'app. Falso se non si può mostrare."""
+    return bool(await _call("pillAsk", cid, title, body, bool(always)))
+
+
+async def pill_ask_done() -> bool:
+    """La domanda ha avuto risposta: la pillola torna alla guida o sparisce."""
+    return bool(await _call("pillAskDone"))
+
+
+async def pill_driving(ident: str, text: str) -> bool:
+    """«Jenny sta usando il telefono» sulla pillola, con «Ferma»."""
+    return bool(await _call("pillDriving", ident, text))
+
+
+async def pill_done(text: str | None) -> bool:
+    """Fine della guida; con *text* resta l'esito per qualche secondo."""
+    return bool(await _call("pillDone", text))
+
+
+async def stop() -> bool:
+    """«Ferma»: i passi non ancora fatti non si fanno."""
+    return bool(await _call("stop"))
+
+
+async def open_chat() -> bool:
+    """Riporta davanti la chat di Jenny."""
+    return bool(await _call("openChat"))
+
+
 async def open_phone_settings() -> bool:
     """Apre Impostazioni → Accessibilità, dove il servizio si accende."""
     return bool(await _call("openSettings"))

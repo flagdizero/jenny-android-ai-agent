@@ -77,6 +77,29 @@ class PhoneBridge(context: Context) {
         packageName
     }
 
+    /** La domanda *cid* sulla pillola ([PhonePill.ask]). */
+    fun pillAsk(cid: String, title: String, body: String, always: Boolean): Boolean =
+        PhonePill.ask(cid, title, body, always)
+
+    /** La domanda ha avuto risposta: la pillola torna alla guida o sparisce. */
+    fun pillAskDone(): Boolean = PhonePill.askDone()
+
+    /** «Jenny sta usando il telefono» sulla pillola, con «Ferma» per la guida *id*. */
+    fun pillDriving(id: String, text: String): Boolean = PhonePill.driving(id, text)
+
+    /** Fine della guida; con *text* resta l'esito per qualche secondo. */
+    fun pillDone(text: String?): Boolean = PhonePill.done(text)
+
+    /** «Ferma»: i passi non ancora fatti non si fanno. */
+    fun stop(): Boolean {
+        PhoneActions.stop()
+        return true
+    }
+
+    /** Riporta davanti la chat di Jenny, a lavoro finito. */
+    fun openChat(): Boolean =
+        Intents.tryStart(appContext, MainActivity.openChatIntent(appContext), "PhoneBridge", "the chat")
+
     /** Apre la pagina di sistema in cui il servizio si accende. */
     fun openSettings(): Boolean = Intents.tryStart(
         appContext,
