@@ -249,7 +249,7 @@ Each linked Jenny is a row with its state (*Last contact*, *Not reachable*, *N w
 | **Rename** / **Unlink** | Unlinking forgets the secret and, if the other is reachable, unlinks it too. Linking again needs a new code. | — |
 | **Can ask me questions** | That Jenny can ask this one questions, answered in a read-only turn (`canAsk`). | On |
 | **Answers can carry files** | Answers to that Jenny can attach files, up to 3 of 20 MB (`sendFiles`). | Off |
-| **Can ask me to do things** | `act`: **No**, **Yes, but ask me before sending anything out** (opening a page, downloading or network access from code waits for **Allow** on a notification), or **Yes, everything**. | No |
+| **Can ask me to do things** | `act`: **No**, **Yes, but ask me before sending anything out** (opening a page, downloading, a command on one of your servers or network access from code waits for **Allow** on a notification), or **Yes, everything**. | No |
 | **History** | Opens the list of questions, answers, files, tests and decisions, in both directions. Above it, **Requests to act**: the latest requests from that Jenny with their state (*In progress*, *Still working on it*, *Done*, *Refused*, *Undone*…) and **Undo**. | — |
 
 A row for **your Mac with opencode** ([Your Mac, with opencode](../using/other-jennys.md#your-mac-with-opencode)) is marked *Mac · opencode* and shows only **Test**, **Rename** / **Unlink** and **History**: the Mac answers questions and never asks this phone anything, so the permission rows have nothing to guard.

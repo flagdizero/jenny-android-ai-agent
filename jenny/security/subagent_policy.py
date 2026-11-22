@@ -159,6 +159,23 @@ class SubagentSecretError(PermissionError):
         )
 
 
+class PeerSecretError(SubagentSecretError):
+    """Un turno che lavora per un'altra Jenny ha provato a leggere un file segreto.
+
+    Stessa famiglia di :class:`SubagentSecretError` (chi la prende la tratta
+    uguale), con un testo per chi sta rispondendo a un altro telefono.
+    """
+
+    def __init__(self, rel: str) -> None:
+        PermissionError.__init__(
+            self,
+            f"'{rel}' holds the app's private configuration (provider keys, tokens); "
+            "it is never read while working for another Jenny, because what you read "
+            "here can go back to the other phone. Don't look for another way to it: "
+            "say in your reply that settings are not something you can report.",
+        )
+
+
 class SubagentSystemCodeError(PermissionError):
     """Un subagent ha provato a scrivere i template o la WebUI di Jenny."""
 
@@ -488,19 +505,39 @@ def socket_egress_refusal() -> str | None:
     return _refusal("no direct network connection")
 
 
+def _peer_secret(path: str | Path) -> str | None:
+    """Il percorso relativo di *path* se è SECRET per un turno che lavora per
+    un'altra Jenny (``jenny.peers.gate.secret_root``); ``None`` altrimenti."""
+    from jenny.peers.gate import secret_root
+
+    root = secret_root()
+    if root is None:
+        return None
+    try:
+        parts = Path(path).resolve().relative_to(Path(root).resolve()).parts
+    except (ValueError, OSError, RuntimeError):
+        return None
+    return "/".join(parts) if _is_secret(parts) else None
+
+
 def is_secret_path(path: str | Path) -> bool:
-    """True se un subagent è legato e *path* è SECRET per lui."""
+    """True se *path* è SECRET per chi lavora qui: un subagent, o un turno che
+    lavora per un'altra Jenny."""
     policy = current_subagent_policy()
     if policy is None:
-        return False
+        return _peer_secret(path) is not None
     parts = policy.relative(path)
     return parts is not None and _is_secret(parts)
 
 
 def check_read(path: str | Path) -> None:
-    """Controlla una lettura di un subagent; no-op fuori da un subagent."""
+    """Controlla una lettura di un subagent, o di un turno che lavora per
+    un'altra Jenny; no-op altrove."""
     policy = current_subagent_policy()
     if policy is None:
+        rel = _peer_secret(path)
+        if rel is not None:
+            raise PeerSecretError(rel)
         return
     parts = policy.relative(path)
     if parts is None:

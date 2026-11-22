@@ -285,6 +285,18 @@ class PeerStore:
             )
         return when
 
+    def defer(self, peer: str, now: int, until_ms: int) -> None:
+        """I messaggi di *peer* pronti adesso aspettano fino a *until_ms*.
+
+        Non è un tentativo fallito (``postpone``): non conta e non allunga i
+        rinvii. Serve quando la coda la sta già mandando un'altra connessione.
+        """
+        with self._db().write() as conn:
+            conn.execute(
+                "UPDATE peer_outbox SET next_try_ms = ? WHERE peer = ? AND next_try_ms <= ?",
+                (until_ms, peer, now),
+            )
+
     def wake(self, peer: str | None = None) -> None:
         """Tutto quel che aspetta parte al prossimo giro (Tailscale è tornato, l'utente insiste)."""
         with self._db().write() as conn:
@@ -301,6 +313,13 @@ class PeerStore:
             conn.execute("DELETE FROM peer_state WHERE peer = ?", (peer,))
 
     # -- Arrivi --
+
+    def arrived(self, peer: str, msg_id: str) -> bool:
+        """Vero se *msg_id* di *peer* è già stato trattato (v. :meth:`first_arrival`)."""
+        rows = self._db().read(
+            "SELECT 1 FROM peer_inbox WHERE peer = ? AND id = ? LIMIT 1", (peer, msg_id)
+        )
+        return bool(rows)
 
     def first_arrival(self, peer: str, msg_id: str, now: int) -> bool:
         """Vero la prima volta che *msg_id* arriva da *peer*; falso per un doppione."""
@@ -452,6 +471,14 @@ class PeerStore:
             "SELECT qid, peer, direction, text, asked_ms, state, outbox_id FROM peer_questions "
             "WHERE direction = 'out' AND state = 'queued' AND asked_ms < ?",
             (cutoff_ms,),
+        )
+        return [dict(r) for r in rows]
+
+    def interrupted_questions(self) -> list[dict[str, Any]]:
+        """Le domande arrivate qui e ancora ``answering``: v. ``PeerQuestions.recover_interrupted``."""
+        rows = self._db().read(
+            "SELECT qid, peer, mode FROM peer_questions "
+            "WHERE direction = 'in' AND state = 'answering' ORDER BY asked_ms"
         )
         return [dict(r) for r in rows]
 

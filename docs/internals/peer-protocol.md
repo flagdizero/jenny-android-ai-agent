@@ -90,14 +90,15 @@ After `ready`, **both** sides send their pending messages for the other on the s
 ```
 {"type":"msg",  "id":<message id>, "kind":<kind>, "body":{…}, "created_ms":<epoch ms>}
 {"type":"ack",  "id":<message id>}
-{"type":"nack", "id":<message id>, "reason":"unsupported" | "failed"}
+{"type":"nack", "id":<message id>, "reason":"unsupported" | "bad" | "failed"}
 {"type":"done"}
 ```
 
 - Messages go **one at a time**: a side sends the next `msg` only after the `ack` or `nack` of the previous one, waiting up to **30 seconds**.
 - After its last message a side sends `done`. The dialer closes once it has sent `done` and received the other's, or 30 seconds after its own.
 - **`ack`** means "I have it, never send it again". It is sent once the message is handled, and also for a message id already received in the **last 7 days**, which is acknowledged and dropped. Each message therefore takes effect once, even when an `ack` is lost and the sender tries again.
-- **`nack`** means "remove it from your queue, it will never work". `unsupported` is a `kind` this side does not know; `failed` is a handler that failed. The sender logs it and drops the message.
+- **`nack`** refuses a message, and its `reason` says whether to try again. `unsupported` (a `kind` this side does not know) and `bad` (a body that is not valid for its kind) mean "remove it from your queue, it will never work": the sender logs it and drops the message. `failed` means the handler could not deal with it *now*: a Jenny keeps the message, waits as after a failed delivery, and sends it again, up to 3 more times before dropping it. A side that drops on every `nack`, as an older Jenny does, is still correct; a side that sends `failed` for everything gets a few retries and nothing worse. Any other reason is treated as final.
+- A receiver records a message id as seen only **after** its handler has finished, so the message that got `failed` is handled again when it comes back; handlers must tolerate seeing the same `qid` twice.
 - **Queue.** A sender keeps each message until its `ack` or `nack`. A failed delivery is retried after 30 s, 1, 2, 5, 10 and then every 30 minutes, and sooner when something else wakes the queue.
 
 ## Message kinds

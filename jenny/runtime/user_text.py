@@ -416,7 +416,10 @@ _TEXT: dict[str, dict[str, str]] = {
         "peer.what_open": "open {target}",
         "peer.what_download": "download from {target}",
         "peer.what_browser": "use the open web page",
-        "peer.confirm_body": "Part of a request from {peer}. Allow it?",
+        "peer.what_ssh": "run commands on your server {target}",
+        # Il corpo ripete cosa e dove: è il solo punto della notifica che va a
+        # capo, il titolo Android lo taglia a una riga.
+        "peer.confirm_body": "{peer} wants to {what}.\nIt is part of a request from {peer}. Allow it?",
         "peer.done_title": "{peer} asked me something",
         "peer.done_body": "«{text}» — done",
         "peer.working_body": "«{text}» — still working on it",
@@ -819,7 +822,8 @@ _TEXT: dict[str, dict[str, str]] = {
         "peer.what_open": "aprire {target}",
         "peer.what_download": "scaricare da {target}",
         "peer.what_browser": "usare la pagina web aperta",
-        "peer.confirm_body": "Fa parte di una richiesta di {peer}. Lo consenti?",
+        "peer.what_ssh": "eseguire comandi sul tuo server {target}",
+        "peer.confirm_body": "{peer} vuole {what}.\nFa parte di una sua richiesta. Lo consenti?",
         "peer.done_title": "{peer} mi ha chiesto una cosa",
         "peer.done_body": "«{text}» — fatto",
         "peer.working_body": "«{text}» — ci sto ancora lavorando",

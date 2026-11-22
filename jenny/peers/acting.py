@@ -118,9 +118,11 @@ class PeerActs:
         from jenny.runtime.user_text import say
 
         name = self.name(peer_id)
-        key = {"open": "peer.what_open", "download": "peer.what_download"}.get(
-            action, "peer.what_browser")
-        what = say(key, target=target)
+        key = {
+            "open": "peer.what_open", "download": "peer.what_download", "ssh": "peer.what_ssh",
+        }.get(action, "peer.what_browser")
+        # Per un server il cancello tiene ``ssh:<alias>``: all'utente si dice l'alias.
+        what = say(key, target=target.removeprefix("ssh:") if action == "ssh" else target)
         ok = await self.confirmations.ask(peer=peer_id, peer_name=name, qid=qid, what=what)
         await asyncio.to_thread(
             self.store.log, peer_id, "sys", "confirm",
