@@ -141,7 +141,7 @@ async def handle(
             await link.remove(_peer_id(params))
         elif method == "peer.permissions":
             flags: dict[str, Any] = {}
-            for key in ("can_ask", "send_files"):
+            for key in ("can_ask", "send_files", "phone_confirm"):
                 if key in params:
                     if not isinstance(params[key], bool):
                         raise CommandError("bad_request", f"{key} must be a boolean")

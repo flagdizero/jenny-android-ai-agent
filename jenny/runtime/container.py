@@ -1109,6 +1109,34 @@ class GatewayContainer:
             clear=lambda ident: notifier.clear_peer_notice("done", ident),
         )
 
+        # Le domande che attraversano il collegamento con un'altra Jenny: chi
+        # ha chiesto da lontano risponde dal suo telefono, se qui gli è concesso.
+        peer_phone: Any = None
+        link = self._peer_link()
+        if link is not None:
+            from jenny.peers.phone_consent import PeerPhoneConsent
+
+            def show_remote(cid: str, peer_name: str, ask: dict[str, Any]) -> None:
+                name = current_bot_name()
+                title = say("phone.peer_ask_title", peer=peer_name or "Jenny", name=name,
+                            app=ask["app"])
+                if ask["kind"] == "costly":
+                    body = say("phone.costly_title", name=name, what=ask["what"], app=ask["app"])
+                    body += "\n" + say("phone.costly_body", goal=ask["goal"])
+                else:
+                    body = say("phone.ask_body", goal=ask["goal"])
+                always = "always" in ask["options"]
+                notifier.post_phone_ask(cid, title, body, always=always)
+                spawn(phone_runtime.pill_ask(cid, title, f"«{ask['goal']}»", always=always))
+
+            def hide_remote(cid: str) -> None:
+                notifier.clear_peer_notice("confirm", cid)
+                spawn(phone_runtime.pill_ask_done())
+
+            peer_phone = PeerPhoneConsent(
+                link, asks, show=show_remote, hide=hide_remote, spawn=spawn,
+            )
+
         def on_phone_action(action: str, ident: str) -> bool:
             # Un tasto della pillola o di una notifica, già sul loop. Vero se era nostro.
             if action == "stop":
@@ -1117,7 +1145,11 @@ class GatewayContainer:
                 spawn(drive.stop(ident))
                 return True
             choice = {"allow": "ok", "always": "always", "deny": "no"}.get(action)
-            return choice is not None and asks.resolve(ident, choice)
+            if choice is None:
+                return False
+            if asks.resolve(ident, choice):
+                return True
+            return peer_phone is not None and peer_phone.answer(ident, choice)
 
         native_input.set_phone_action_handler(on_phone_action)
         self._phone_asks = asks

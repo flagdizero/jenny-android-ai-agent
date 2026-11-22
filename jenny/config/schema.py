@@ -826,6 +826,12 @@ class PeerConfig(Base):
     # telefono (una pagina da aprire, la rete dal codice) aspetta un «Consenti»
     # dell'utente di qui; ``free`` fa tutto senza chiedere. Spento di default.
     act: Literal["off", "confirm", "free"] = "off"
+    # ``phone_confirm``: quando quella Jenny chiede di usare questo telefono
+    # (le mani, ``jenny.phone``), la domanda «sto per usare Gmail, ok?» può
+    # avere risposta dal *suo* telefono, dove sta l'utente
+    # (``jenny.peers.phone_consent``). Spento di default: senza, risponde solo
+    # chi ha in mano questo telefono.
+    phone_confirm: bool = False
     # ``kind``: che cosa c'è dall'altra parte, come l'ha detto lei abbinandosi
     # (il campo ``agent`` del protocollo): ``jenny`` o ``opencode`` (le mani sul
     # Mac, il plugin ``opencode-jenny``). Testo libero e non ``Literal``: un
@@ -839,6 +845,7 @@ class PeerPermissionsUpdate(Base):
 
     can_ask: bool | None = None
     send_files: bool | None = None
+    phone_confirm: bool | None = None
     act: Literal["off", "confirm", "free"] | None = None
 
 
