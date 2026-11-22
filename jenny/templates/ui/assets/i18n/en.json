@@ -1776,7 +1776,14 @@
       "stubAt": "You talked to {name} · {from}–{to}",
       "traceBy": "Summary written by {name}",
       "inOpen": "{name} has the line · since {time}",
-      "inClose": "{name} closed the line · {time}"
+      "inClose": "{name} closed the line · {time}",
+      "ask": {
+        "app": "To do it, {name} has to use {app} on her phone. May I?",
+        "costly": "{name} is about to tap «{what}» in {app}: it can't be undone. Go ahead?",
+        "ok": "Ok",
+        "always": "Always for this app",
+        "no": "No"
+      }
     },
     "peers": {
       "title": "Other Jennys",

@@ -1204,6 +1204,12 @@ class GatewayContainer:
             peer_phone = PeerPhoneConsent(
                 link, asks, show=show_remote, hide=hide_remote, spawn=spawn,
             )
+            # La stessa domanda anche nel filo della linea, se è da lì che
+            # l'utente sta scrivendo a quella Jenny.
+            lines = getattr(link, "lines", None)
+            if lines is not None:
+                peer_phone.line_show = lines.show_ask
+                peer_phone.line_hide = lines.hide_ask
 
         def on_phone_action(action: str, ident: str) -> bool:
             # Un tasto della pillola o di una notifica, già sul loop. Vero se era nostro.

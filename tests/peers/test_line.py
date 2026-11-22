@@ -418,3 +418,30 @@ async def test_unlinking_brings_the_chat_back_home(two):
     assert closed["reason"] == "unpaired"
     await wait_until(lambda: side_b.jenny.link.store.line("in", side_a.jenny.id) is None,
                      timeout=10)
+
+
+async def test_a_telegram_chat_can_be_passed_too(two):
+    side_a, side_b = await _linked(two)
+    await side_a.lines.open("telegram", "4242", side_b.jenny.id)
+
+    async def is_open() -> bool:
+        line = await side_a.lines.status("telegram", "4242")
+        return line is not None and line["state"] == "open"
+
+    await _until(is_open)
+    assert await side_a.lines.route("telegram", "4242", "ci sei?") is True
+    await wait_until(lambda: len(side_b.injected) == 1)
+    # Un'altra chat dello stesso canale resta di questa Jenny.
+    assert await side_a.lines.route("telegram", "9999", "ci sei?") is False
+    assert await side_a.lines.route("telegram", "4242", "/torna") is True
+    # Il segnaposto sta nella chat di sempre della WebUI, non su Telegram.
+    stub = next(m for m in side_a.cards
+                if "line_stub" in (m.metadata.get(OUTBOUND_META_AGENT_UI) or {}))
+    assert (stub.channel, stub.chat_id) == ("websocket", "default")
+
+
+async def test_a_line_can_only_be_passed_from_a_chat_channel(two):
+    side_a, side_b = await _linked(two)
+    with pytest.raises(PeerError) as err:
+        await side_a.lines.open("notification", "native", side_b.jenny.id)
+    assert err.value.code == "bad_channel"

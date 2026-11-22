@@ -350,6 +350,7 @@ class HomeApp {
       },
       onStatus: (status) => {
         this.you.sayPeers(peersSummary(status));
+        if (!status) return;
         /* Una Jenny collegata o scollegata cambia anche il tasto in chat. */
         this.line.status = { ...status, line: this.line.line };
         this.line.apply();

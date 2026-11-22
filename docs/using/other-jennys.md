@@ -6,6 +6,8 @@ They talk directly, phone to phone, over [Tailscale](https://tailscale.com). The
 
 Each Jenny stays herself: her own model, memory, notebooks and reminders. Neither one sees the other's things. She *asks*, and the other one decides what to answer.
 
+There are two ways to reach the other one. You can have your Jenny **ask** her something and bring back the answer, or you can have her **pass you the line** and talk to the other Jenny yourself, from the phone you are holding ([Talking to her directly](#talking-to-her-directly)).
+
 ## What you need
 
 - **Tailscale on both phones**, signed in to the same tailnet and connected.
@@ -15,7 +17,7 @@ Each Jenny stays herself: her own model, memory, notebooks and reminders. Neithe
 
 ## Linking the two
 
-Linking is done once, and needs both phones in your hands.
+Linking is done once, and needs both phones in your hands. The steps below use the workshop panel. The same thing is in the house, under **Settings → Other Jennys → Link another Jenny**: show the QR or type the other one's code, then name her and choose the two permissions that matter most.
 
 1. On the first phone, open the workshop: **Hands → Other Jennys**. Turn on **Link with other Jennys**, then tap **Show the QR**.
 2. On the second phone, scan the QR with the camera. Android opens Jenny with the form already filled in. Give the other Jenny a name ("Work", "Personal") and tap **Link**. If linking is off on this phone, the form says so, and **Link** turns it on.
@@ -71,6 +73,28 @@ Everything that changed on the work phone can be undone. **Undo** puts the files
 
 A file that changed again after the request is left as it is, and the result says how many. Opened pages and anything already sent can't be called back.
 
+## Talking to her directly
+
+Asking is a relay: your Jenny puts the question, the other one answers, your Jenny tells you. Sometimes you want the other one yourself. Say **"pass me Work"** in the personal chat, or tap the **⇄** key next to the Plan key, and the line is hers: from then on what you type in that chat goes straight to the work Jenny, as if you were typing on the work phone. Your personal Jenny doesn't read it and doesn't answer.
+
+You can tell the line is passed by three things. The row of pages at the top is replaced by the other Jenny's name with a back arrow; the field and the send key change colour; and the ⇄ key carries her name. The Plan key and attachments are gone while the line is passed: it carries text only.
+
+**Her notebooks.** The ⇄ key opens **Who you're talking to**: your Jennys in a row at the top, and under the one that is lit, her chats — the main chat and her notebooks, by name. Tap one to talk there. In words it works too: once you are through to Work, "let's move to the suppliers notebook" moves you, and the head becomes *WORK › SUPPLIERS*. You see the conversation; her boards and pages stay on her phone. The same sheet, with your own Jenny lit, opens the chats of the notebooks on this phone.
+
+**Coming back.** The back arrow, Android's Back, or `/torna` (or `/back`) typed as a message. They are recognised by the app itself, since your Jenny isn't reading. Choosing one of this phone's chats in the sheet comes back too.
+
+**What stays here.** The conversation lives on the other phone, in her chat, where each of your messages is marked with where it came from. On this phone it leaves a marker — *You talked to Work · 10:02–10:15* — and, under it, two lines the work Jenny wrote about what was said and done. Your personal Jenny keeps those, so later she can tell you "you talked about that with Work" and ask her for the details. The two lines are the only part of the conversation that leaves the work phone; **Leaves a two-line summary**, on that phone, turns them off. Tapping the marker opens the line again.
+
+**When she asks before using an app.** If what you ask needs one of the apps on her phone, the question — "to do it, Work has to use Mail on her phone" — appears in the conversation with its keys, as well as in a notification. It is written by the app, not by her model.
+
+**What doesn't pass.** A step-by-step plan is started on the phone it runs on: over the line she can tell you how far it has got, not show its card. And from a passed line you can't be passed on to a third Jenny, or have her ask one: go back first.
+
+**When she doesn't answer.** Your message waits, the head says *not answering*, and a strip above the field offers **Retry** and **Back to Jenny**. What you wrote leaves when she is back.
+
+**The permission.** It is off until you turn it on, on the phone that *receives*: **Settings → Other Jennys → Can pass the line here** for that Jenny. Whoever holds the other phone can then do on this one what you could do by typing here, so turn it on only between phones that are both yours. Turning it off closes a line that is open.
+
+The line can also be passed from Telegram: the other Jenny's replies arrive with her name in front, and `/torna` brings you back.
+
 ## A daily report
 
 There is no separate report feature, because a reminder does it. In the personal chat: "every weekday at 7pm, ask Work how the day went and what's left to do". Every evening the question goes out and the answer arrives as a card, and your personal Jenny knows about the day without you asking.
@@ -85,11 +109,13 @@ The other side doesn't have to be a phone. If you use [opencode](https://opencod
 - **What it can read.** One folder you choose when installing (by default `~/Documents/GitHub`), and only to read: `git status`, `log`, `diff`, and GitHub's PRs, checks and runs through `gh`. It can't edit files, run other commands or open web pages. Each question is a session you can open in opencode to see what it did.
 - **Regular checks** are reminders, set in words: "every hour, ask the Mac whether the CI of PR 85 is green, and tell me only if it changes". Nothing to set up on the Mac.
 
+The Mac is listed with the Jennys in **Who you're talking to**, with a laptop for its icon and a single chat under it: it has no notebooks. Passing it the line needs a version of the plugin that knows how; until then the line closes at once and says the Mac can't do it yet.
+
 In the panel the Mac is marked *Mac · opencode*. It doesn't ask your phone anything, so it has no permission rows; and if something on the Mac did ask, your phone would refuse without looking at anything. The details of the link are in the [Peer protocol](../internals/peer-protocol.md).
 
 ## Permissions are decided by whoever receives
 
-Each phone decides what the other may do *to it*: whether the other can ask questions (**Can ask me questions**, on by default), whether answers to it can carry files, and whether it can ask for things to be done. Nothing set on the personal phone opens anything on the work phone.
+Each phone decides what the other may do *to it*: whether the other can ask questions (**Can ask me questions**, on by default), whether answers to it can carry files, whether it can ask for things to be done, and whether it can pass the line here. Nothing set on the personal phone opens anything on the work phone.
 
 Both directions work the same way. The work Jenny can ask the personal one too, under the personal phone's rules.
 

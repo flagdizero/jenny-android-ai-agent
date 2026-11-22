@@ -188,6 +188,9 @@ class PeerLink:
         self.acts: Any = None
         # Le linee (``jenny.peers.line.PeerLines``), legate allo stesso modo.
         self.lines: Any = None
+        # Il consenso alle mani che attraversa il collegamento
+        # (``jenny.peers.phone_consent.PeerPhoneConsent``): si lega da sé.
+        self.phone_consent: Any = None
         # Un messaggio che l'altra ha rifiutato per sempre (``nack`` che non è
         # «riprova»): chi l'aveva mandato può volerlo sapere (tipo, motivo).
         self.on_nack: Callable[[str, str, str], Awaitable[None]] | None = None

@@ -731,7 +731,7 @@ Config, under `tools.androidWeb.browser`: `timeout`, `maxSnapshotChars`, `maxRea
 
 ## 11. Other Jennys
 
-The tools behind [Your other Jenny](../using/other-jennys.md). Both are in the `core` and `orchestrator` scopes, never in a subagent's.
+The tools behind [Your other Jenny](../using/other-jennys.md). All four are in the `core` and `orchestrator` scopes, never in a subagent's.
 
 ### peer_ask
 
@@ -744,6 +744,19 @@ Sends a question, or a request to do something, to the user's other Jenny on ano
 Where it is: the personal chat and the runs of its reminders and monitors (so "every evening ask Work how the day went" is just a reminder), not a notebook's chat or its reminders. It is listed only while another Jenny is linked. It refuses inside work another Jenny asked for — her request's turn, its helpers, a reminder it created — so two Jennys can't keep each other busy. In a monitor's silent run it asks the model not to announce the question, since the card reaches the chat by itself.
 
 Config: `peers.enabled` and a linked Jenny. Limits: 4,000 characters per question; the other side answers at most `peers.maxAsksPerHour` (30) per hour from each Jenny.
+
+### peer_line
+
+Passes the chat to the user's other Jenny: from then on what the user writes there goes to her, and this Jenny neither reads nor answers until the user comes back ([Talking to her directly](../using/other-jennys.md#talking-to-her-directly)).
+
+- `peer` is the other Jenny's name; it can be left out when only one is linked.
+- `notebook` opens the line on one of *her* notebook chats instead of her main chat.
+
+It only opens the line. The messages are carried by the gateway, not by this tool, and so is coming back. Where it is: the personal chat, listed only while another Jenny is linked. It refuses from a notebook's chat, inside work another Jenny asked for, and in a turn that itself arrived through a line. Whether the other side accepts is hers to decide (`line` on her phone).
+
+### line_move
+
+For the side that *receives* a line: moves the conversation to the chat of one of this Jenny's notebooks, or back to her main chat, when the user asks in words. The user's next message arrives there. It is listed in the personal chat and in notebook chats while another Jenny is linked, and outside a turn that arrived through a line it answers that it is not available.
 
 ### peer_attach
 
@@ -776,7 +789,7 @@ The workshop's **Hands** drawer governs exactly two tool settings, and SSH gets 
 | Web search (max results, timeout, fetch max chars) | Yes — Hands → Web Search (the `enable` switch itself is config-only) | `tools.androidWeb.*` |
 | Location sharing | Yes — Hands → Location | `tools.location.enable` |
 | SSH access (on/off, hosts, keys, fingerprints) | Yes — Hands → SSH (its own section) | `tools.ssh.enable`, `tools.ssh.hosts` |
-| Other Jennys (`peer_ask`, `peer_attach`, and what each other Jenny may do here) | Yes — Hands → Other Jennys (its own section) | `peers.*` |
+| Other Jennys (`peer_ask`, `peer_line`, `line_move`, `peer_attach`, and what each other Jenny may do here) | Yes — Hands → Other Jennys (its own section) | `peers.*` |
 | File tools (read/write/edit/patch/list/find/grep) | No | `tools.file.enable` |
 | Python execution | No | `tools.pythonExec.enable` (+ timeout, output cap, module lists) |
 | Self-inspection (`my`) | No | `tools.my.enable`, `tools.my.allowSet` |

@@ -52,7 +52,7 @@ _CODE_FOR = {
 # I comandi della linea passata (``jenny.peers.line``), dalla chat della casa.
 LINE_METHODS = frozenset({
     "peer.line.status", "peer.line.open", "peer.line.close", "peer.line.move",
-    "peer.line.chats", "peer.line.retry", "peer.line.say",
+    "peer.line.chats", "peer.line.retry", "peer.line.say", "peer.line.answer",
 })
 # La chat della WebUI da cui si passa la linea: solo quella di sempre.
 _LINE_CHANNEL = "websocket"
@@ -127,6 +127,13 @@ async def _line_command(link: PeerLink, method: str, params: dict[str, Any]) -> 
         # linea non diventa un messaggio per Jenny: chi chiama lo sa dal rifiuto.
         if not await lines.route(_LINE_CHANNEL, _LINE_CHAT, _text(params, "text", limit=8000)):
             raise PeerError("no_line")
+    elif method == "peer.line.answer":
+        # Il tocco su una domanda dell'altra Jenny disegnata nel filo.
+        cid, choice = params.get("cid"), params.get("choice")
+        consent = link.phone_consent
+        if not is_id(cid) or choice not in ("ok", "always", "no") or consent is None:
+            raise CommandError("bad_request", "cid and choice are required")
+        return {"answered": bool(consent.answer(cid, choice))}
     elif method == "peer.line.chats":
         return {"chats": await lines.chats(_peer_id(params))}
     return {"line": await lines.status(_LINE_CHANNEL, _LINE_CHAT)}

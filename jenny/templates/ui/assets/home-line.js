@@ -350,6 +350,10 @@ export class HomeLine {
     } else if (msg.kind === 'item' && this.line) {
       (this.line.items = this.line.items || []).push(msg.item);
       this._appendItem(msg.item);
+    } else if (msg.kind === 'ask' && this.line) {
+      this._appendAsk(msg.ask);
+    } else if (msg.kind === 'ask_closed') {
+      this._dropAsk(msg.cid);
     } else if (msg.kind === 'closed') {
       const reason = msg.reason;
       this._setLine(null);
@@ -357,6 +361,43 @@ export class HomeLine {
         showToast(i18n.tOr(`home.line.closed.${reason}`, t('closed.closed'), { name: msg.name || '' }), 'error');
       }
     }
+  }
+
+  /** Una domanda dell'altra Jenny prima di usare un'app sul suo telefono
+   *  (`jenny/peers/phone_consent.py`): la frase la scrive questo codice, e i
+   *  tasti rispondono con `peer.line.answer`. */
+  _appendAsk(ask) {
+    if (!ask || typeof ask.cid !== 'string') return;
+    this._dropAsk(ask.cid);
+    this._stopWaiting();
+    const name = this.line?.name || '';
+    const node = el('div', 'home-msg home-msg-jenny home-line-ask');
+    node.dataset.lineAsk = ask.cid;
+    const costly = ask.kind === 'costly';
+    node.appendChild(el('div', 'home-block', costly
+      ? t('ask.costly', { name, what: ask.what || '', app: ask.app || '' })
+      : t('ask.app', { name, app: ask.app || '' })));
+    if (ask.goal) node.appendChild(el('div', 'home-line-ask-goal', `«${ask.goal}»`));
+    const keys = el('div', 'home-line-keys');
+    const options = Array.isArray(ask.options) ? ask.options : ['ok', 'no'];
+    for (const choice of ['ok', 'always', 'no']) {
+      if (!options.includes(choice) && choice !== 'no') continue;
+      keys.appendChild(button(`home-line-key${choice === 'ok' ? ' is-main' : ''}`,
+        t(`ask.${choice}`), () => {
+          this._dropAsk(ask.cid);
+          rpc.peer('line.answer', { cid: ask.cid, choice })
+            .catch(() => showToast(t('sayFailed'), 'error'));
+          if (choice !== 'no') this._startWaiting();
+        }));
+    }
+    node.appendChild(keys);
+    this.thread.appendChild(node);
+    this._toBottom();
+  }
+
+  _dropAsk(cid) {
+    if (typeof cid !== 'string') return;
+    this.thread.querySelector(`[data-line-ask="${CSS.escape(cid)}"]`)?.remove();
   }
 
   _appendNote(text) {

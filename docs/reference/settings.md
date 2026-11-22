@@ -65,6 +65,19 @@ There is no field for typing a model ID by hand on this page. You pick an ID fro
 
 She always docks on the right edge. That is not a setting.
 
+### Other Jennys
+
+The Jennys on your other phones, and your computer if it is linked ([Your other Jenny](../using/other-jennys.md)). The row shows their names.
+
+| Control | Effect | Default |
+|---|---|---|
+| **Talk** | Passes the line to that Jenny and takes you to the chat. | — |
+| **Can pass the line here** | From her phone you write straight to this Jenny, with the same powers as when you write here (`line`). | Off |
+| **Questions and requests** | One level out of four: *nothing*, *questions only*, *asks first*, *does everything*. It writes `canAsk` and `act` together. | questions only |
+| **Link another Jenny** | Three steps: show the QR here or type the other one's code; then her name, and the two switches above. | — |
+
+A linked computer shows only **Talk**. Files in answers, the history and unlinking are in the workshop: [Hands → Other Jennys](#other-jennys-1).
+
 ### Updates
 
 | Control | Effect |
@@ -250,6 +263,8 @@ Each linked Jenny is a row with its state (*Last contact*, *Not reachable*, *N w
 | **Can ask me questions** | That Jenny can ask this one questions, answered in a read-only turn (`canAsk`). | On |
 | **Answers can carry files** | Answers to that Jenny can attach files, up to 3 of 20 MB (`sendFiles`). | Off |
 | **Can ask me to do things** | `act`: **No**, **Yes, but ask me before sending anything out** (opening a page, downloading, a command on one of your servers or network access from code waits for **Allow** on a notification), or **Yes, everything**. | No |
+| **Can pass the line here** | From her phone you write straight to this Jenny, with the same powers as when you write here (`line`). Also in the house: **Settings → Other Jennys**. | Off |
+| **Leaves a two-line summary** | When a line from that Jenny closes, this one sends her two lines on what was said (`lineTrace`). | On |
 | **History** | Opens the list of questions, answers, files, tests and decisions, in both directions. Above it, **Requests to act**: the latest requests from that Jenny with their state (*In progress*, *Still working on it*, *Done*, *Refused*, *Undone*…) and **Undo**. | — |
 
 A row for **your Mac with opencode** ([Your Mac, with opencode](../using/other-jennys.md#your-mac-with-opencode)) is marked *Mac · opencode* and shows only **Test**, **Rename** / **Unlink** and **History**: the Mac answers questions and never asks this phone anything, so the permission rows have nothing to guard.

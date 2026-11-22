@@ -258,6 +258,9 @@ class PeerLines:
             raise PeerError("bad_channel")
         peer = await self._peer_by_ref(peer_ref)
         place = (place or "").strip()
+        if peer_kind(peer.kind) != KIND_JENNY:
+            # Un computer con opencode ha una chat sola: niente quaderni.
+            place = ""
         if place and not is_valid_project_name(place):
             raise PeerError("bad_place")
         key = out_key(channel, chat_id)
@@ -357,7 +360,7 @@ class PeerLines:
         # e richiusa non lascia una riga nella chat.
         if any(item.get("role") == "user" for item in items):
             await self._deliver_stub(
-                channel, chat_id, name=name, peer_id=row["peer"], lid=row["lid"],
+                name=name, peer_id=row["peer"], lid=row["lid"],
                 since=int(row["since_ms"]), until=now_ms(),
             )
         return True
@@ -399,10 +402,17 @@ class PeerLines:
         return [str(name) for name in body.get("chats") or [] if isinstance(name, str)]
 
     async def _deliver_stub(
-        self, channel: str, chat_id: str, *, name: str, peer_id: str, lid: str,
-        since: int, until: int,
+        self, *, name: str, peer_id: str, lid: str, since: int, until: int,
     ) -> None:
-        """«Hai parlato con Lavoro»: una scheda, e una riga nella storia di Jenny."""
+        """«Hai parlato con Lavoro»: una scheda, e una riga nella storia di Jenny.
+
+        Sempre nella chat di sempre della WebUI, che è la vista della
+        conversazione: da Telegram la chiusura è già detta con una riga sua
+        (il frame ``closed``), e il testo qui sotto è per il modello.
+        """
+        from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID
+
+        channel, chat_id = WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID
         card = {"peer": name, "peerId": peer_id, "lid": lid, "from": since, "to": until}
         # Il testo per la storia del modello: sa che c'è stato un buco, e di chi è.
         text = (
@@ -517,6 +527,32 @@ class PeerLines:
             taint=f"peer:{name}",
         )
         await self._db(self.store.log, peer_id, "in", KIND_LINE_TRACE, {})
+
+    async def _out_of_peer(self, peer_id: str) -> dict[str, Any] | None:
+        for row in await self._db(self.store.lines, "out"):
+            if row["peer"] == peer_id:
+                return row
+        return None
+
+    async def show_ask(self, peer_id: str, cid: str, ask: dict[str, Any]) -> None:
+        """Una domanda dell'altra Jenny («sto per usare Gmail, ok?») nel filo della linea.
+
+        La stessa che arriva come notifica (``jenny.peers.phone_consent``): qui
+        ha i suoi tasti dove l'utente sta scrivendo. La scrive il codice, non
+        il modello dell'altra.
+        """
+        row = await self._out_of_peer(peer_id)
+        if row is None:
+            return
+        channel, chat_id = _split_key(row["key"])
+        await self._emit(channel, chat_id, {"kind": "ask", "ask": {"cid": cid, **ask}})
+
+    async def hide_ask(self, peer_id: str, cid: str) -> None:
+        row = await self._out_of_peer(peer_id)
+        if row is None:
+            return
+        channel, chat_id = _split_key(row["key"])
+        await self._emit(channel, chat_id, {"kind": "ask_closed", "cid": cid})
 
     async def _on_nack(self, peer_id: str, kind: str, reason: str) -> None:
         """L'altra non conosce i messaggi della linea (una versione prima)."""

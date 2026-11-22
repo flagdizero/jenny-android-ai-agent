@@ -27,7 +27,8 @@ class _Link:
     def __init__(self, *, phone_confirm: bool = True, act: str = "confirm") -> None:
         self.handlers: dict[str, Any] = {}
         self.sent: list[tuple[str, str, dict[str, Any]]] = []
-        self.peer = SimpleNamespace(id=PEER, name="Personale", phone_confirm=phone_confirm, act=act)
+        self.peer = SimpleNamespace(id=PEER, name="Personale", phone_confirm=phone_confirm, act=act,
+                                    line=False)
 
     def register(self, kind: str, handler: Any) -> None:
         self.handlers[kind] = handler
@@ -152,3 +153,56 @@ async def test_a_closed_question_disappears_on_the_asking_side(rig) -> None:
     assert rig.hidden == []
     await rig.link.handlers[KIND_PHONE_CLOSED](PEER, {"cid": cid})
     assert rig.hidden == [cid] and rig.bridge.answer(cid, "ok") is False
+
+
+# -- Una linea passata: chi scrive è l'utente, dall'altro telefono ------------
+
+
+def _line_ctx(peer: str = PEER) -> RequestContext:
+    return RequestContext(channel="websocket", chat_id="default", session_key="unified:default",
+                          metadata={"_line_peer": peer, "_line_lid": "d" * 32})
+
+
+async def test_a_question_in_a_line_turn_travels_to_the_phone_the_user_holds(rig) -> None:
+    # Per una linea non serve ``phoneConfirm``: basta che la linea sia permessa.
+    rig.link.peer.phone_confirm = False
+    rig.link.peer.line = True
+    task, cid = await _ask(rig, origin="app", ctx=_line_ctx())
+    peer, kind, body = rig.link.sent[0]
+    assert (peer, kind) == (PEER, KIND_PHONE_ASK) and body["cid"] == cid
+    await rig.link.handlers[KIND_PHONE_REPLY](PEER, {"cid": cid, "choice": "ok"})
+    assert await task == "ok"
+
+
+async def test_a_line_that_is_no_longer_allowed_carries_no_answer(rig) -> None:
+    rig.link.peer.line = False
+    task, cid = await _ask(rig, origin="app", ctx=_line_ctx())
+    assert rig.link.sent == []
+    await rig.link.handlers[KIND_PHONE_REPLY](PEER, {"cid": cid, "choice": "ok"})
+    assert not task.done()
+    rig.asks.resolve(cid, "no")
+    assert await task == "no"
+
+
+async def test_the_question_is_also_drawn_in_the_line_thread(rig) -> None:
+    drawn: list[tuple[str, str, Any]] = []
+    hidden: list[tuple[str, str]] = []
+
+    async def show(peer_id: str, cid: str, ask: dict[str, Any]) -> None:
+        drawn.append((peer_id, cid, ask))
+
+    async def hide(peer_id: str, cid: str) -> None:
+        hidden.append((peer_id, cid))
+
+    rig.bridge.line_show, rig.bridge.line_hide = show, hide
+    cid = "e" * 32
+    await rig.link.handlers[KIND_PHONE_ASK](PEER, {
+        "cid": cid, "kind": "app", "app": "Gmail", "goal": "leggere le email",
+        "options": ["ok", "always", "no"],
+    })
+    await rig.settle()
+    assert drawn[0][:2] == (PEER, cid) and drawn[0][2]["app"] == "Gmail"
+    assert rig.bridge.answer(cid, "always") is True
+    await rig.settle()
+    assert hidden == [(PEER, cid)]
+    assert rig.link.sent[-1] == (PEER, KIND_PHONE_REPLY, {"cid": cid, "choice": "always"})

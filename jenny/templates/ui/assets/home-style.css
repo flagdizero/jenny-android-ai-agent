@@ -6826,3 +6826,8 @@ dialog.home-photo-viewer[open] { display: flex; }
   font-weight: 700;
 }
 .home-peers-big:active { filter: brightness(0.94); }
+
+/* Una domanda dell'altra Jenny nel filo della linea: la frase e i suoi tasti. */
+.home-line-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.home-line-keys .home-line-key { padding: 7px 14px; font-size: 14px; }
+.home-line-ask-goal { font-size: 13px; color: var(--text-muted); }

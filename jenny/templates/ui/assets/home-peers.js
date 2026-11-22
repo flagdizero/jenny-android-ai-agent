@@ -160,7 +160,10 @@ export class HomePeers {
     try {
       this.status = await rpc.peer('status');
       this.onStatus(this.status);
-    } catch { /* collegamenti non disponibili: la riga resta com'e' */ }
+    } catch {
+      /* Collegamenti non disponibili: la riga dice che non ce n'e' nessuna. */
+      if (!this.status) this.onStatus(null);
+    }
     return this.status;
   }
 

@@ -670,6 +670,26 @@ class AgentLoop(
         except Exception:  # noqa: BLE001 — il turno è comunque finito
             logger.opt(exception=True).warning("Peer request: end-of-turn hook failed")
 
+    async def _routed_to_line(self, msg: InboundMessage) -> bool:
+        """Vero se *msg* era per una linea aperta su quella chat, e ci è andato.
+
+        Vale per Telegram. La WebUI lo fa prima, nel canale
+        (``WebSocketChannel``), dove il messaggio non è ancora nel transcript;
+        e qui non deve valere per il canale ``websocket``: un messaggio arrivato
+        *da* una linea entra proprio da lì, e rimandarlo a una terza Jenny
+        sarebbe il secondo salto (``jenny.peers.line``).
+        """
+        if msg.channel != "telegram":
+            return False
+        lines = getattr(getattr(self, "peer_questions", None), "lines", None)
+        if lines is None:
+            return False
+        try:
+            return bool(await lines.route(msg.channel, msg.chat_id, msg.content))
+        except Exception:  # noqa: BLE001 — nel dubbio il messaggio resta a questa Jenny
+            logger.opt(exception=True).warning("Line: could not route a message")
+            return False
+
     def _peers_available(self) -> bool:
         questions = getattr(self, "peer_questions", None)
         return bool(questions is not None and questions.available())
@@ -1850,6 +1870,10 @@ class AgentLoop(
                 logger.warning("Error consuming inbound message: {}, continuing...", e)
                 continue
 
+            # Una chat passata a un'altra Jenny: il messaggio va a lei e qui non
+            # diventa un turno, nemmeno un comando.
+            if await self._routed_to_line(msg):
+                continue
             raw = msg.content.strip()
             effective_key = self._effective_session_key(msg)
             # Prima di tutto il resto, ``/init`` compreso: se la cartella legata

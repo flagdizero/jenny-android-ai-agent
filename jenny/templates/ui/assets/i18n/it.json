@@ -1776,7 +1776,14 @@
       "stubAt": "Hai parlato con {name} · {from}–{to}",
       "traceBy": "Riassunto scritto da {name}",
       "inOpen": "{name} ha la linea · dalle {time}",
-      "inClose": "{name} ha chiuso la linea · {time}"
+      "inClose": "{name} ha chiuso la linea · {time}",
+      "ask": {
+        "app": "Per farlo {name} deve usare {app} sul suo telefono. Posso?",
+        "costly": "{name} sta per toccare «{what}» in {app}: non si può annullare. Vado avanti?",
+        "ok": "Ok",
+        "always": "Sempre per questa app",
+        "no": "No"
+      }
     },
     "peers": {
       "title": "Altre Jenny",

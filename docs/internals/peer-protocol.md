@@ -159,6 +159,33 @@ One piece of a file that goes with an answer:
 
 Jenny honours `undo` only while that peer is still allowed to ask it to do things.
 
+### The line: `line_open`, `line_say`, `line_move`, `line_list`, `line_close`
+
+A **line** carries the user's own words from one side to the other: the user, on the passing side, writes to the receiving side as if typing there. The passing side sends these five; the receiving side answers with the four below. Every line has an id, `lid`, chosen by the side that opens it.
+
+```
+line_open   {"lid": <id>, "place": ""}            open; place is "" for the main chat, or a notebook's name
+line_say    {"lid": <id>, "mid": <id>, "text": …}  one message of the user, up to 8,000 characters
+line_move   {"lid": <id>, "place": "Suppliers"}    move the line to another chat of the receiving side
+line_list   {"rid": <id>}                          ask for the names of the chats that can be moved to
+line_close  {"lid": <id>}                          the user went back
+```
+
+The receiving side accepts a line only from a peer it allows to pass one. A `line_say` for a line it does not have open is answered with `line_state` `closed`, never handled.
+
+### `line_state`, `line_text`, `line_chats`, `line_trace`
+
+```
+line_state  {"lid": <id>, "state": "open" | "refused" | "closed", "place": "", "reason": "…"}
+line_text   {"lid": <id>, "text": …}               a final reply of the receiving side, up to 16,000 characters
+line_chats  {"rid": <id>, "ok": true, "chats": ["Suppliers", …]}
+line_trace  {"lid": <id>, "text": …}               after a close: a short summary, up to 400 characters
+```
+
+`line_state` answers `line_open` and `line_move`, and can arrive by itself when the receiving side closes the line. With `state` `open`, a `reason` of `no_place` means the chat asked for does not exist and the line is where `place` says. Other reasons, all with a state that is not `open`: `not_allowed` (the permission is off, or was turned off), `no_line` (there is no such line). `line_text` carries only finished replies: no partial text, reasoning or progress. `line_trace` is optional and may arrive long after the close, or never.
+
+A side that does not implement the line answers `nack unsupported` to `line_open`, and the passing side closes the line at once and says why.
+
 ## Compatibility
 
 - A new **kind** needs no version change: an older side answers `nack unsupported` and the sender drops it.
