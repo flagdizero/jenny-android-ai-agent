@@ -83,6 +83,9 @@ SHELL_WITHOUT_LISTENER = {
         # Il piano a lista ha la sua scheda nella chat del quaderno della casa
         # (``home-plan.js``); l'officina non lo mostra.
         "plan_changed": "la scheda del piano e' solo della casa",
+        # La linea passata a un'altra Jenny si apre e si legge dalla chat della
+        # casa (``home-line.js``); in officina resta il pannello dei permessi.
+        "line": "la linea passata e' solo della casa",
     },
 }
 

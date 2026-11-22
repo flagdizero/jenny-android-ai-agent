@@ -240,6 +240,8 @@ _UI_MANIFEST = [
     "assets/home-apps-trash.js",
     "assets/home-staged.js",
     "assets/home-plan.js",
+    "assets/home-line.js",
+    "assets/home-peers.js",
     "assets/home-model.js",
     "assets/home-pages.js",
     "assets/home-strip.js",

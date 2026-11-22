@@ -2903,6 +2903,7 @@ button.home-wakes-act:active { background: var(--active); }
 .home-jenny-room,
 .home-model-room,
 .home-updates-room,
+.home-peers-room,
 .home-backup-room {
   display: none;
   flex: 1;
@@ -2914,6 +2915,7 @@ button.home-wakes-act:active { background: var(--active); }
 .home-shell[data-view='jenny'] .home-jenny-room,
 .home-shell[data-view='model'] .home-model-room,
 .home-shell[data-view='updates'] .home-updates-room,
+.home-shell[data-view='peers'] .home-peers-room,
 .home-shell[data-view='backup'] .home-backup-room { display: flex; }
 
 /* Sei righe diventate una: da quando la chat sta dentro un pannello della
@@ -6426,3 +6428,401 @@ dialog.home-photo-viewer[open] { display: flex; }
 }
 .home-phone-forget:active { background: var(--active); }
 .home-card-note.is-warn { color: var(--warning); }
+
+
+/* ── La linea passata a un'altra Jenny (`home-line.js`) ──────────────────
+   A linea aperta la chat di sempre cambia in tre punti, tutti del colore
+   `--peer`: la testa al posto della fila, il composer, il tasto manda. Il
+   filo e' un contenitore suo, che prende il posto di quello della chat. */
+
+/* Il tasto ⇄: la forma del tasto Piano, accanto a lui. Una classe sua e non
+   quella del tasto Piano: chi cerca «il tasto Piano» per classe deve trovarne
+   uno solo. */
+.home-line-toggle {
+  flex: none;
+  height: 30px;
+  min-width: 30px;
+  margin-left: 2px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.home-line-toggle[hidden] { display: none; }
+.home-line-toggle .ti { font-size: 18px; }
+.home-line-toggle-label:empty { display: none; }
+.home-field:has(.home-line-toggle:not([hidden])) .home-input { padding-left: 8px; }
+/* Senza il tasto Piano (una chat dove i piani non ci sono) e' il primo del campo. */
+.home-field > .home-line-toggle:first-child,
+.home-plan-toggle[hidden] + .home-line-toggle { margin-left: 6px; }
+.home-field.is-line {
+  border-color: var(--peer);
+  box-shadow: 0 0 0 1px var(--peer), 0 0 14px color-mix(in oklab, var(--peer) 30%, transparent);
+}
+.home-field.is-line .home-line-toggle {
+  margin-left: 6px;
+  background: color-mix(in oklab, var(--peer) 18%, transparent);
+  border-color: color-mix(in oklab, var(--peer) 70%, transparent);
+  color: var(--peer);
+}
+.home-field.is-line .home-line-toggle-label {
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-send.is-line {
+  background: var(--peer);
+  color: var(--peer-ink);
+  box-shadow: 0 0 14px color-mix(in oklab, var(--peer) 45%, transparent);
+}
+.home-send.is-line .ti { color: var(--peer-ink); }
+/* Solo testo: a linea aperta niente Piano e niente allegati. */
+.home-field.is-line .home-plan-toggle,
+.home-field.is-line .home-attach { display: none; }
+
+/* La testa: l'intestazione delle stanze, col nome dell'altra. C'e' solo sulla
+   pagina della chat di sempre, dove prende il posto della fila. */
+.home-line-head,
+.home-shell[data-view='chat'] .home-line-head { display: none; }
+.home-shell.is-line[data-view='chat'][data-page='chat'] .home-line-head {
+  display: flex;
+  --path-line: var(--peer);
+}
+.home-shell.is-line[data-view='chat'][data-page='chat'] .home-strip { display: none; }
+.home-line-head .home-line-here .home-path-name { color: var(--peer); }
+.home-line-head .home-path-root,
+.home-line-head .home-line-here { border: 0; background: none; padding: 0; }
+.home-line-live {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.home-line-live i,
+.home-line-dot {
+  flex: none;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--peer);
+}
+.home-line-live.is-off i,
+.home-line-dot.is-off { background: var(--warning); }
+
+/* Il filo della linea al posto di quello della chat. In fondo lo spazio per
+   Jenny, come nel filo di sempre. */
+.home-chat.is-line > #home-thread,
+.home-chat.is-line > .home-empty { display: none; }
+.home-line-thread[hidden] { display: none; }
+.home-line-thread { padding-bottom: 92px; }
+.home-line-thread > :first-child { margin-top: auto; }
+.home-line-mark {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--peer);
+}
+.home-line-mark::before,
+.home-line-mark::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: color-mix(in oklab, var(--peer) 45%, transparent);
+}
+.home-line-mark .ti { font-size: 14px; }
+.home-line-wait .home-block { color: var(--text-muted); letter-spacing: .2em; }
+
+/* L'altra non risponde: sopra il campo, a sinistra perche' a destra c'e' lei. */
+.home-line-wire:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 84px;
+}
+.home-line-wire-text { flex: 1; min-width: 0; }
+.home-line-key {
+  flex: none;
+  padding: 4px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.home-line-key.is-main { border-color: var(--peer); color: var(--peer); }
+.home-line-key:active { background: var(--active); }
+
+/* Il foglio «Con chi parli»: la fila delle Jenny, e sotto le chat. */
+.home-line-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 4px 4px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.home-line-tabs::-webkit-scrollbar { display: none; }
+.home-line-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.home-line-tab.is-here {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+}
+.home-line-tab.is-peer {
+  border-color: var(--peer);
+  color: var(--peer);
+  background: color-mix(in oklab, var(--peer) 16%, transparent);
+}
+.home-line-tab.is-add { width: 40px; padding: 0; justify-content: center; border-style: dashed; }
+.home-line-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.home-line-row-text { flex: 1; min-width: 0; }
+.home-line-sheet .home-plan-sheet-row > .ti.is-peer,
+.home-line-check.is-peer { color: var(--peer); }
+.home-line-check { flex: none; color: var(--accent); }
+.home-line-nbdot { flex: none; width: 24px; display: grid; place-items: center; }
+.home-line-nbdot i { display: block; width: 11px; height: 11px; border-radius: 50%; }
+.home-line-note { margin-top: 10px; }
+
+/* Quel che resta in chat dopo una linea (`shared/peer-card.js`): il
+   segnaposto, le due righe dell'altra Jenny, e — sul telefono che la linea la
+   riceve — la riga di quando e' cominciata. */
+.home-line-stub {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+}
+.home-line-stub > .ti:first-child { color: var(--peer); font-size: 15px; }
+.home-line-stub b { color: var(--text); font-weight: 600; }
+.home-line-stub:active { background: var(--active); }
+.home-line-trace { display: grid; gap: 6px; }
+.home-line-trace-text {
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--peer);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.home-line-trace-by { font-size: 12px; color: var(--text-faint); }
+.home-line-in {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.home-line-in::before,
+.home-line-in::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.home-msg-jenny:has(> .home-line-in) { align-self: stretch; }
+
+
+/* ── La stanza «Altre Jenny» (`home-peers.js`) ───────────────────────────
+   Le collegate come schede: chi e', come sta, «Parla», e i permessi che
+   contano. Il colore e' quello di un'altra Jenny (`--peer`), lo stesso della
+   linea: qui si decide con chi si potra' parlare di la'. */
+.home-peers-card { padding: 0; display: flex; flex-direction: column; }
+.home-peers-top { display: flex; align-items: center; gap: 12px; padding: 12px 14px 10px; }
+.home-peers-top.is-flat { padding: 0; }
+.home-peers-badge {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--peer) 18%, transparent);
+  color: var(--peer);
+  font-size: 19px;
+}
+.home-peers-badge.is-computer { background: var(--overlay-strong); color: var(--text-muted); }
+.home-peers-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.home-peers-name {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--heading);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-peers-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.home-peers-net { padding: 2px 8px; }
+.home-peers-talk {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--peer);
+  border-radius: 999px;
+  background: none;
+  color: var(--peer);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.home-peers-talk:disabled { opacity: .45; }
+.home-peers-talk:active { background: color-mix(in oklab, var(--peer) 16%, transparent); }
+.home-peers-card .home-peers-row {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+.home-peers-sub { display: block; margin-top: 2px; font-size: 12px; color: var(--text-muted); font-weight: 400; }
+.home-peers-note { padding: 0 14px 12px; }
+.home-peers-flatnote { padding: 0; }
+.home-switch.is-peer.is-on { background: var(--peer); }
+.home-switch.is-peer.is-on .home-switch-knob { background: var(--peer-ink); }
+.home-peers-add {
+  flex: none;
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+}
+.home-peers-add .ti { color: var(--peer); font-size: 19px; }
+.home-peers-add:active { background: var(--active); }
+.home-peers-more { align-self: flex-start; }
+.home-peers-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 34px 20px 10px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.home-peers-empty .ti { font-size: 34px; color: var(--peer); }
+.home-peers-empty b { color: var(--heading); font-size: 16px; }
+/* Il collegamento: tre passi, e in cima quanti ne mancano. */
+.home-peers-steps { display: flex; justify-content: center; gap: 6px; margin: 2px 0 6px; }
+.home-peers-steps i { width: 22px; height: 3px; border-radius: 2px; background: var(--border-strong); }
+.home-peers-steps i.is-on { background: var(--peer); }
+.home-peers-lead { padding: 0 6px 4px; font-size: 14px; line-height: 1.45; color: var(--text); }
+.home-peers-choices { padding: 0; }
+.home-peers-choice {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.home-peers-choice + .home-peers-choice { border-top: 1px solid var(--border); }
+.home-peers-choice > .ti:first-child {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--peer) 16%, transparent);
+  color: var(--peer);
+  font-size: 22px;
+}
+.home-peers-choice-text { flex: 1; min-width: 0; }
+.home-peers-choice-text b { display: block; font-size: 15px; font-weight: 600; }
+.home-peers-choice:active { background: var(--active); }
+.home-peers-qr { display: flex; flex-direction: column; gap: 12px; padding: 18px 14px; }
+.home-peers-qr-title { text-align: center; font-size: 15px; font-weight: 600; color: var(--heading); }
+.home-peers-qr-box {
+  align-self: center;
+  width: min(208px, 60vw);
+  aspect-ratio: 1;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff;
+  display: grid;
+}
+.home-peers-qr-box svg { width: 100%; height: 100%; }
+.home-peers-code {
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: .12em;
+  color: var(--heading);
+}
+.home-peers-center { text-align: center; padding: 0 6px; }
+.home-peers-cancel { align-self: center; }
+.home-peers-form { display: flex; flex-direction: column; gap: 10px; padding: 16px 14px; }
+.home-peers-field { display: flex; flex-direction: column; gap: 4px; }
+.home-peers-field-label { font-size: 13px; color: var(--text-muted); }
+.home-peers-input { margin-top: 0; font-size: 15px; }
+.home-peers-big {
+  flex: none;
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--peer);
+  color: var(--peer-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+}
+.home-peers-big:active { filter: brightness(0.94); }

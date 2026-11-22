@@ -52,7 +52,7 @@ _CODE_FOR = {
 # I comandi della linea passata (``jenny.peers.line``), dalla chat della casa.
 LINE_METHODS = frozenset({
     "peer.line.status", "peer.line.open", "peer.line.close", "peer.line.move",
-    "peer.line.chats", "peer.line.retry",
+    "peer.line.chats", "peer.line.retry", "peer.line.say",
 })
 # La chat della WebUI da cui si passa la linea: solo quella di sempre.
 _LINE_CHANNEL = "websocket"
@@ -122,6 +122,11 @@ async def _line_command(link: PeerLink, method: str, params: dict[str, Any]) -> 
         await lines.move(_LINE_CHANNEL, _LINE_CHAT, _text(params, "place", limit=64))
     elif method == "peer.line.retry":
         await lines.retry(_LINE_CHANNEL, _LINE_CHAT)
+    elif method == "peer.line.say":
+        # Quel che l'utente ha scritto nel campo, a linea aperta. Senza una
+        # linea non diventa un messaggio per Jenny: chi chiama lo sa dal rifiuto.
+        if not await lines.route(_LINE_CHANNEL, _LINE_CHAT, _text(params, "text", limit=8000)):
+            raise PeerError("no_line")
     elif method == "peer.line.chats":
         return {"chats": await lines.chats(_peer_id(params))}
     return {"line": await lines.status(_LINE_CHANNEL, _LINE_CHAT)}

@@ -691,6 +691,14 @@ def replay_transcript_to_ui_messages(
         agent_ui = rec.get("agent_ui")
         if isinstance(agent_ui, dict) and isinstance(agent_ui.get("peer_answer"), dict):
             extra["peerAnswer"] = agent_ui["peer_answer"]
+        elif isinstance(agent_ui, dict):
+            # Quel che resta di una linea passata (``jenny.peers.line``): il
+            # segnaposto, le due righe dell'altra, la riga di chi l'ha ricevuta.
+            # Stesso campo, col tipo in ``line`` (``shared/peer-card.js``).
+            for key, kind in (("line_stub", "stub"), ("line_trace", "trace"), ("line_in", "in")):
+                if isinstance(agent_ui.get(key), dict):
+                    extra["peerAnswer"] = {**agent_ui[key], "line": kind}
+                    break
         origin = rec.get("origin")
         if isinstance(origin, str) and origin:
             extra["origin"] = origin

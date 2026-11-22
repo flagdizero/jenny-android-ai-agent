@@ -100,9 +100,72 @@ function markUndone(qid) {
   undoButtons.delete(qid);
 }
 
+/** La scheda che `agent_ui` porta, in una forma sola: la risposta di un'altra
+ *  Jenny così com'è, quel che resta di una linea con il suo tipo in `line`
+ *  (`stub`, `trace`, `in`). `null` se non ne porta. */
+export function cardOf(agentUi) {
+  if (!agentUi || typeof agentUi !== 'object') return null;
+  if (agentUi.peer_answer) return agentUi.peer_answer;
+  for (const [key, kind] of [['line_stub', 'stub'], ['line_trace', 'trace'], ['line_in', 'in']]) {
+    const card = agentUi[key];
+    if (card && typeof card === 'object') return { ...card, line: kind };
+  }
+  return null;
+}
+
+/** Quel che resta in chat di una linea passata (`jenny/peers/line.py`).
+ *
+ *  - `stub`: «Hai parlato con Lavoro · 10:02–10:15», che riapre la linea;
+ *  - `trace`: le due righe scritte dall'altra Jenny. Testo e basta, mai
+ *    markdown: è un dato arrivato da un altro telefono;
+ *  - `in`: sul telefono che la linea la riceve, da quando e fino a quando. */
+function lineCardNode(card) {
+  const name = card.peer;
+  if (card.line === 'stub') {
+    const from = timeOf(card.from);
+    const to = timeOf(card.to);
+    const btn = button('home-line-stub', null, async () => {
+      if (!ID_RE.test(card.peerId || '')) return;
+      btn.disabled = true;
+      try {
+        await rpc.peer('line.open', { id: card.peerId });
+      } catch (e) {
+        showToast(i18n.t('home.line.errors.generic'), 'error');
+      }
+      btn.disabled = false;
+    });
+    btn.appendChild(icon('ti-arrows-exchange'));
+    const label = el('span');
+    const text = from && to
+      ? i18n.t('home.line.stubAt', { name: '\u0000', from, to })
+      : i18n.t('home.line.stub', { name: '\u0000' });
+    const [before, after] = text.split('\u0000');
+    label.append(document.createTextNode(before || ''), el('b', null, name),
+      document.createTextNode(after || ''));
+    btn.appendChild(label);
+    btn.appendChild(icon('ti-chevron-right'));
+    if (ID_RE.test(card.lid || '')) btn.dataset.lineLid = card.lid;
+    return btn;
+  }
+  if (card.line === 'trace') {
+    const node = el('div', 'home-line-trace');
+    node.appendChild(el('div', 'home-line-trace-text', typeof card.text === 'string' ? card.text : ''));
+    node.appendChild(el('div', 'home-line-trace-by', i18n.t('home.line.traceBy', { name })));
+    return node;
+  }
+  const time = timeOf(card.at);
+  const node = el('div', 'home-line-in');
+  node.appendChild(icon('ti-arrows-exchange'));
+  node.appendChild(el('span', null, i18n.t(
+    card.event === 'close' ? 'home.line.inClose' : 'home.line.inOpen', { name, time },
+  )));
+  return node;
+}
+
 /** Il nodo della scheda, o `null` se *card* non è una risposta di un'altra Jenny. */
 export function peerCardNode(card) {
   if (!card || typeof card !== 'object' || typeof card.peer !== 'string') return null;
+  if (card.line) return lineCardNode(card);
   const status = STATUSES.has(card.status) ? card.status : 'failed';
   const act = card.mode === 'act';
   const node = el('div', `home-peer-card is-${status}${act ? ' is-act' : ''}`);

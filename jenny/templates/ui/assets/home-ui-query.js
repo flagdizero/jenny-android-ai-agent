@@ -37,6 +37,7 @@ const ROOM_ELEMENTS = {
   jenny: 'home-jenny-room',
   model: 'home-model-room',
   updates: 'home-updates-room',
+  peers: 'home-peers-room',
   backup: 'home-backup-room',
 };
 

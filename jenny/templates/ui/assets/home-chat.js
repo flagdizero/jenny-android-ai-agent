@@ -56,7 +56,7 @@ import { renderMediaList } from './shared/media.js';
 import { originBadge } from './shared/origin.js';
 import { copyWithToast, latencyText, renderReplyExtras } from './shared/reply.js';
 import { groupTurns, turnBoundary, turnIdOf } from './shared/turns.js';
-import { peerCardNode } from './shared/peer-card.js';
+import { cardOf, peerCardNode } from './shared/peer-card.js';
 
 /* Quanto lontano dal fondo si puo' essere e continuare a essere "in fondo".
    Sotto questa soglia il filo insegue i messaggi nuovi; sopra, no — chi sta
@@ -650,7 +650,7 @@ export class HomeChat {
       if (step || (msg.text && !msg.error)) this._dropPassing();
       else this._keepPassing();
     }
-    const peerCard = peerCardNode(msg.agent_ui?.peer_answer);
+    const peerCard = peerCardNode(cardOf(msg.agent_ui));
     if (peerCard) {
       this._ensureTurn().appendChild(peerCard);
     } else if (msg.text) {

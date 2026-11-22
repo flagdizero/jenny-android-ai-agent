@@ -50,7 +50,7 @@ export class HomeYou {
    *  @param onModel     la riga che porta a chi risponde.
    *  @param onUpdates   la riga che porta agli aggiornamenti.
    *  @param onBackup    la riga che porta al backup. */
-  constructor({ onWorkshop, onJenny, onModel, onUpdates, onBackup } = {}) {
+  constructor({ onWorkshop, onJenny, onModel, onUpdates, onBackup, onPeers } = {}) {
     this.el = document.getElementById('home-you');
     this.themesEl = document.getElementById('home-themes');
     this.themeLabel = document.getElementById('home-theme-label');
@@ -66,6 +66,8 @@ export class HomeYou {
     this.updatesValue = document.getElementById('home-updates-value');
     this.backupLabel = document.getElementById('home-backup-label');
     this.backupValue = document.getElementById('home-backup-value');
+    this.peersLabel = document.getElementById('home-peers-label');
+    this.peersValue = document.getElementById('home-peers-value');
     this._painted = false;
 
     document.getElementById('home-workshop')
@@ -78,6 +80,8 @@ export class HomeYou {
       ?.addEventListener('click', () => onUpdates?.());
     document.getElementById('home-row-backup')
       ?.addEventListener('click', () => onBackup?.());
+    document.getElementById('home-row-peers')
+      ?.addEventListener('click', () => onPeers?.());
     this.themesEl?.addEventListener('click', (e) => {
       const card = e.target.closest('[data-theme]');
       if (card) this.pickTheme(card.dataset.theme);
@@ -111,6 +115,11 @@ export class HomeYou {
     if (this.jennyValue) this.jennyValue.textContent = value || '';
   }
 
+  /** Le altre Jenny collegate, sulla loro riga: i nomi, o che non ce n'e'. */
+  sayPeers(value) {
+    if (this.peersValue) this.peersValue.textContent = value || '';
+  }
+
   /** Chi risponde, sulla riga che porta a sceglierlo: la marca. */
   sayModel(value) {
     if (this.modelValue) this.modelValue.textContent = value || '';
@@ -125,6 +134,7 @@ export class HomeYou {
     if (this.modelLabel) this.modelLabel.textContent = i18n.t('home.model.title');
     if (this.updatesLabel) this.updatesLabel.textContent = i18n.t('home.updates.title');
     if (this.backupLabel) this.backupLabel.textContent = i18n.t('home.backup.title');
+    if (this.peersLabel) this.peersLabel.textContent = i18n.t('home.peers.title');
     /* Il nome del tema non si traduce — «Jenny Kyoto» e' un nome — ma la frase
        che lo racconta si', e cambia con la lingua. */
     this._sayTheme();
