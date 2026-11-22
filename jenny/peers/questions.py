@@ -35,6 +35,7 @@ from typing import Any
 
 from loguru import logger
 
+from . import gate
 from .link import PeerError, PeerLink
 from .model import is_id, text_field
 from .store import new_id, now_ms
@@ -147,6 +148,8 @@ class PeerQuestions:
         self._deliver = deliver
         self._available = False
         self._tasks: set[asyncio.Task[Any]] = set()
+        # Le domande a cui un turno di questo processo sta rispondendo adesso.
+        self._answering: set[str] = set()
         self._expire_task: asyncio.Task[None] | None = None
         # Le richieste di fare (``jenny.peers.acting.PeerActs``), se il composition
         # root le lega: senza, una richiesta di fare che arriva è rifiutata.
@@ -266,16 +269,10 @@ class PeerQuestions:
             else:
                 media.append(self._workspace / got["path"])
         state = ("working" if working else "answered") if status == "ok" else status
-        await asyncio.to_thread(
-            self.store.set_question, peer_id, "out", qid, state=state, answer=text,
-        )
-        if act:
-            await asyncio.to_thread(self.store.set_done, peer_id, "out", qid, done)
-        await asyncio.to_thread(
-            self.store.log, peer_id, "in", KIND_ANSWER,
-            {"qid": qid, "status": status, "files": len(media), "mode": question.get("mode"),
-             "working": working},
-        )
+        # Prima la scheda, poi lo stato. La domanda segnata «risposta» è ciò che
+        # fa scartare un secondo arrivo come doppione: scritta prima, una scheda
+        # che non riusciva a partire non sarebbe più comparsa, nemmeno al
+        # nuovo invio che la coda fa dopo un gestore caduto.
         peer = await self._link._peer(peer_id)
         await self._deliver_card(
             name=peer.name if peer is not None else peer_id[:8],
@@ -289,6 +286,16 @@ class PeerQuestions:
             peer_id=peer_id,
             done=done,
             working=working,
+        )
+        await asyncio.to_thread(
+            self.store.set_question, peer_id, "out", qid, state=state, answer=text,
+        )
+        if act:
+            await asyncio.to_thread(self.store.set_done, peer_id, "out", qid, done)
+        await asyncio.to_thread(
+            self.store.log, peer_id, "in", KIND_ANSWER,
+            {"qid": qid, "status": status, "files": len(media), "mode": question.get("mode"),
+             "working": working},
         )
 
     async def _deliver_card(
@@ -361,6 +368,12 @@ class PeerQuestions:
             await self.refresh()
         except Exception:
             logger.opt(exception=True).warning("peers: first refresh failed")
+        try:
+            await self.recover_interrupted()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.opt(exception=True).warning("peers: recovering interrupted questions failed")
         while True:
             try:
                 await self.expire_due()
@@ -400,10 +413,16 @@ class PeerQuestions:
         peer = await self._link._peer(peer_id)
         if peer is None:
             return
+        # Segnata viva prima della riga: il recupero dell'avvio
+        # (:meth:`recover_interrupted`) non la prende per una rimasta a metà.
+        mine = qid not in self._answering
+        self._answering.add(qid)
         fresh = await asyncio.to_thread(
             self.store.add_question, peer_id, "in", qid, text, state="answering", mode=mode
         )
         if not fresh:
+            if mine:
+                self._answering.discard(qid)
             return
         await asyncio.to_thread(
             self.store.log, peer_id, "in", KIND_ASK,
@@ -412,7 +431,48 @@ class PeerQuestions:
         # In disparte: il messaggio ha già il suo ``ack``, la risposta è un altro.
         self._spawn(self._answer(peer, qid, text, mode))
 
+    async def recover_interrupted(self) -> int:
+        """Le domande arrivate qui e rimaste a metà: l'altra Jenny lo viene a sapere.
+
+        Una domanda è confermata (``ack``) appena arriva, e il turno che le
+        risponde vive solo in memoria: se il gateway si ferma in mezzo (Android
+        che chiude l'app, un riavvio) la riga resta ``answering`` e nessuno
+        risponde più. Chi aveva chiesto lo scopriva alla scadenza, 24 ore dopo,
+        con «non era raggiungibile». Al primo giro dopo l'avvio quelle righe
+        ricevono un ``failed``, che arriva subito e dice il vero.
+        """
+        rows = await asyncio.to_thread(self.store.interrupted_questions)
+        told = 0
+        for row in rows:
+            if row["qid"] in self._answering:
+                continue  # un turno vivo di questo processo: non è rimasta a metà
+            await asyncio.to_thread(
+                self.store.set_question, row["peer"], "in", row["qid"], state="failed", answer=""
+            )
+            body: dict[str, Any] = {"qid": row["qid"], "status": "failed", "text": "", "files": []}
+            if row["mode"] == "act":
+                body["mode"] = "act"
+            try:
+                await self._link.send(row["peer"], KIND_ANSWER, body)
+            except PeerError:
+                continue  # scollegata nel frattempo: non c'è a chi dirlo
+            await asyncio.to_thread(
+                self.store.log, row["peer"], "out", KIND_ANSWER,
+                {"qid": row["qid"], "status": "failed", "interrupted": True},
+            )
+            told += 1
+        if told:
+            logger.info("peers: {} question(s) were interrupted by a restart, answered failed", told)
+        return told
+
     async def _answer(self, peer: Any, qid: str, text: str, mode: str = "read") -> None:
+        self._answering.add(qid)
+        try:
+            await self._answer_now(peer, qid, text, mode)
+        finally:
+            self._answering.discard(qid)
+
+    async def _answer_now(self, peer: Any, qid: str, text: str, mode: str) -> None:
         cfg = await self._link._config()
         if mode == "act":
             asked = await asyncio.to_thread(
@@ -491,20 +551,24 @@ class PeerQuestions:
         )
         session_key = f"{PEER_SESSION_PREFIX}{peer.id}"
         token = PEER_TURN.set(turn)
+        # I file di configurazione non si leggono, come per ``peer_attach``: senza,
+        # «cosa c'è in config.json?» tornava con le chiavi dei provider e quella
+        # dell'accesso remoto (``gate.secret_root``).
         try:
-            outcome = await agent.process_direct_outcome(
-                prompt,
-                session_key=session_key,
-                channel=WEBSOCKET_CHANNEL,
-                chat_id="default",
-                on_progress=silent_progress,
-                tools=answer_tools(agent.tools),
-                visibility=TurnVisibility.SILENT,
-                metadata={
-                    WORKSPACE_READONLY_METADATA_KEY: True,
-                    "_taint": [f"peer:{peer.name}"],
-                },
-            )
+            with gate.answering(self._workspace):
+                outcome = await agent.process_direct_outcome(
+                    prompt,
+                    session_key=session_key,
+                    channel=WEBSOCKET_CHANNEL,
+                    chat_id="default",
+                    on_progress=silent_progress,
+                    tools=answer_tools(agent.tools),
+                    visibility=TurnVisibility.SILENT,
+                    metadata={
+                        WORKSPACE_READONLY_METADATA_KEY: True,
+                        "_taint": [f"peer:{peer.name}"],
+                    },
+                )
         finally:
             PEER_TURN.reset(token)
         try:

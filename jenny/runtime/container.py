@@ -957,7 +957,9 @@ class GatewayContainer:
         confirmations = Confirmations(
             post=lambda cid, name, what: notifier.post_peer_confirm(
                 cid, say("peer.confirm_title", peer=name, what=what),
-                say("peer.confirm_body", peer=name),
+                # Cosa e dove anche nel corpo, che va a capo: nel titolo un nome
+                # lungo si taglia, e resta in vista solo il suo inizio.
+                say("peer.confirm_body", peer=name, what=what),
             ),
             clear=lambda cid: notifier.clear_peer_notice("confirm", cid),
             on_change=confirmations_changed,
@@ -976,7 +978,7 @@ class GatewayContainer:
         questions.acts = acts
         link.acts = acts
         # Il cancello sulle uscite chiede a loro: livelli, conferme, cosa è uscito.
-        gate.install(acts)
+        gate.install(acts, root=Path(config.workspace_path))
 
         def on_peer_action(action: str, ident: str) -> None:
             # Un tasto di una notifica (``PeerActionReceiver``), già sul loop.

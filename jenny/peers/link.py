@@ -56,6 +56,14 @@ IDLE_CHECK_S = 300.0
 # motivo per far aspettare l'utente.
 UNPAIR_NOTIFY_S = 8.0
 NAME_MAX = 40
+# Il ``nack`` di un gestore caduto: «non adesso», da riprovare. Ogni altro
+# motivo (``unsupported``, ``bad``) è definitivo e toglie il messaggio dalla coda.
+NACK_RETRY = "failed"
+# Quante volte si riprova un messaggio che l'altra non riesce a trattare.
+HANDLER_RETRIES = 3
+# Quando l'altra sta già ricevendo la coda su un'altra connessione, quanto
+# aspettare prima di guardare se è rimasto qualcosa.
+BUSY_RETRY_S = 2.0
 
 Handler = Callable[[str, dict[str, Any]], Awaitable[None]]
 Dial = Callable[[str], Awaitable[Any]]
@@ -157,6 +165,8 @@ class PeerLink:
         self._kick = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
         self._send_locks: dict[str, asyncio.Lock] = {}
+        # I messaggi che l'altra non è riuscita a trattare, e quante volte.
+        self._handler_failures: dict[str, int] = {}
         self._background: set[asyncio.Task[Any]] = set()
         self._wakes = 0
         self._stopping = False
@@ -306,6 +316,7 @@ class PeerLink:
             raise PeerError("not_found")
 
         await self._mutate(apply)
+        await self._refresh_acts()
 
     async def set_permissions(
         self, peer_id: str, *, can_ask: bool | None = None, send_files: bool | None = None,
@@ -329,6 +340,23 @@ class PeerLink:
             raise PeerError("not_found")
 
         await self._mutate(apply)
+        await self._refresh_acts()
+
+    async def _refresh_acts(self) -> None:
+        """Il cancello delle richieste rilegge nomi e livelli **adesso**.
+
+        ``PeerActs`` ne tiene una copia in memoria, perché il cancello la legge
+        anche dai fili del codice. Senza questo un permesso abbassato restava
+        scritto in config e basta: il lavoro in corso e i promemoria già creati
+        continuavano col livello vecchio, e le conferme in attesa non
+        diventavano un no (revisione del 22/11/2026).
+        """
+        if self.acts is None:
+            return
+        try:
+            await self.acts.refresh()
+        except Exception:
+            logger.opt(exception=True).warning("peers: could not refresh the act levels")
 
     async def ping(self, peer_id: str) -> None:
         if await self._peer(peer_id) is None:
@@ -433,9 +461,20 @@ class PeerLink:
             "type": "pair_challenge", "from": mine, "nonce": nonce_a, "salt": pairing.salt,
         }))
         proof = await self._recv(ws, "pair_proof")
+        # Il tentativo si conta all'arrivo della prova, e il codice dev'essere
+        # ancora quello vivo: contato solo dopo il confronto, tante connessioni
+        # aperte insieme passavano tutte il controllo iniziale e venivano tutte
+        # valutate, anche a codice già chiuso (7 su 5, e un abbinamento riuscito
+        # dopo la chiusura, nella prova del 22/11/2026).
+        if self._pairing is not pairing or pairing.attempts >= auth.PAIR_MAX_ATTEMPTS:
+            logger.info("peers: pairing refused (the code is no longer open)")
+            return
+        pairing.attempts += 1
         key = await asyncio.to_thread(auth.code_key, pairing.code, pairing.salt)
+        if self._pairing is not pairing:
+            logger.info("peers: pairing refused (the code is no longer open)")
+            return
         if not auth.mac_ok(key, proof.get("mac"), "pair-b", peer_id, mine, nonce_b, nonce_a):
-            pairing.attempts += 1
             logger.warning("peers: wrong pairing code ({} of {})", pairing.attempts,
                            auth.PAIR_MAX_ATTEMPTS)
             if pairing.attempts >= auth.PAIR_MAX_ATTEMPTS:
@@ -731,17 +770,43 @@ class PeerLink:
                         if not rows:
                             break
                         for row in rows:
+                            try:
+                                body = await asyncio.to_thread(
+                                    files.wire_body, self._workspace, row["kind"], row["body"]
+                                )
+                            except (OSError, files.FileError) as exc:
+                                # Un pezzo che non si legge più (la copia in
+                                # uscita non c'è: la coda torna con un
+                                # ripristino, la copia no) non parte mai. Va
+                                # tolto: la coda è in ordine, e lasciato lì
+                                # fermava per sempre tutto quello che viene dopo.
+                                logger.warning("peers: dropping {} that can't be read ({})",
+                                               row["kind"], type(exc).__name__)
+                                await asyncio.to_thread(
+                                    self.store.log, peer_id, "sys", "refused",
+                                    {"kind": row["kind"], "reason": "unreadable"},
+                                )
+                                await asyncio.to_thread(self.store.remove, row["id"])
+                                continue
                             fut: asyncio.Future[tuple[str, str]] = loop.create_future()
                             waiting[row["id"]] = fut
                             await ws.send(model.encode({
                                 "type": "msg", "id": row["id"], "kind": row["kind"],
-                                "body": await asyncio.to_thread(
-                                    files.wire_body, self._workspace, row["kind"], row["body"]
-                                ),
+                                "body": body,
                                 "created_ms": row["created_ms"],
                             }))
                             verdict, reason = await asyncio.wait_for(fut, timeout=ACK_TIMEOUT_S)
                             waiting.pop(row["id"], None)
+                            if verdict == "nack" and reason == NACK_RETRY and self._may_retry(row["id"]):
+                                # L'altra non è riuscita a trattarlo *adesso*
+                                # (il suo gestore è caduto): resta in coda e si
+                                # riprova, col rinvio di ogni tentativo fallito.
+                                # Il rinvio si scrive qui: vale anche quando
+                                # questa è la connessione che l'altra ha aperto,
+                                # dove nessun giro della coda lo scriverebbe.
+                                await asyncio.to_thread(self.store.postpone, peer_id, now_ms())
+                                raise PeerError("peer_failed")
+                            self._handler_failures.pop(row["id"], None)
                             # Prima la riga in cronologia, poi via dalla coda:
                             # chi vede la coda vuota trova già detto perché.
                             if verdict == "nack":
@@ -804,14 +869,39 @@ class PeerLink:
         handler = self._handlers.get(kind)
         if handler is None:
             return {"type": "nack", "id": msg_id, "reason": "unsupported"}
-        if not await asyncio.to_thread(self.store.first_arrival, peer_id, msg_id, now_ms()):
+        if await asyncio.to_thread(self.store.arrived, peer_id, msg_id):
             return {"type": "ack", "id": msg_id}
+        # «Arrivato» si scrive **dopo** che il gestore è riuscito. Scritto prima,
+        # un gestore caduto o interrotto a metà lasciava il messaggio segnato
+        # come visto: il nuovo invio prendeva l'``ack`` del doppione e nessuno lo
+        # trattava più. I gestori reggono un secondo passaggio (le domande e le
+        # risposte si riconoscono dal loro ``qid``).
         try:
             await handler(peer_id, body)
+        except ValueError:
+            # Un messaggio malformato lo sarà anche al prossimo invio: non si riprova.
+            logger.opt(exception=True).warning("peers: {} is not a valid message", kind)
+            await asyncio.to_thread(self.store.first_arrival, peer_id, msg_id, now_ms())
+            return {"type": "nack", "id": msg_id, "reason": "bad"}
         except Exception:
             logger.opt(exception=True).warning("peers: handler for {} failed", kind)
-            return {"type": "nack", "id": msg_id, "reason": "failed"}
+            return {"type": "nack", "id": msg_id, "reason": NACK_RETRY}
+        await asyncio.to_thread(self.store.first_arrival, peer_id, msg_id, now_ms())
         return {"type": "ack", "id": msg_id}
+
+    def _may_retry(self, msg_id: str) -> bool:
+        """Vero finché un messaggio che l'altra non è riuscita a trattare va riprovato.
+
+        Il conto è in memoria: un riavvio lo azzera, e va bene (il tetto serve a
+        non tenere in testa alla coda, per sempre, un messaggio che l'altra non
+        tratterà mai).
+        """
+        count = self._handler_failures.get(msg_id, 0) + 1
+        if count > HANDLER_RETRIES:
+            self._handler_failures.pop(msg_id, None)
+            return False
+        self._handler_failures[msg_id] = count
+        return True
 
     # -- La coda ------------------------------------------------------------------------
 
@@ -852,10 +942,22 @@ class PeerLink:
             wakes = self._wakes
             try:
                 await self._deliver(peer)
+                # Un'altra connessione con quella Jenny sta già mandando la
+                # coda (ha chiamato lei, o un file sta passando): questa non
+                # ha mandato niente, e le righe restano «pronte». Senza una
+                # pausa il giro la richiamava subito, a centinaia di
+                # connessioni al secondo (677 in 3 s, misurate il 22/11/2026).
+                lock = self._send_locks.get(peer_id)
+                if lock is not None and lock.locked():
+                    now = now_ms()
+                    await asyncio.to_thread(
+                        self.store.defer, peer_id, now, now + int(BUSY_RETRY_S * 1000)
+                    )
             except Exception as exc:
                 code = exc.code if isinstance(exc, PeerError) else type(exc).__name__
                 now = now_ms()
-                await asyncio.to_thread(self.store.postpone, peer_id, now)
+                if code != "peer_failed":  # quel rinvio l'ha già scritto chi mandava
+                    await asyncio.to_thread(self.store.postpone, peer_id, now)
                 await asyncio.to_thread(self.store.note_failure, peer_id, now, code)
                 logger.info("peers: {} not reached ({}), will retry", peer.name, code)
                 # Una sveglia arrivata durante il tentativo vale ancora: il
