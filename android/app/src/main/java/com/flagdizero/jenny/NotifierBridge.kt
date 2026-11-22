@@ -651,6 +651,39 @@ class NotifierBridge(context: Context) {
             ),
         )
 
+    /**
+     * Chiede il consenso alle mani di Jenny: «sta per usare WhatsApp». Stessa
+     * notifica e stessa porta di [postPeerConfirm], con un tasto in più quando
+     * *always* è vero — «Sempre», che non chiede più per quell'app. Per un
+     * tasto che costa (paga, elimina) *always* è falso: lì si chiede ogni volta.
+     */
+    fun postPhoneAsk(cid: String, title: String, body: String, always: Boolean): Boolean =
+        postPeer(
+            PEER_KIND_CONFIRM, cid, title, body,
+            buildList {
+                add(peerAction(appContext, R.string.phone_no_label,
+                    PeerActionReceiver.ACTION_DENY, cid, needsUnlock = false))
+                if (always) {
+                    add(peerAction(appContext, R.string.phone_always_label,
+                        PeerActionReceiver.ACTION_ALWAYS, cid, needsUnlock = true))
+                }
+                add(peerAction(appContext, R.string.phone_ok_label,
+                    PeerActionReceiver.ACTION_ALLOW, cid, needsUnlock = true))
+            },
+        )
+
+    /** Dice che Jenny sta usando il telefono, con «Ferma». Lo stesso *id*
+     *  sostituisce la notifica; il tocco torna a Python come `stop`. Si toglie
+     *  con [clearPeerNotice] (`done`). */
+    fun postPhoneDriving(id: String, title: String, body: String): Boolean =
+        postPeer(
+            PEER_KIND_DONE, id, title, body,
+            listOf(
+                peerAction(appContext, R.string.phone_stop_label,
+                    PeerActionReceiver.ACTION_STOP, id, needsUnlock = false),
+            ),
+        )
+
     /** Dice che una richiesta dell'altra Jenny è fatta, con «Annulla». Lo
      *  stesso *qid* sostituisce la notifica. Il tocco torna a Python da
      *  `PeerActionReceiver` (`undo` con *qid*). */

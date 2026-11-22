@@ -16,6 +16,7 @@ from jenny.config.tool_schemas import (
     IntrospectToolConfig,
     LocationConfig,
     MyToolConfig,
+    PhoneConfig,
     PythonExecConfig,
     SshConfig,
 )
@@ -879,6 +880,7 @@ class ToolsConfig(Base):
         default_factory=AndroidWebToolsConfig,
         validation_alias=AliasChoices("androidWeb", "android_web"),
     )
+    phone: PhoneConfig = Field(default_factory=PhoneConfig)
     python_exec: PythonExecConfig = Field(
         default_factory=PythonExecConfig,
         validation_alias=AliasChoices("pythonExec", "python_exec"),

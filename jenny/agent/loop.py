@@ -874,6 +874,13 @@ class AgentLoop(
                 return True
             if peer_act_session and name == "install_update":
                 return True
+            # Le mani sul telefono: dalla chat personale (app, mascotte,
+            # Telegram, notifica, orologio: è la stessa sessione), dai suoi
+            # promemoria e su richiesta di un'altra Jenny. In un quaderno no.
+            # Se in quel turno si possa davvero lo decide il consenso
+            # (``jenny.phone.consent``), che risponde col motivo.
+            if name in ("phone_snapshot", "phone_do"):
+                return not (personal or personal_cron or peer_act_session)
             if not in_project:
                 return False
             return name == "recall_history"

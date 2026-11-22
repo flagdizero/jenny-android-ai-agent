@@ -143,6 +143,29 @@ class AndroidWebToolsConfig(Base):
     browser: AndroidWebBrowserConfig = Field(default_factory=AndroidWebBrowserConfig)
 
 
+class PhoneConfig(Base):
+    """Jenny che usa il telefono: apre le app, tocca, scrive (tool ``phone_*``).
+
+    ``mode`` è l'interruttore dell'utente: ``off`` spegne, ``confirm`` chiede
+    prima di usare un'app che non è in ``trusted_apps``, ``free`` non chiede
+    più («yolo»). Le azioni gravi — paga, compra, elimina, trasferisci —
+    chiedono **sempre**, anche in ``free``: lo decide ``jenny/phone/consent.py``,
+    non questa config.
+
+    ``trusted_apps`` sono i pacchetti per cui l'utente ha premuto «Sempre»
+    (più le voci ``link:<host>`` per i link aperti). Si svuota dalla stanza di
+    Jenny, una voce alla volta.
+
+    Spegnere ``mode`` non spegne il servizio di accessibilità: quello lo
+    accende e lo spegne l'utente da Android, ed è l'interruttore che rende la
+    cosa impossibile per costruzione.
+    """
+
+    mode: Literal["off", "confirm", "free"] = "confirm"
+    trusted_apps: list[str] = Field(default_factory=list)
+    max_snapshot_chars: int = Field(default=4000, ge=500, le=20000)
+
+
 class LocationConfig(Base):
     """Configurazione della posizione del dispositivo (solo Android).
 

@@ -40,6 +40,8 @@ class GatewayContainer:
         # Le domande fra Jenny (``jenny.peers.questions``): nascono col
         # collegamento, cioè col canale WebSocket, e si legano all'agente.
         self._peer_questions: Any = None
+        # Le domande in attesa delle mani di Jenny (``jenny.phone.consent``).
+        self._phone_asks: Any = None
         self.onboarding_event = asyncio.Event()
 
         # Collaboratori popolati da build().
@@ -861,6 +863,7 @@ class GatewayContainer:
 
             link.on_change = peers_changed
             self._wire_peer_questions(link, config)
+        self._wire_phone()
 
         # I giri delle estensioni impacchettate in questa build. Registrati
         # **sempre**: il loro interruttore si gira dalla WebUI a gateway acceso,
@@ -991,6 +994,39 @@ class GatewayContainer:
         self._peer_questions = questions
         if self._agent is not None:
             self._agent.attach_peer_questions(questions)
+
+    def _wire_phone(self) -> None:
+        """Le mani di Jenny: lega il consenso (``jenny.phone.consent``) alle
+        scelte dell'utente in ``config.json`` e ai posti in cui la domanda
+        compare. Sempre, anche senza altre Jenny: il cancello legge la
+        modalità a ogni azione, e con ``off`` risponde col motivo."""
+        from jenny.phone import consent
+        from jenny.runtime import native_input, notifier
+        from jenny.runtime.user_text import current_bot_name, say
+
+        asks = consent.PhoneAsks()
+
+        def notice(ask: consent.Ask) -> None:
+            name = current_bot_name()
+            if ask.kind == "costly":
+                title = say("phone.costly_title", name=name, what=ask.what, app=ask.app)
+                body = say("phone.costly_body", goal=ask.goal)
+            else:
+                title = say("phone.ask_title", name=name, app=ask.app)
+                body = say("phone.ask_body", goal=ask.goal)
+            notifier.post_phone_ask(ask.cid, title, body, always="always" in ask.options)
+
+        asks.posters.append(notice)
+        asks.clearers.append(lambda ask: notifier.clear_peer_notice("confirm", ask.cid))
+        consent.install(consent.ConfigSettings(), asks)
+
+        def on_phone_action(action: str, ident: str) -> bool:
+            # Un tasto di una notifica, già sul loop. Vero se la domanda era nostra.
+            choice = {"allow": "ok", "always": "always", "deny": "no"}.get(action)
+            return choice is not None and asks.resolve(ident, choice)
+
+        native_input.set_phone_action_handler(on_phone_action)
+        self._phone_asks = asks
 
     def _wire_plan_driver(self, agent: Any, config: Config) -> None:
         """Il driver dei piani a lista: nasce con l'agente, perché lo guida.

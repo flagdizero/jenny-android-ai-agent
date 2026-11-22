@@ -61,6 +61,7 @@ ALLOWED: dict[str, str] = {
     "jenny/runtime/floating.py:_BRIDGE.lock": "reset_floating_state",
     "jenny/runtime/wear.py:_BRIDGE.lock": "reset_wear_state",
     "jenny/runtime/screen.py:_BRIDGE.lock": "reset_screen_state",
+    "jenny/runtime/phone.py:_BRIDGE.lock": "reset_phone_state",
     "jenny/runtime/location.py:_BRIDGE.lock": "reset_location_state",
     "jenny/runtime/notifier.py:_BRIDGE.lock": "reset_notifier_state",
     "jenny/runtime/power.py:_BRIDGE.lock": "reset_power_state",

@@ -37,6 +37,11 @@
     <string name="screen_service_label">Jenny — lettura dello schermo</string>
     <string name="screen_service_summary">Jenny legge lo schermo solo quando tocchi la mascotte flottante</string>
     <string name="screen_service_description">Quando tocchi la mascotte flottante, Jenny legge una volta l\'app che sta sotto — il testo, l\'indirizzo della pagina e uno screenshot di quella sola app — così puoi chiederle qualcosa o fargliela salvare. Non legge mai da sola, non tocca e non scrive niente, e salta le app che vietano gli screenshot, come quelle bancarie e le schede in incognito. La lettura resta sul telefono, in memoria, finché non la usa o non passano dieci minuti.</string>
+    <string name="phone_ok_label">Ok</string>
+    <string name="phone_always_label">Sempre</string>
+    <string name="phone_no_label">No</string>
+    <string name="phone_stop_label">Ferma</string>
+
     <string name="hands_service_label">Jenny — usa il telefono</string>
     <string name="hands_service_summary">Jenny apre le app, tocca e scrive al posto tuo, quando glielo chiedi</string>
     <string name="hands_service_description">Quando chiedi a Jenny di fare qualcosa sul telefono, apre l\'app, legge lo schermo, tocca, scrive e scorre come faresti tu. Chiede prima di cominciare, puoi fermarla in ogni momento, e non scrive mai le password.</string>

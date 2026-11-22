@@ -61,6 +61,11 @@ class PhoneBridge(context: Context) {
         return PhoneActions.run(svc, JSONArray(stepsJson)).toString()
     }
 
+    /** Il pacchetto dell'app in primo piano, o `null` a servizio spento. È
+     *  quella su cui cadrebbe un tocco: Python ci chiede il consenso. */
+    fun foreground(): String? =
+        HandsService.instance?.rootInActiveWindow?.packageName?.toString()
+
     /** Il pacchetto dell'app che il modello ha chiamato per nome, o `null`. */
     fun resolveApp(app: String): String? = PhoneActions.resolvePackage(appContext, app)
 

@@ -60,6 +60,11 @@
     <string name="screen_service_label">Jenny — reading the screen</string>
     <string name="screen_service_summary">Jenny reads the screen only when you tap her floating mascot</string>
     <string name="screen_service_description">When you tap Jenny\'s floating mascot, she reads the app underneath once — its text, the page address and a screenshot of that app alone — so you can ask her about it or have her save it. She never reads on her own, never touches or types anything, and skips apps that block screenshots, such as banking apps and incognito tabs. The reading stays on the phone, in memory, until she uses it or ten minutes pass.</string>
+    <string name="phone_ok_label">Ok</string>
+    <string name="phone_always_label">Always</string>
+    <string name="phone_no_label">No</string>
+    <string name="phone_stop_label">Stop</string>
+
     <string name="hands_service_label">Jenny — using the phone</string>
     <string name="hands_service_summary">Jenny opens apps, taps and types for you, when you ask her</string>
     <string name="hands_service_description">When you ask Jenny to do something on the phone, she opens the app, reads what is on screen, taps, types and scrolls like you would. She asks before she starts, you can stop her at any moment, and she never types passwords.</string>

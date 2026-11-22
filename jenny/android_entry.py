@@ -96,6 +96,7 @@ def _reset_loop_bound_state() -> None:
         from jenny.runtime.location import reset_location_state
         from jenny.runtime.native_input import reset_native_input
         from jenny.runtime.notifier import reset_notifier_state
+        from jenny.runtime.phone import reset_phone_state
         from jenny.runtime.power import reset_power_state
         from jenny.runtime.screen import reset_screen_state
         from jenny.runtime.timezone_follow import reset_timezone_follow
@@ -117,6 +118,7 @@ def _reset_loop_bound_state() -> None:
         # Stesso motivo, per il WearBridge dell'orologio.
         reset_wear_state()
         reset_screen_state()
+        reset_phone_state()
         reset_location_state()
         # L'updater tiene una fase *sticky* e un ``UpdateBridge`` in cache: senza
         # questo reset un gateway che riparte nello stesso processo mostrerebbe

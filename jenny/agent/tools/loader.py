@@ -87,6 +87,7 @@ _HARDCODED_TOOL_MODULES = [
     "plan",
     "notebook",
     "peer",
+    "phone",
 ]
 
 

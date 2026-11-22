@@ -323,6 +323,38 @@ def post_peer_confirm(cid: str, title: str, body: str) -> None:
         logger.opt(exception=True).warning("Peer confirm notice failed")
 
 
+def post_phone_ask(cid: str, title: str, body: str, *, always: bool) -> None:
+    """Posta la domanda delle mani di Jenny per *cid*: «No», «Ok» e — con
+    *always* — «Sempre». Mai solleva.
+
+    Il tocco torna da ``native_input.on_native_peer_action`` come
+    ``"allow"``/``"always"``/``"deny"``. Si toglie con ``clear_peer_notice("confirm", cid)``.
+    """
+    try:
+        if not _peer_ident_ok(cid):
+            logger.warning("Phone question not posted: malformed cid")
+            return
+        title, body = _peer_text(title, body)
+        _peer_fire("postPhoneAsk", cid, title, body, bool(always))
+    except Exception:  # noqa: BLE001 — mai un'eccezione al chiamante
+        logger.opt(exception=True).warning("Phone question notice failed")
+
+
+def post_phone_driving(ident: str, title: str, body: str) -> None:
+    """Posta «Jenny sta usando il telefono», col pulsante «Ferma». Mai solleva.
+
+    Il tocco torna come ``"stop"``. Si toglie con ``clear_peer_notice("done", ident)``.
+    """
+    try:
+        if not _peer_ident_ok(ident):
+            logger.warning("Phone driving notice not posted: malformed ident")
+            return
+        title, body = _peer_text(title, body)
+        _peer_fire("postPhoneDriving", ident, title, body)
+    except Exception:  # noqa: BLE001 — mai un'eccezione al chiamante
+        logger.opt(exception=True).warning("Phone driving notice failed")
+
+
 def post_peer_done(qid: str, title: str, body: str) -> None:
     """Posta «fatto», col pulsante «Annulla», per la richiesta *qid*. Mai solleva.
 

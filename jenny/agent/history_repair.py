@@ -58,6 +58,7 @@ COMPACTABLE_TOOLS = frozenset(
         "list_exec_sessions",
         "browser_read",
         "browser_snapshot",
+        "phone_snapshot",
         "ssh_exec",
         "get_recent_logs",
         "get_source",

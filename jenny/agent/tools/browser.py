@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
-import re
 import time
 from typing import Any
 
@@ -33,6 +32,13 @@ from jenny.agent.tools.schema import (
     ObjectSchema,
     StringSchema,
     tool_parameters_schema,
+)
+from jenny.security.costly_words import (
+    ACCESS_VERBS,
+    COSTLY_RE,
+    COSTLY_VERBS,
+    SENSITIVE_RE,
+    SENSITIVE_VERBS,
 )
 
 # Il proprietario della sessione di Jenny. Gli aiutanti usano il loro
@@ -200,23 +206,11 @@ def _no_slot_error(max_sessions: int, waited_s: float) -> str:
 # Confronto a parola intera: "ordina" non deve scattare su "ordinamento", e
 # "conferma" da sola non deve scattare su ogni banner dei cookie — per questo
 # c'e' "conferma ordine" e non "conferma".
-_COSTLY_VERBS = (
-    r"pag(?:a|are|amento)", r"acquist(?:a|are|o)", r"compra", r"ordina",
-    r"conferma ordine", r"procedi al pagamento", r"abbonati",
-    r"pay", r"buy", r"purchase", r"checkout", r"place order", r"subscribe",
-    r"elimin(?:a|are)", r"cancell(?:a|are)", r"rimuov(?:i|ere)", r"svuota",
-    r"delete", r"remove", r"empty (?:cart|trash)",
-    r"trasferisc(?:i|ere)", r"bonifico", r"invia denaro", r"transfer", r"send money",
-)
-_ACCESS_VERBS = (
-    # "entra" e' l'etichetta di accesso piu' comune sui siti italiani, e senza
-    # di essa l'interlocco non copre il caso piu' frequente qui. Il confine di
-    # parola la tiene stretta: non scatta su "rientra", "entrata", "centrale".
-    r"accedi", r"entra", r"sign in", r"log ?in",
-)
-_SENSITIVE_VERBS = _COSTLY_VERBS + _ACCESS_VERBS
-_SENSITIVE_RE = re.compile(r"\b(?:" + "|".join(_SENSITIVE_VERBS) + r")\b", re.IGNORECASE)
-_COSTLY_RE = re.compile(r"\b(?:" + "|".join(_COSTLY_VERBS) + r")\b", re.IGNORECASE)
+_COSTLY_VERBS = COSTLY_VERBS
+_ACCESS_VERBS = ACCESS_VERBS
+_SENSITIVE_VERBS = SENSITIVE_VERBS
+_SENSITIVE_RE = SENSITIVE_RE
+_COSTLY_RE = COSTLY_RE
 
 
 def _is_sensitive(name: str) -> bool:
