@@ -670,6 +670,10 @@ class NotifierBridge(context: Context) {
                 add(peerAction(appContext, R.string.phone_ok_label,
                     PeerActionReceiver.ACTION_ALLOW, cid, needsUnlock = true))
             },
+            // Con la pillola a schermo la domanda è già davanti all'utente: la
+            // notifica resta nella tendina ma non scende sopra l'app. Sul
+            // Titan, il 22/11/2026, copriva proprio la sveglia da eliminare.
+            quiet = PhonePill.canShow(appContext),
         )
 
     /** Dice che Jenny sta usando il telefono, con «Ferma». Lo stesso *id*
@@ -728,6 +732,7 @@ class NotifierBridge(context: Context) {
         title: String,
         body: String,
         actions: List<NotificationCompat.Action>,
+        quiet: Boolean = false,
     ): Boolean {
         if (!PeerActionReceiver.isValidIdent(ident)) {
             Log.w(TAG, "Peer notice not posted: malformed ident")
@@ -760,6 +765,9 @@ class NotifierBridge(context: Context) {
                     )
                 )
             actions.forEach { builder.addAction(it) }
+            // «Silenziosa» toglie suono, vibrazione e la comparsa sopra l'app;
+            // il canale resta quello degli avvisi, che l'utente conosce.
+            if (quiet) builder.setSilent(true)
             val manager = appContext.getSystemService(NotificationManager::class.java)
                 ?: return false
             manager.notify(tag, PEER_NOTICE_ID, builder.build())

@@ -29,6 +29,12 @@ import android.widget.TextView
  *   mette **in pausa** (Continua · Ferma): le mani sono due, e sono le sue;
  * * **esito** — cosa ha fatto, che sparisce da sola.
  *
+ * La domanda sta sopra alle altre due: finché non ha una risposta, né una
+ * pausa né un aggiornamento della guida la tolgono da schermo. Sul Titan, il
+ * 22/11/2026, un tocco dell'utente durante «Ok?» la sostituiva con la pausa, e
+ * «Continua» rimetteva la guida: la domanda restava aperta senza un posto in
+ * cui rispondere, se non la notifica.
+ *
  * ## Perché è una finestra del servizio di accessibilità
  *
  * `TYPE_ACCESSIBILITY_OVERLAY` e non l'overlay della mascotte: non serve il
@@ -70,6 +76,11 @@ object PhonePill {
     @Volatile
     private var driving: String? = null
     private var drivingText = ""
+
+    /** La domanda a schermo, finché non ha una risposta ([askDone]). */
+    private class Question(val cid: String, val title: String, val body: String, val always: Boolean)
+
+    private var question: Question? = null
     private val hide = Runnable { remove() }
 
     /** I tasti a schermo adesso, per [debugPress]. */
@@ -85,21 +96,19 @@ object PhonePill {
 
     /** Mostra la domanda *cid*. */
     fun ask(cid: String, title: String, body: String, always: Boolean): Boolean = onMain {
-        val svc = HandsService.instance ?: return@onMain false
-        val buttons = buildList {
-            add(svc.getString(R.string.phone_no_label) to { send(svc, PeerActionReceiver.ACTION_DENY, cid) })
-            if (always) {
-                add(svc.getString(R.string.phone_always_label) to { send(svc, PeerActionReceiver.ACTION_ALWAYS, cid) })
-            }
-            add(svc.getString(R.string.phone_ok_label) to { send(svc, PeerActionReceiver.ACTION_ALLOW, cid) })
-        }
-        show(svc, title, body, buttons)
+        HandsService.instance ?: return@onMain false
+        question = Question(cid, title, body, always)
+        // La domanda riguarda il passo che sta per partire: dopo la risposta
+        // la guida mostra quello, non il testo del passo di prima.
+        val goal = body.trim().removeSurrounding("«", "»").trim()
+        if (driving != null && goal.isNotEmpty()) drivingText = goal
+        draw()
     }
 
     /** Toglie la domanda e torna alla guida, se ce n'è una. */
     fun askDone(): Boolean = onMain {
-        val id = driving
-        if (id == null) remove() else drawDriving(id)
+        question = null
+        if (driving == null) remove() else draw()
         true
     }
 
@@ -108,12 +117,23 @@ object PhonePill {
         if (driving != id) PhoneActions.begin()
         driving = id
         drivingText = text
-        drawDriving(id)
+        draw()
+    }
+
+    /** La pillola si può vedere adesso? Servizio acceso, schermo acceso e non
+     *  bloccato. Lo chiede [NotifierBridge]: con la pillola a schermo la
+     *  notifica della stessa domanda arriva in silenzio. */
+    fun canShow(context: Context): Boolean {
+        if (HandsService.instance == null) return false
+        val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        return pm.isInteractive && !km.isKeyguardLocked
     }
 
     /** Fine della guida: con *text* resta l'esito per qualche secondo. */
     fun done(text: String?): Boolean = onMain {
         driving = null
+        question = null
         val svc = HandsService.instance
         if (text.isNullOrBlank() || svc == null) {
             remove()
@@ -133,8 +153,19 @@ object PhonePill {
     fun detach() {
         main.post {
             driving = null
+            question = null
             remove()
         }
+    }
+
+    /** Nasconde la pillola per il tempo di una foto ([PhoneShot]): resta dov'è,
+     *  solo non si vede. Aspetta un fotogramma, così la foto la trova già via. */
+    fun hidden(hide: Boolean) {
+        onMain {
+            view?.alpha = if (hide) 0f else 1f
+            true
+        }
+        if (hide) Thread.sleep(80)
     }
 
     /** Sposta la pillola in basso se il punto (x, y) ci cade sopra: un gesto
@@ -154,8 +185,21 @@ object PhonePill {
         Thread.sleep(120)
     }
 
-    private fun drawDriving(id: String): Boolean {
+    /** Disegna la faccia giusta per lo stato di adesso: la domanda, se ce n'è
+     *  una; altrimenti la pausa o la guida. */
+    private fun draw(): Boolean {
         val svc = HandsService.instance ?: return false
+        question?.let { q ->
+            val buttons = buildList {
+                add(svc.getString(R.string.phone_no_label) to { send(svc, PeerActionReceiver.ACTION_DENY, q.cid) })
+                if (q.always) {
+                    add(svc.getString(R.string.phone_always_label) to { send(svc, PeerActionReceiver.ACTION_ALWAYS, q.cid) })
+                }
+                add(svc.getString(R.string.phone_ok_label) to { send(svc, PeerActionReceiver.ACTION_ALLOW, q.cid) })
+            }
+            return show(svc, q.title, q.body, buttons)
+        }
+        val id = driving ?: return false
         return if (PhoneActions.paused) {
             show(
                 svc, svc.getString(R.string.phone_paused), null,
@@ -163,7 +207,7 @@ object PhonePill {
                     svc.getString(R.string.phone_stop_label) to { send(svc, PeerActionReceiver.ACTION_STOP, id) },
                     svc.getString(R.string.phone_continue_label) to {
                         PhoneActions.resume()
-                        drawDriving(id)
+                        draw()
                     },
                 ),
             )
@@ -241,14 +285,16 @@ object PhonePill {
 
     /** Un tocco fuori dalla pillola mentre Jenny guida: se non è suo, pausa. */
     private fun outsideTouch() {
-        val id = driving ?: return
-        if (PhoneActions.paused) return
+        if (driving == null) return
+        // Con una domanda a schermo Jenny è ferma ad aspettare: non c'è un
+        // gesto da interrompere, e la pausa coprirebbe la domanda.
+        if (question != null || PhoneActions.paused) return
         val since = SystemClock.elapsedRealtime() - PhoneActions.injectedAt
         Log.i(TAG, "Touch outside the pill, ${since}ms after Jenny's last gesture")
         if (since < OWN_TOUCH_MS) return
         PhoneActions.pause()
         Log.i(TAG, "The user touched the screen: paused")
-        drawDriving(id)
+        draw()
     }
 
     private fun remove() {

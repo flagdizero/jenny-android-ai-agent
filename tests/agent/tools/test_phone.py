@@ -181,3 +181,95 @@ def test_the_debug_receiver_does_nothing_outside_debuggable_builds() -> None:
     manifest = _xml("AndroidManifest.xml")
     block = manifest[manifest.index('android:name=".DebugPhoneReceiver"'):][:300]
     assert 'android:permission="android.permission.DUMP"' in block
+
+
+# ── App che non danno nomi: la foto, e il punto ──────────────────────────────
+
+UNNAMED = {
+    "version": 7, "package": "org.x", "app": "X", "secure": False, "refs": 5, "unnamed": 5,
+    "truncated": False, "text": '- button "" [ref=7:e1]\n- button "" [ref=7:e2]', "index": {},
+}
+
+
+async def test_a_screen_of_nameless_buttons_points_to_the_screenshot(fake) -> None:
+    fake["snap"] = UNNAMED
+    out = await tool.PhoneSnapshotTool().execute()
+    assert "screenshot=true" in out
+
+
+async def test_a_screen_with_names_does_not_suggest_a_screenshot(fake) -> None:
+    fake["snap"] = {**UNNAMED, "unnamed": 1}
+    assert "screenshot=true" not in await tool.PhoneSnapshotTool().execute()
+    assert "screenshot=true" not in await tool.PhoneSnapshotTool().execute(filter=None)
+
+
+async def test_a_screenshot_comes_back_as_a_picture_with_the_reading(
+    fake, monkeypatch, tmp_path,
+) -> None:
+    async def screenshot(path: str, max_side: int) -> dict[str, Any] | None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_bytes(b"\xff\xd8jpeg")
+        fake["shot"] = (path, max_side)
+        return {"width": 1024, "height": 1024}
+
+    monkeypatch.setattr(tool.runtime, "screenshot", screenshot)
+    monkeypatch.setattr(tool, "get_uploads_dir", lambda: tmp_path / "uploads")
+    monkeypatch.setattr(tool, "get_workspace_path", lambda: tmp_path)
+    out = await tool.PhoneSnapshotTool().execute(screenshot=True)
+    assert isinstance(out, list) and out[0]["type"] == "image_url"
+    assert out[0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    text = out[1]["text"]
+    assert text.startswith(tool._UNTRUSTED_BANNER)
+    assert "1024×1024" in text and "uploads/phone/" in text and "x and y" in text
+    assert fake["shot"][1] == tool._SHOT_MAX_SIDE
+    assert fake["untrusted"] == ["phone:com.android.settings"]
+
+
+async def test_an_app_that_forbids_screenshots_gives_no_picture(fake, monkeypatch) -> None:
+    async def screenshot(path: str, max_side: int) -> dict[str, Any] | None:
+        return {"secure": True}
+
+    monkeypatch.setattr(tool.runtime, "screenshot", screenshot)
+    out = await tool.PhoneSnapshotTool().execute(screenshot=True)
+    assert isinstance(out, str) and "forbids screenshots" in out
+
+
+async def test_do_passes_points_through_to_the_phone(fake) -> None:
+    steps = [{"action": "tap", "x": 300, "y": 420}]
+    await tool.PhoneDoTool().execute(goal="aprire il gruppo", steps=steps)
+    assert fake["acted"] == [steps]
+
+
+def test_the_pill_keeps_a_question_above_pause_and_driving() -> None:
+    """Una domanda aperta non la copre né la pausa né la guida: sul Titan, il
+    22/11/2026, restava senza un posto in cui rispondere."""
+    src = read_source("PhonePill")
+    draw = src[src.index("private fun draw()"):src.index("private fun send(")]
+    assert draw.index("question?.let") < draw.index("PhoneActions.paused")
+    outside = src[src.index("private fun outsideTouch()"):src.index("private fun remove()")]
+    assert "question != null" in outside
+
+
+def test_the_question_notification_is_quiet_when_the_pill_shows() -> None:
+    src = read_source("NotifierBridge")
+    ask = src[src.index("fun postPhoneAsk"):src.index("fun postPhoneDriving")]
+    assert "quiet = PhonePill.canShow(appContext)" in ask
+    assert "if (quiet) builder.setSilent(true)" in src
+
+
+def test_an_unknown_app_name_lists_the_apps_that_are_there() -> None:
+    src = read_source("PhoneActions")
+    assert "?: throw Refusal(notFound(svc, app))" in src
+    assert "Apps on this phone:" in src and "no launcher icon" in src
+
+
+def test_a_point_needs_a_screenshot_to_refer_to() -> None:
+    src = read_source("PhoneActions")
+    point = src[src.index("private fun point("):src.index("private fun tapAt(")]
+    assert "PhoneShot.ready" in point and "outside the screenshot" in point
+
+
+def test_the_debug_receiver_has_no_feasibility_leftovers() -> None:
+    src = read_source("DebugPhoneReceiver")
+    for gone in ('"pill"', '"wake"', '"launch"'):
+        assert gone not in src

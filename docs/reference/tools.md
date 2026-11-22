@@ -298,11 +298,13 @@ What is on the phone's screen **right now**, in whatever app is open: one line p
 | Parameter | Behavior |
 |---|---|
 | `filter` | Keep only the lines containing this text |
+| `screenshot` | Also return a picture of the screen (JPEG, long side 1,024 px, saved under `uploads/phone/`) |
 
 - A `ref` carries the snapshot's version and dies with it: after an action the screen is another one.
 - A clickable row with no name of its own is named after what it contains, and that content is not repeated under it.
 - **Apps that block screenshots are not read**, and password fields never come through — the same rules as `screen`.
 - Capped at `tools.phone.maxSnapshotChars` (4,000); past it the snapshot says it was cut.
+- When almost no element has a name — an app that draws its own screen — the snapshot says so and points to `screenshot`. The picture is taken without the pill, and never of an app that blocks screenshots.
 - Everything it returns is untrusted, and marks the turn.
 
 ### phone_do
@@ -313,14 +315,16 @@ Use the phone like a person. `goal` is one sentence saying what and where — it
 |---|---|
 | `open_app` | `app` — a name ("WhatsApp") or a package |
 | `open_link` | `url` — opened by the app that handles it |
-| `tap`, `long_press` | `ref` |
+| `tap`, `long_press` | `ref`, or `x` and `y`: a point of the latest screenshot, in its pixels |
 | `type` | `text`, optional `ref` (else the field with the cursor), optional `enter` |
 | `scroll` | `direction` (`up`/`down`), optional `ref` |
-| `swipe` | `direction` (`up`/`down`/`left`/`right`) |
+| `swipe` | `direction` (`up`/`down`/`left`/`right`), or `x`,`y` → `x2`,`y2` |
 | `back`, `home`, `recents`, `notifications` | — |
 | `wait` | `ms`, at most 5,000 |
 
 - **Consent comes first, and is not the tool's to give.** Before the first step the runner asks `jenny/phone/consent.py`: off, an app to confirm (Ok / Always / No), a tap that pays or deletes (always asked), a password field (always refused). A refusal comes back as an ordinary result.
+- **A tap on a point** is asked about like a tap on a ref when the app names what is under it (so a "Delete" still always asks); where nothing there has a name it asks every time, Ok or No, except in `free`.
+- An `open_app` that finds no app answers with the names of the apps installed, as the phone shows them.
 - At most 12 steps per call.
 - With the screen off it turns it on first, if that takes no PIN, and turns it off when the turn ends.
 - While it runs, a pill on screen offers Stop; a touch of yours pauses the steps.
