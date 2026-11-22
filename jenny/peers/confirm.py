@@ -82,7 +82,8 @@ class Confirmations:
         loop = asyncio.get_running_loop()
         cid = secrets.token_hex(16)
         pending = _Pending(
-            cid=cid, peer=peer, peer_name=peer_name, qid=qid, what=what[:200],
+            # Un nome host arriva a 253 caratteri, e la parte che conta è la fine.
+            cid=cid, peer=peer, peer_name=peer_name, qid=qid, what=what[:320],
             at_ms=now_ms(), future=loop.create_future(),
         )
         self._pending[cid] = pending

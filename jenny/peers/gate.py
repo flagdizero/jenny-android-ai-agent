@@ -15,15 +15,21 @@ dalla config di questo telefono (``PeerConfig.act``):
 
 - ``free``: passa tutto;
 - ``confirm``: le uscite verso un indirizzo scelto dal modello
-  (:data:`URL_TOOLS`, :data:`BLIND_TOOLS`) aspettano un «Consenti» dell'utente di
-  qui; la rete dal codice (``python_exec``) è chiusa, e il rifiuto dice di usare
-  ``web_fetch``, che chiede;
+  (:data:`URL_TOOLS`, :data:`BLIND_TOOLS`) e i comandi su un server dell'utente
+  (:data:`SSH_TOOLS`) aspettano un «Consenti» dell'utente di qui; la rete dal
+  codice (``python_exec``) è chiusa, e il rifiuto dice di usare ``web_fetch``,
+  che chiede;
 - ``off`` (il permesso tolto mentre il lavoro era in corso, o un promemoria
   rimasto da una richiesta vecchia): le uscite sono rifiutate.
 
 Restano liberi ``message`` (arriva solo all'utente stesso), ``web_search`` (va
 solo al motore di ricerca), e tutto ciò che scrive sul telefono: lo prende il
 registro dell'annulla. ``install_update`` è rifiutato sempre.
+
+**Cosa non si legge.** Un turno che lavora per un'altra Jenny — una domanda o
+una richiesta — non legge ``config.json`` né le sue copie (:func:`secret_root`,
+applicato da ``security.subagent_policy``): la risposta torna all'altro
+telefono, e chiavi e token non sono fra le cose che gli si dicono.
 
 Questo modulo non importa niente del resto di Jenny: lo chiamano il runner
 (:func:`before_tool`) e la politica di rete di ``python_exec``
@@ -38,6 +44,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
@@ -49,6 +56,10 @@ PEER_ACT_META = "_peer_act"
 URL_TOOLS = frozenset({"web_fetch", "browser_open", "download_file"})
 #: Quelli che agiscono dentro una pagina già aperta, dove la destinazione non si vede.
 BLIND_TOOLS = frozenset({"browser_do"})
+#: Quelli che lavorano su un server dell'utente (un aiutante ``sysadmin``): il
+#: server è uno di quelli registrati, ma il comando lo sceglie il modello, e da lì
+#: un ``curl`` porta fuori quel che il comando contiene. La conferma dice quale.
+SSH_TOOLS = frozenset({"ssh_exec", "ssh_job", "ssh_transfer"})
 #: Una sessione di codice nata fuori dalla richiesta non porta il cancello.
 CODE_SESSION_TOOLS = frozenset({"write_stdin"})
 #: Mai, da una richiesta di un altro telefono.
@@ -86,13 +97,46 @@ class ActGate:
 
 
 _GATE: ContextVar[ActGate | None] = ContextVar("jenny_peer_act_gate", default=None)
+# La radice dell'installazione, mentre un turno risponde a una domanda di
+# un'altra Jenny (``jenny.peers.questions``): quel turno non ha un cancello
+# (non può uscire), ma ha gli stessi file da non leggere.
+_ANSWERING: ContextVar[Path | None] = ContextVar("jenny_peer_answering", default=None)
 _AUTHORITY: Authority | None = None
+_ROOT: Path | None = None
 
 
-def install(authority: Authority | None) -> None:
-    """Lega (o scioglie, con ``None``) chi decide. Senza, ogni uscita è rifiutata."""
-    global _AUTHORITY
+def install(authority: Authority | None, root: Path | str | None = None) -> None:
+    """Lega (o scioglie, con ``None``) chi decide. Senza, ogni uscita è rifiutata.
+
+    *root* è la radice dell'installazione: serve a :func:`secret_root` per i
+    turni delle richieste di fare, che il loop lega senza saperla.
+    """
+    global _AUTHORITY, _ROOT
     _AUTHORITY = authority
+    _ROOT = Path(root) if authority is not None and root is not None else None
+
+
+@contextmanager
+def answering(root: Path | str) -> Iterator[None]:
+    """Il contesto di un turno che risponde a una domanda di un'altra Jenny."""
+    token = _ANSWERING.set(Path(root))
+    try:
+        yield
+    finally:
+        _ANSWERING.reset(token)
+
+
+def secret_root() -> Path | None:
+    """La radice i cui file segreti questo contesto non legge, o ``None``.
+
+    Vale per un turno che lavora per un'altra Jenny (domanda o richiesta): quel
+    che legge può finire nella risposta, cioè su un altro telefono. Gli aiutanti
+    hanno già la loro regola (``subagent_policy``), che non dipende da questa.
+    """
+    root = _ANSWERING.get()
+    if root is not None:
+        return root
+    return _ROOT if _GATE.get() is not None else None
 
 
 def act_of(metadata: Any) -> dict[str, str] | None:
@@ -193,7 +237,7 @@ async def before_tool(name: str, params: Any) -> str | None:
         return None
     if name in NEVER_TOOLS:
         return _refusal(gate, name, "that is not something to do on request from another phone.")
-    if name not in URL_TOOLS and name not in BLIND_TOOLS and name not in CODE_SESSION_TOOLS:
+    if name not in (URL_TOOLS | BLIND_TOOLS | SSH_TOOLS | CODE_SESSION_TOOLS):
         return None
     args = params if isinstance(params, Mapping) else {}
     level = _level(gate)
@@ -211,6 +255,13 @@ async def before_tool(name: str, params: Any) -> str | None:
         target = _host(url) or url[:200]
         action = "download" if name == "download_file" else "open"
         what = f"open {target}" if action == "open" else f"download from {target}"
+    elif name in SSH_TOOLS:
+        # L'alias di un server registrato dall'utente, col suo prefisso: un
+        # «sì» a un server non vale per il sito che ha lo stesso nome.
+        alias = " ".join(str(args.get("host") or "").split())[:80]
+        target = f"ssh:{alias}"
+        action = "ssh"
+        what = f"run commands on the server {alias!r}"
     else:
         target = "browser"
         action = "browser"
@@ -259,10 +310,12 @@ __all__ = [
     "CODE_SESSION_TOOLS",
     "NEVER_TOOLS",
     "PEER_ACT_META",
+    "SSH_TOOLS",
     "URL_TOOLS",
     "ActGate",
     "Authority",
     "act_of",
+    "answering",
     "before_tool",
     "bind",
     "current",
@@ -271,4 +324,5 @@ __all__ = [
     "install",
     "network_refusal",
     "reset",
+    "secret_root",
 ]
