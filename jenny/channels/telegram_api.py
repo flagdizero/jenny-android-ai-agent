@@ -111,7 +111,8 @@ class TelegramAPI:
         """Long-poll degli update; il timeout HTTP supera quello lato server."""
         payload: dict[str, Any] = {
             "timeout": timeout_s,
-            "allowed_updates": ["message"],
+            # ``callback_query``: il tocco su un tasto in linea (v. ``send_buttons``).
+            "allowed_updates": ["message", "callback_query"],
         }
         if offset is not None:
             payload["offset"] = offset
@@ -124,11 +125,33 @@ class TelegramAPI:
         text: str,
         *,
         parse_mode: str | None = None,
+        buttons: list[tuple[str, str]] | None = None,
     ) -> dict[str, Any]:
+        """Manda un messaggio; con *buttons* — ``(etichetta, dato)`` — sotto
+        compare una riga di tasti in linea, e il tocco torna come
+        ``callback_query`` con quel dato (al massimo 64 byte)."""
         payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
         if parse_mode:
             payload["parse_mode"] = parse_mode
+        if buttons:
+            payload["reply_markup"] = {"inline_keyboard": [[
+                {"text": label, "callback_data": data} for label, data in buttons
+            ]]}
         return await self._call("sendMessage", payload)
+
+    async def answer_callback(self, callback_id: str, text: str | None = None) -> Any:
+        """Chiude l'attesa del tasto premuto (la rotellina), con un avviso breve."""
+        payload: dict[str, Any] = {"callback_query_id": callback_id}
+        if text:
+            payload["text"] = text[:180]
+        return await self._call("answerCallbackQuery", payload)
+
+    async def clear_buttons(self, chat_id: str, message_id: int) -> Any:
+        """Toglie i tasti da un messaggio: la domanda ha avuto risposta."""
+        return await self._call("editMessageReplyMarkup", {
+            "chat_id": chat_id, "message_id": message_id,
+            "reply_markup": {"inline_keyboard": []},
+        })
 
     async def send_media_file(
         self,

@@ -141,6 +141,10 @@ class WebSocketDispatcher:
         )
         logger.info("WebSocket channel enabled")
 
+    #: Il gestore dei tasti in linea di Telegram, legato da chi costruisce il
+    #: gateway (le domande di ``jenny.phone.consent``). ``None``: nessuno.
+    telegram_on_button: Any = None
+
     def _init_telegram(self) -> None:
         """Crea il canale Telegram se abilitato in config con un token.
 
@@ -169,6 +173,9 @@ class WebSocketDispatcher:
             on_paired=record_paired,
             runtime_events=self._runtime_events,
         )
+        # Chi riceve i tasti in linea: sta qui e non sul canale, che un cambio
+        # di impostazioni ricrea (``reload_telegram``).
+        self.channels["telegram"].on_button = self.telegram_on_button
         logger.info("Telegram channel enabled")
 
     def _init_notification(self) -> None:

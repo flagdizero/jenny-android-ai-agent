@@ -1036,7 +1036,58 @@ class GatewayContainer:
                 always="always" in ask.options,
             ))
 
-        asks.posters.extend([notice, pill])
+        telegram_messages: dict[str, int] = {}
+
+        def telegram_channel() -> Any:
+            return (getattr(self.channels, "channels", None) or {}).get("telegram")
+
+        def telegram(ask: consent.Ask) -> None:
+            # Chi ha chiesto da Telegram non è davanti al telefono: la domanda
+            # gli arriva lì, con gli stessi tasti.
+            channel = telegram_channel()
+            if ask.origin != "telegram" or channel is None:
+                return
+            name = current_bot_name()
+            if ask.kind == "costly":
+                text = say("phone.costly_title", name=name, what=ask.what, app=ask.app)
+                text += "\n" + say("phone.costly_body", goal=ask.goal)
+            else:
+                text = say("phone.ask_title", name=name, app=ask.app)
+                text += "\n" + say("phone.ask_body", goal=ask.goal)
+            labels = {"no": say("phone.no"), "always": say("phone.always"), "ok": say("phone.ok")}
+            buttons = [
+                (labels[c], f"ph:{ask.cid}:{c}") for c in ("no", "always", "ok")
+                if c in ask.options
+            ]
+
+            async def send() -> None:
+                message_id = await channel.send_buttons(text, buttons)
+                if message_id is not None:
+                    telegram_messages[ask.cid] = message_id
+
+            spawn(send())
+
+        def telegram_clear(ask: consent.Ask) -> None:
+            channel = telegram_channel()
+            message_id = telegram_messages.pop(ask.cid, None)
+            if channel is not None and message_id is not None:
+                spawn(channel.clear_buttons(message_id))
+
+        async def telegram_button(data: str) -> str | None:
+            kind, _, rest = data.partition(":")
+            cid, _, choice = rest.partition(":")
+            if kind != "ph" or not asks.resolve(cid, choice):
+                return say("phone.too_late")
+            return None
+
+        if self.channels is not None:
+            self.channels.telegram_on_button = telegram_button
+        channel = telegram_channel()
+        if channel is not None:
+            channel.on_button = telegram_button
+
+        asks.posters.extend([notice, pill, telegram])
+        asks.clearers.append(telegram_clear)
         asks.clearers.append(lambda ask: notifier.clear_peer_notice("confirm", ask.cid))
         asks.clearers.append(lambda ask: spawn(phone_runtime.pill_ask_done()))
         consent.install(consent.ConfigSettings(), asks)
