@@ -319,7 +319,7 @@ export class HomePeers {
       return row;
     });
     openActionSheet(this.sheet, {
-      children: [...sheetHead(t('askTitle', { name: p.name }), t('askNote')), ...rows],
+      children: [...sheetHead(t('askTitle', { name: p.name }), t('askNote', { name: p.name })), ...rows],
       closeLabel: i18n.t('common.close'),
       cls: 'home-line-sheet',
     });

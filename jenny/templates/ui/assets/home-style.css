@@ -6831,3 +6831,6 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-line-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
 .home-line-keys .home-line-key { padding: 7px 14px; font-size: 14px; }
 .home-line-ask-goal { font-size: 13px; color: var(--text-muted); }
+
+/* La linea passata, con la chat sul velo: il nome dell'altra nel suo colore. */
+.home-over-head.is-line .home-over-title .home-path-name { color: var(--peer); }

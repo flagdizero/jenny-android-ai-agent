@@ -723,7 +723,12 @@ class HomeApp {
     this.pathRoot?.addEventListener('click', () => this.goToPathRoot());
     this.editBtn?.addEventListener('click', () => this.reader.startEdit());
     /* Le voci del percorso nel velo (v. `_applyOverTitle`). */
-    this.overBack?.addEventListener('click', () => this.closeChatOver());
+    /* A linea passata la freccia del velo torna alla tua Jenny (e il velo
+       resta); altrimenti lo chiude, come Indietro. */
+    this.overBack?.addEventListener('click', () => {
+      if (this.line?.isOpenHere()) this.line.close();
+      else this.closeChatOver();
+    });
     this.overNotebooks?.addEventListener('click', () => this._overToNotebooks());
     this.overNotebook?.addEventListener('click', () => this._overToBoard());
 
@@ -3094,6 +3099,18 @@ class HomeApp {
     this._paintDot(this.overDot, color);
     if (color) this.overHead?.style.setProperty('--path-line', color);
     else this.overHead?.style.removeProperty('--path-line');
+    /* La chat di sempre passata a un'altra Jenny (`home-line.js`): anche sul
+       velo la testa dice con chi parli — il suo nome, e il quaderno se la
+       linea e' li' — nel suo colore, e la freccia torna a casa. */
+    const line = this.line?.isOpenHere() ? this.line.line : null;
+    this.overHead?.classList.toggle('is-line', Boolean(line));
+    if (line) {
+      this.overName.textContent = line.place ? `${line.name} › ${line.place}` : line.name;
+      if (this.overBack) this.overBack.hidden = false;
+      this.overHead?.style.setProperty('--path-line', 'var(--peer)');
+    }
+    this.overBack?.setAttribute('aria-label',
+      i18n.t(line ? 'home.line.back' : 'home.over.close'));
   }
 
   /** QUADERNI, nella testa del velo: la chat scende e si va all'elenco dei
@@ -3144,7 +3161,7 @@ class HomeApp {
     this.over?.host?.setAttribute('aria-label', i18n.t('home.over.label'));
     this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
     document.getElementById('home-over-path')?.setAttribute('aria-label', i18n.t('home.path.label'));
-    this.overBack?.setAttribute('aria-label', i18n.t('home.over.close'));
+    if (!this.line?.isOpenHere()) this.overBack?.setAttribute('aria-label', i18n.t('home.over.close'));
     if (this.editLabel) this.editLabel.textContent = i18n.t('home.reader.edit');
     this.reader?.applyTranslations();
     this.audit?.applyTranslations();
