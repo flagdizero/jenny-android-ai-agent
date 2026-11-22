@@ -47,7 +47,7 @@ def driver(workspace: Path) -> PlanDriver:
 # ── i canali ────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("channel", ["telegram", "floating", "notification"])
+@pytest.mark.parametrize("channel", ["telegram", "floating", "notification", "wear"])
 async def test_planning_does_not_reach_the_other_channels(
     driver: PlanDriver, channel: str
 ) -> None:

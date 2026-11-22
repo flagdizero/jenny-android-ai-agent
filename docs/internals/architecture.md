@@ -89,7 +89,7 @@ Jenny has **four** channels, all owned by `WebSocketDispatcher` (`jenny/channels
 | Notification | `jenny/channels/notification.py` | Android only. A reply typed into one of Jenny's notifications comes in on this channel, and her answer goes back as a system alert. No connection of its own. |
 | Floating | `jenny/channels/floating.py` | Android only. The floating mascot's bubble: what you type there comes in on this channel, and the answer is shown in the bubble. |
 
-`WebSocketDispatcher` also owns retry, delta coalescing for streaming updates, and progress-message filtering per channel — see [`dispatcher.py`](../../jenny/channels/dispatcher.py). This is a decomposition, not a generic channel registry: the four channels are wired explicitly in `_init_channel()`/`_init_telegram()`/`_init_notification()`/`_init_floating()`, not discovered.
+`WebSocketDispatcher` also owns retry, delta coalescing for streaming updates, and progress-message filtering per channel — see [`dispatcher.py`](../../jenny/channels/dispatcher.py). This is a decomposition, not a generic channel registry: the five channels are wired explicitly in `_init_channel()`/`_init_telegram()`/`_init_notification()`/`_init_floating()`/`_init_wear()`, not discovered.
 
 Useful docs:
 

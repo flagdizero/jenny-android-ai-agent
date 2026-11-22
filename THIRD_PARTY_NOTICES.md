@@ -38,6 +38,9 @@ OFL text and the per-font copyright notices are in `vendor/fonts/LICENSE.txt`.
 - **Per-theme display fonts** (`theme-fonts.css`) — Tenor Sans, Orbitron,
   Shippori Mincho, Baloo 2, Bangers, Comic Neue, Fredoka, Marcellus.
 
+The Wear OS app bundles one more, **Unbounded**, under
+`android/wear/src/main/assets/fonts/`, also under the SIL Open Font License 1.1.
+
 ## Bundled Python packages
 
 Chaquopy installs the wheels pinned in `requirements-android.lock.txt` into the
@@ -87,9 +90,15 @@ table says otherwise.
 | [Markwon](https://github.com/noties/Markwon) `core`, `ext-strikethrough`, `ext-tables`, `ext-tasklist`, `linkify`, `html` | 4.6.2 | Apache-2.0 | both |
 | [commonmark-java](https://github.com/commonmark/commonmark-java) (pulled in by Markwon, with its GFM strikethrough and tables extensions) | 0.13.0 | BSD-2-Clause | both |
 | Google Play services `play-services-auth` (with the `play-services-*` libraries it pulls in) | 21.2.0 | Android Software Development Kit License (proprietary) | `play` only |
+| Google Play services `play-services-wearable` (with the `play-services-*` libraries it pulls in) | 19.0.0 | Android Software Development Kit License (proprietary) | `play` only |
 
 The `foss` build contains no Google library; `play-services-auth` is there only
-for the encrypted copy on Google Drive.
+for the encrypted copy on Google Drive, `play-services-wearable` only for the
+watch (the Data Layer).
+
+The Wear OS app (`android/wear/`, a separate APK) carries `play-services-wearable`
+19.0.0 and AndroidX `watchface-complications-data-source` 1.3.0 (Apache-2.0). It talks only to the `play`
+build: there is no `foss` watch app.
 
 ## Bundled Android libraries — SSH
 
@@ -110,8 +119,9 @@ Both licenses are permissive and compatible with this project's AGPL-3.0 grant.
 
 ## Mascot artwork
 
-The Jenny mascot artwork (`android/image_source/`, and the WebP poses derived
-from it under `jenny/templates/ui/assets/`) is original work, copyright © 2026
+The Jenny mascot artwork (`android/image_source/`, the WebP poses derived
+from it under `jenny/templates/ui/assets/`, and the PNG poses of the watch app
+under `android/wear/src/main/res/drawable-nodpi/`) is original work, copyright © 2026
 Ludovico Ragno, and is **not** covered by the AGPL grant — see
 [TRADEMARK.md](./TRADEMARK.md).
 

@@ -78,3 +78,20 @@ def test_a_reminder_asked_from_the_bubble_is_delivered_to_the_personal_chat() ->
         twin, turn_seed="cron:from-bubble", source_label="Chiama Anna"
     )
     assert metadata.keys() == expected.keys() and metadata
+
+
+def test_a_reminder_asked_from_the_watch_is_delivered_to_the_personal_chat() -> None:
+    """Come per il fumetto: quando il job scatta l'app sul polso è chiusa, e
+    l'indirizzo della domanda di allora non porta più a nessuno."""
+    job = CronJob(
+        id="from-watch",
+        name="Annaffia",
+        payload=CronPayload(
+            message="annaffia il basilico",
+            session_key="unified:default",
+            origin_channel="wear",
+            origin_chat_id="shade",
+            origin_metadata={"_native_thread": "node-1/q-42"},
+        ),
+    )
+    assert origin_delivery_context(job) == ("websocket", "default", {})

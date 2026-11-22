@@ -17,6 +17,7 @@ from jenny.bus.events import (
     COORDINATION_FLAGS,
     FLOATING_CHANNEL,
     NOTIFICATION_CHANNEL,
+    WEAR_CHANNEL,
     WEBSOCKET_CHANNEL,
     WEBUI_DEFAULT_CHAT_ID,
     OutboundMessage,
@@ -95,6 +96,7 @@ class WebSocketDispatcher:
         self._init_telegram()
         self._init_notification()
         self._init_floating()
+        self._init_wear()
 
     def _init_channel(self) -> None:
         """Initialize the WebSocket channel from the top-level websocket config."""
@@ -220,6 +222,28 @@ class WebSocketDispatcher:
 
         self.channels[FLOATING_CHANNEL] = FloatingChannel()
         logger.info("Floating channel enabled")
+
+    def _init_wear(self) -> None:
+        """Crea il canale dell'orologio. Solo su Android.
+
+        Senza interruttore, come la tendina: il canale è solo la strada del
+        ritorno, e una domanda dal polso può arrivare soltanto se l'app
+        dell'orologio esiste ed è associata. Nella build ``foss`` il canale c'è
+        ma non riceve mai niente — il ricevitore del Data Layer sta solo nella
+        ``play`` — quindi non ha mai niente da consegnare.
+
+        Fuori da Android il canale non esiste, per la stessa ragione degli altri
+        due canali nativi.
+        """
+        from jenny.runtime.context import get_android_context
+
+        if get_android_context() is None:
+            logger.info("Wear channel not available (no Android context)")
+            return
+        from jenny.channels.wear import WearChannel
+
+        self.channels[WEAR_CHANNEL] = WearChannel()
+        logger.info("Wear channel enabled")
 
     @property
     def enabled(self) -> bool:

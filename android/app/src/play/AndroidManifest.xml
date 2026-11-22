@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Il manifest del flavor `play`, fuso con quello di `main`. Contiene solo ciò
+     che usa codice Google e quindi non può stare nella `foss`. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Le domande dall'orologio (Data Layer). Esportato perché lo chiama
+             Google Play services; il filtro sul percorso tiene fuori tutto il
+             resto. V. WearListener.kt e android/wear-protocol. -->
+        <service
+            android:name=".WearListener"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/jenny/"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

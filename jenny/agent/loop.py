@@ -65,6 +65,7 @@ from jenny.bus.events import (
     FLOATING_CHANNEL,
     INTERNAL_CHANNEL,
     NOTIFICATION_CHANNEL,
+    WEAR_CHANNEL,
     WEBSOCKET_CHANNEL,
     WEBUI_TURN_METADATA_KEY,
     InboundMessage,
@@ -203,9 +204,9 @@ def _new_turn_id(session_key: str) -> str:
 # un wakelock eterno scarica la batteria senza dare spiegazioni.
 _TURN_WAKELOCK_TIMEOUT_S = 1800.0
 
-# I canali dove l'utente scrive: i quattro che alimentano la sessione unificata.
+# I canali dove l'utente scrive: i cinque che alimentano la sessione unificata.
 _CHAT_CHANNELS = frozenset(
-    {WEBSOCKET_CHANNEL, "telegram", NOTIFICATION_CHANNEL, FLOATING_CHANNEL}
+    {WEBSOCKET_CHANNEL, "telegram", NOTIFICATION_CHANNEL, FLOATING_CHANNEL, WEAR_CHANNEL}
 )
 
 # I turni che il runner chiude con un avviso invece di una risposta
