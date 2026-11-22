@@ -242,6 +242,17 @@ _LINE_REFUSALS = {
                  "back arrow, or /torna) and ask their own Jenny.",
 }
 
+# Perché l'altra non ha preso la linea (il motivo che torna da `PeerLines.settled`).
+_LINE_CLOSED = {
+    "not_allowed": "{name} does not take the line from this phone: the user allows it on "
+                   "{name}'s phone, in her Settings, under the other Jennys, with the switch "
+                   "that lets this phone pass the line there (describe it in the user's "
+                   "language; do not quote an English label).",
+    "unsupported": "{name} runs an older version that cannot take the line yet: it needs "
+                   "an update.",
+    "unpaired": "{name} is no longer linked to this phone.",
+}
+
 
 @tool_parameters(
     tool_parameters_schema(
@@ -315,10 +326,35 @@ class PeerLineTool(Tool):
                 names = ", ".join(p.name for p in await self._questions.peers())
                 return f"Say which one: {names}."
             return _LINE_REFUSALS.get(exc.code, f"Could not pass the line: {exc.code}.")
+        name = line["name"]
+        outcome = await lines.settled(ctx.channel, ctx.chat_id, line["lid"])
+        if outcome == "open":
+            asked = str(notebook or "").strip()
+            now = await lines.status(ctx.channel, ctx.chat_id) or {}
+            if asked and now.get("place") != asked:
+                return (
+                    f"The line is passed to {name}, but on her main chat: she has no "
+                    f"notebook called '{asked}'. The user's next messages in this chat go to "
+                    "her, not to you. Reply now with one short line saying both things, and "
+                    "that they come back with the back arrow or by writing /torna."
+                )
+            return (
+                f"The line is passed to {name}: the user's next messages in this chat go "
+                "to her, not to you. Reply now with one short line: that you are passing them "
+                "over, and that they come back with the back arrow or by writing /torna."
+            )
+        if outcome == "waiting":
+            return (
+                f"The line to {name} is open on this side, but {name} has not answered yet "
+                "(that phone may be asleep or offline): what the user writes in this chat now "
+                "waits and reaches her when she is back; it does not come to you. Reply now "
+                "with one short line saying exactly that, and that they come back with the "
+                "back arrow or by writing /torna."
+            )
+        why = _LINE_CLOSED.get(outcome, "{name} closed the line at once.").format(name=name)
         return (
-            f"The line is passed to {line['name']}: the user's next messages in this chat go "
-            "to her, not to you. Reply now with one short line: that you are passing them "
-            "over, and that they come back with the back arrow or by writing /torna."
+            f"The line was NOT passed: {why} The user is still talking to you. Tell them so "
+            "in one short line; do not say you are passing them over."
         )
 
 

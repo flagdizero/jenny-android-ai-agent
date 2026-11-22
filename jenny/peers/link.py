@@ -659,6 +659,7 @@ class PeerLink:
             if old is not None:
                 entry.can_ask, entry.send_files, entry.act = old.can_ask, old.send_files, old.act
                 entry.phone_confirm = old.phone_confirm
+                entry.line, entry.line_trace = old.line, old.line_trace
                 if keep_name:
                     entry.name = old.name
             if kind == KIND_OPENCODE:
@@ -668,6 +669,7 @@ class PeerLink:
                 # riga che aveva prima lo stesso indirizzo).
                 entry.can_ask, entry.send_files, entry.act = False, False, "off"
                 entry.phone_confirm = False
+                entry.line = False
             replaced.extend(p.id for p in peers.peers if p.id != peer_id and same_phone(p))
             peers.peers = [p for p in peers.peers if not same_phone(p)] + [entry]
             peers.enabled = True

@@ -752,7 +752,7 @@ Passes the chat to the user's other Jenny: from then on what the user writes the
 - `peer` is the other Jenny's name; it can be left out when only one is linked.
 - `notebook` opens the line on one of *her* notebook chats instead of her main chat.
 
-It only opens the line. The messages are carried by the gateway, not by this tool, and so is coming back. Where it is: the personal chat, listed only while another Jenny is linked. It refuses from a notebook's chat, inside work another Jenny asked for, and in a turn that itself arrived through a line. Whether the other side accepts is hers to decide (`line` on her phone).
+It only opens the line. The messages are carried by the gateway, not by this tool, and so is coming back. Where it is: the personal chat, listed only while another Jenny is linked. It refuses from a notebook's chat, inside work another Jenny asked for, and in a turn that itself arrived through a line. Whether the other side accepts is hers to decide (`line` on her phone). The tool waits a few seconds for her answer and says how it went: passed, passed on her main chat because the notebook is not there, not passed (she does not allow it, or runs a version without the line), or open on this side while she has not answered yet, in which case what the user writes waits for her.
 
 ### line_move
 

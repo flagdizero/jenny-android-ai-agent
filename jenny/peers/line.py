@@ -31,6 +31,7 @@ finale torna all'altra Jenny come ``line_text`` (:meth:`PeerLines.on_outbound`).
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -71,6 +72,8 @@ MAX_PLACES = 200
 IDLE_CLOSE_MS = 12 * 3600 * 1000
 # Quanto si aspetta l'elenco delle chat dell'altra prima di dire che non risponde.
 CHATS_TIMEOUT_S = 8.0
+# Quanto `peer_line` aspetta il sì o il no dell'altra prima di rispondere al modello.
+OPEN_WAIT_S = 4.0
 # Il turno che scrive le due righe: se non finisce, resta il segnaposto nudo.
 TRACE_TIMEOUT_S = 120.0
 # Quanto del filo si tiene in memoria per ridisegnare la chat, e per il riassunto.
@@ -87,6 +90,28 @@ Emit = Callable[[str, str, dict[str, Any]], Awaitable[None]]
 Inject = Callable[[str, str, dict[str, str], dict[str, Any]], Awaitable[None]]
 Deliver = Callable[[Any], Awaitable[None]]
 Places = Callable[[], list[str]]
+
+
+# Un rimando a una pagina, com'è scritto in chat: ``[[quaderno/pagina]]`` o
+# ``[[quaderno/pagina|etichetta]]``.
+_PAGE_LINK = re.compile(r"\[\[([^\[\]|\n]+)(?:\|([^\[\]\n]+))?\]\]")
+
+
+def plain_links(text: str) -> str:
+    """Il testo senza i rimandi alle pagine: resta il nome, fra virgolette basse.
+
+    Sull'altro telefono le pagine di questa Jenny non si aprono (sulla linea
+    passa solo il testo), e ``[[piante/acero/concimazione]]`` lì sarebbe una
+    riga di simboli: resta «acero/concimazione», o l'etichetta se c'è.
+    """
+    def name(match: re.Match[str]) -> str:
+        label = (match.group(2) or "").strip()
+        if label:
+            return label
+        parts = [p for p in match.group(1).strip().split("/") if p]
+        return "«" + "/".join(parts[1:] or parts) + "»"
+
+    return _PAGE_LINK.sub(name, text)
 
 
 def line_of(metadata: Any) -> str | None:
@@ -143,6 +168,11 @@ class PeerLines:
         self._out_items: dict[str, list[dict[str, Any]]] = {}
         self._in_items: dict[str, list[dict[str, Any]]] = {}
         self._chats_waiting: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        # Perché si è chiusa l'ultima linea di una chat: `settled` lo legge
+        # per dire al modello com'è finita un'apertura rifiutata subito.
+        self._last_close: dict[str, tuple[str, str]] = {}
+        # Le chat di cui il filo è già stato letto da quando il processo è su.
+        self._seen_out: set[str] = set()
         self._tasks: set[asyncio.Task[Any]] = set()
         link.lines = self
         link.on_nack = self._on_nack
@@ -242,8 +272,31 @@ class PeerLines:
         if row is None:
             return None
         public = await self._public(row)
+        if key not in self._seen_out:
+            # La prima lettura dopo un riavvio: i messaggi ancora in coda
+            # tornano in testa al filo.
+            self._seen_out.add(key)
+            have = {item.get("id") for item in self._out_items.get(key, ())}
+            unsent = [item for item in await self._unsent(row) if item["id"] not in have]
+            self._out_items[key] = unsent + self._out_items.get(key, [])
         public["items"] = list(self._out_items.get(key, ()))
         return public
+
+    async def _unsent(self, row: dict[str, Any]) -> list[dict[str, Any]]:
+        """Dopo un riavvio: quel che l'utente ha scritto e non è ancora partito.
+
+        Il filo sta in memoria e un riavvio lo perde, ma i messaggi che
+        aspettano l'altra Jenny sono nella coda: senza di loro la sua risposta
+        arriverebbe sotto a niente.
+        """
+        waiting = await self._db(self.store.pending, row["peer"])
+        return [
+            {"id": str(msg["body"].get("mid") or msg["id"]), "role": "user",
+             "text": str(msg["body"].get("text", "")),
+             "at": int(msg["created_ms"])}
+            for msg in waiting
+            if msg["kind"] == KIND_LINE_SAY and msg["body"].get("lid") == row["lid"]
+        ]
 
     async def has_out(self, channel: str, chat_id: str) -> bool:
         return await self._db(self.store.line, "out", out_key(channel, chat_id)) is not None
@@ -277,12 +330,36 @@ class PeerLines:
             self.store.line_put, "out", key, peer=peer.id, lid=lid, place=place, state="opening",
         )
         self._out_items[key] = []
+        self._seen_out.add(key)
         await self._link.send(peer.id, KIND_LINE_OPEN, {"lid": lid, "place": place})
         await self._db(self.store.log, peer.id, "out", KIND_LINE_OPEN, {"place": place})
         self._link.wake(peer.id)
         public = await self._public(await self._db(self.store.line, "out", key))
         await self._emit(channel, chat_id, {"kind": "state", "line": public})
         return public
+
+    async def settled(
+        self, channel: str, chat_id: str, lid: str, *, timeout: float = OPEN_WAIT_S,
+    ) -> str:
+        """Com'è finita l'apertura di *lid*: ``open``, il motivo del rifiuto o ``waiting``.
+
+        L'altra Jenny risponde in un attimo se c'è: chi apre a parole
+        (``peer_line``) aspetta qui quel poco, così Jenny non dice «ti passo
+        Lavoro» di una linea che Lavoro ha già rifiutato. Se non risponde entro
+        *timeout* la linea resta aperta da questo lato e i messaggi aspettano.
+        """
+        key = out_key(channel, chat_id)
+        deadline = time.monotonic() + timeout
+        while True:
+            row = await self._db(self.store.line, "out", key)
+            if row is None or row["lid"] != lid:
+                closed = self._last_close.get(key)
+                return closed[1] if closed is not None and closed[0] == lid else "closed"
+            if row["state"] == "open":
+                return "open"
+            if time.monotonic() >= deadline:
+                return "waiting"
+            await asyncio.sleep(0.15)
 
     async def route(self, channel: str, chat_id: str, text: str) -> bool:
         """Vero se *text* era per una linea aperta, e ci è andato (o l'ha chiusa)."""
@@ -344,6 +421,8 @@ class PeerLines:
         if row is None:
             return False
         await self._db(self.store.line_drop, "out", key)
+        self._last_close[key] = (str(row["lid"]), reason)
+        self._seen_out.discard(key)
         items = self._out_items.pop(key, [])
         peer = await self._link._peer(row["peer"])
         name = peer.name if peer is not None else row["peer"][:8]
@@ -773,7 +852,8 @@ class PeerLines:
         self._remember(self._in_items, peer_id, {"role": "peer", "text": text})
         try:
             await self._link.send(
-                peer_id, KIND_LINE_TEXT, {"lid": lid, "text": text[:MAX_TEXT_CHARS]},
+                peer_id, KIND_LINE_TEXT,
+                {"lid": lid, "text": plain_links(text)[:MAX_TEXT_CHARS]},
             )
             self._link.wake(peer_id)
         except PeerError:

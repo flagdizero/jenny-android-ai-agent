@@ -182,7 +182,7 @@ line_chats  {"rid": <id>, "ok": true, "chats": ["Suppliers", …]}
 line_trace  {"lid": <id>, "text": …}               after a close: a short summary, up to 400 characters
 ```
 
-`line_state` answers `line_open` and `line_move`, and can arrive by itself when the receiving side closes the line. With `state` `open`, a `reason` of `no_place` means the chat asked for does not exist and the line is where `place` says. Other reasons, all with a state that is not `open`: `not_allowed` (the permission is off, or was turned off), `no_line` (there is no such line). `line_text` carries only finished replies: no partial text, reasoning or progress. `line_trace` is optional and may arrive long after the close, or never.
+`line_state` answers `line_open` and `line_move`, and can arrive by itself when the receiving side closes the line. With `state` `open`, a `reason` of `no_place` means the chat asked for does not exist and the line is where `place` says. Other reasons, all with a state that is not `open`: `not_allowed` (the permission is off, or was turned off), `no_line` (there is no such line). `line_text` carries only finished replies: no partial text, reasoning or progress. Links to the receiving side's pages (`[[notebook/page]]`) travel as plain names, since the other phone cannot open them. `line_trace` is optional and may arrive long after the close, or never.
 
 A side that does not implement the line answers `nack unsupported` to `line_open`, and the passing side closes the line at once and says why.
 

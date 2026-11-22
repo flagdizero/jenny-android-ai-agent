@@ -445,3 +445,71 @@ async def test_a_line_can_only_be_passed_from_a_chat_channel(two):
     with pytest.raises(PeerError) as err:
         await side_a.lines.open("notification", "native", side_b.jenny.id)
     assert err.value.code == "bad_channel"
+
+
+async def test_the_tool_says_when_the_other_refused(two):
+    # Il difetto visto col modello vero: l'altra rifiuta in un attimo, e Jenny
+    # diceva lo stesso «ti passo Lavoro» e poi rispondeva lei.
+    side_a, side_b = await _linked(two, allow=False)
+    token = bind_request_context(_ctx())
+    try:
+        said = await _bound(PeerLineTool(), side_a.lines).execute(peer="")
+    finally:
+        reset_request_context(token)
+    assert "NOT passed" in said and "does not take the line from this phone" in said
+    assert "/torna" not in said
+    assert not await side_a.lines.has_out(WS, CHAT)
+
+
+async def test_the_tool_says_when_the_notebook_is_not_there(two):
+    side_a, side_b = await _linked(two, places=["Piante"])
+    token = bind_request_context(_ctx())
+    try:
+        said = await _bound(PeerLineTool(), side_a.lines).execute(peer="", notebook="Orto")
+    finally:
+        reset_request_context(token)
+    assert "no notebook called 'Orto'" in said and "/torna" in said
+    assert (await side_a.lines.status(WS, CHAT))["place"] == ""
+
+
+async def test_an_open_nobody_answered_is_waiting(two):
+    side_a, side_b = await _linked(two)
+    from jenny.peers.line import out_key
+
+    row_key = out_key(WS, CHAT)
+    await side_a.lines._db(
+        side_a.lines.store.line_put, "out", row_key,
+        peer=side_b.jenny.id, lid="a" * 32, place="", state="opening",
+    )
+    assert await side_a.lines.settled(WS, CHAT, "a" * 32, timeout=0.05) == "waiting"
+    assert await side_a.lines.settled(WS, CHAT, "b" * 32, timeout=0.05) == "closed"
+
+
+def test_page_links_travel_as_plain_names():
+    from jenny.peers.line import plain_links
+
+    text = "Vedi [[piante/acero/concimazione]] e [[piante/ginkgo|il ginkgo]], non [questo](x)."
+    assert plain_links(text) == "Vedi «acero/concimazione» e il ginkgo, non [questo](x)."
+    assert plain_links("[[indice]]") == "«indice»"
+
+
+async def test_after_a_restart_the_unsent_messages_are_back_in_the_thread(two):
+    side_a, side_b = await _linked(two)
+    await _open(side_a, side_b)
+    lines = side_a.lines
+    from jenny.peers.line import out_key
+
+    row = await lines._db(lines.store.line, "out", out_key(WS, CHAT))
+    # Un messaggio ancora in coda, e la memoria persa come dopo un riavvio.
+    await lines._db(
+        lines.store.enqueue, row["peer"], "line_say",
+        {"lid": row["lid"], "mid": "c" * 32, "text": "ci sei?"},
+    )
+    lines._out_items.clear()
+    lines._seen_out.clear()
+    status = await lines.status(WS, CHAT)
+    assert [(i["id"], i["role"], i["text"]) for i in status["items"]] == [
+        ("c" * 32, "user", "ci sei?"),
+    ]
+    # La seconda lettura non lo raddoppia.
+    assert len((await lines.status(WS, CHAT))["items"]) == 1
