@@ -1006,7 +1006,8 @@ class GatewayContainer:
         from jenny.runtime import phone as phone_runtime
         from jenny.runtime.user_text import current_bot_name, say
 
-        asks = consent.PhoneAsks()
+        settings = consent.ConfigSettings()
+        asks = consent.PhoneAsks(ttl_s=settings.ask_timeout_s)
 
         def notice(ask: consent.Ask) -> None:
             name = current_bot_name()
@@ -1090,7 +1091,7 @@ class GatewayContainer:
         asks.clearers.append(telegram_clear)
         asks.clearers.append(lambda ask: notifier.clear_peer_notice("confirm", ask.cid))
         asks.clearers.append(lambda ask: spawn(phone_runtime.pill_ask_done()))
-        consent.install(consent.ConfigSettings(), asks)
+        consent.install(settings, asks)
 
         async def stop_turn(driving: drive.Drive) -> None:
             # La stessa strada di chi scrive «/stop» in quella chat.

@@ -164,6 +164,9 @@ class PhoneConfig(Base):
     mode: Literal["off", "confirm", "free"] = "confirm"
     trusted_apps: list[str] = Field(default_factory=list)
     max_snapshot_chars: int = Field(default=4000, ge=500, le=20000)
+    # Quanto una domanda («sto per usare WhatsApp, ok?») aspetta una risposta
+    # prima di valere «no». Dieci minuti: il tempo di accorgersi della notifica.
+    ask_timeout_s: int = Field(default=600, ge=20, le=3600)
 
 
 class LocationConfig(Base):

@@ -196,9 +196,16 @@ object PhoneActions {
         }
         if (target != null && target.performAction(what)) {
             markOwn()
-            return "${describe(element)} — settled in ${settle()}ms"
+            val waited = settle()
+            // Alcune viste dicono «fatto» e non fanno niente: i tasti delle
+            // notifiche («Espandi», «Rispondi») su `jenny_square`, 22/11/2026.
+            // Se dopo il clic lo schermo non ha dato nessun segno, si tocca
+            // davvero, una volta.
+            if (HandsService.lastEventAt >= actionStart) {
+                return "${describe(element)} — settled in ${waited}ms"
+            }
         }
-        // Il nodo non accetta il clic: si tocca dov'è.
+        // Il nodo non accetta il clic, o l'ha ignorato: si tocca dov'è.
         val b = Rect().also { element.node.getBoundsInScreen(it) }
         if (b.isEmpty) throw Refusal("${describe(element)} cannot be tapped: it has no place on screen")
         PhonePill.dodge(b.exactCenterX(), b.exactCenterY())

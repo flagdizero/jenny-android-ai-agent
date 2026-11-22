@@ -202,6 +202,17 @@ async def test_no_answer_counts_as_no(phone, turn, monkeypatch) -> None:
     assert asks.pending() == []
 
 
+async def test_the_waiting_time_is_read_when_the_question_is_asked(phone, turn) -> None:
+    """``tools.phone.askTimeoutS`` si legge al momento: un cambio vale subito."""
+    waits = [5.0]
+    asks = consent.PhoneAsks(ttl_s=lambda: waits[0])
+    consent.install(phone[0], asks)
+    waits[0] = 0.0
+    turn()
+    refusal = await consent.before_tool("phone_do", TAP)
+    assert refusal is not None and "did not answer" in refusal
+
+
 async def test_free_mode_asks_nothing_for_an_ordinary_tap(phone, turn) -> None:
     settings, asks = phone
     settings._mode = "free"

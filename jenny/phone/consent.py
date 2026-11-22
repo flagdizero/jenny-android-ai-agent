@@ -133,11 +133,18 @@ class PhoneAsks:
     gli altri né la domanda.
     """
 
-    def __init__(self, *, ttl_s: float = ASK_TTL_S) -> None:
+    def __init__(self, *, ttl_s: float | Callable[[], float] = ASK_TTL_S) -> None:
+        # Un numero, o chi lo legge al momento (``tools.phone.askTimeoutS``).
         self._ttl_s = ttl_s
         self._pending: dict[str, Ask] = {}
         self.posters: list[Callable[[Ask], Any]] = []
         self.clearers: list[Callable[[Ask], Any]] = []
+
+    def _ttl(self) -> float:
+        try:
+            return float(self._ttl_s() if callable(self._ttl_s) else self._ttl_s)
+        except Exception:  # noqa: BLE001 — una config che non si legge non allunga l'attesa
+            return ASK_TTL_S
 
     def pending(self) -> list[dict[str, Any]]:
         """Le domande in attesa, dalla più vecchia."""
@@ -161,7 +168,7 @@ class PhoneAsks:
         )
         self._pending[ask.cid] = ask
         self._each(self.posters, ask)
-        deadline_ms = ask.at_ms + int(self._ttl_s * 1000)
+        deadline_ms = ask.at_ms + int(self._ttl() * 1000)
         try:
             while True:
                 left_s = (deadline_ms - _now_ms()) / 1000
@@ -200,7 +207,7 @@ class PhoneAsks:
 
     def expire_due(self, *, now: int | None = None) -> int:
         """Chiude le domande scadute mentre il telefono dormiva."""
-        cutoff = (_now_ms() if now is None else now) - int(self._ttl_s * 1000)
+        cutoff = (_now_ms() if now is None else now) - int(self._ttl() * 1000)
         expired = 0
         for ask in list(self._pending.values()):
             if ask.at_ms <= cutoff and not ask.future.done():
@@ -242,6 +249,9 @@ class ConfigSettings:
         except Exception:  # noqa: BLE001 — una config che non si legge vale «spento»
             logger.opt(exception=True).warning("phone: config unreadable, treated as off")
             return "off"
+
+    def ask_timeout_s(self) -> float:
+        return float(self._phone().ask_timeout_s)
 
     def trusted(self) -> set[str]:
         try:
