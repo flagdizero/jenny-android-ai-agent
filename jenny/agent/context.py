@@ -786,9 +786,11 @@ class ContextBuilder:
 
         if orchestrating:
             # ``phone``: le mani sulle altre app sono dell'orchestratore, non di
-            # un aiutante. Senza dirlo qui, dove «tutto il resto è uno spawn»,
-            # alla richiesta «metti una sveglia» rispondeva di non poterlo fare
-            # (prova su ``jenny_s22``, 22/11/2026).
+            # un aiutante. Va detto qui, perché questo template dice «i tuoi
+            # strumenti leggono e trovano» e «tutto il resto è uno spawn», ed è
+            # l'ultima prosa del prompt: senza la riga, il telefono sarebbe
+            # l'unica cosa che l'orchestratore fa da sé senza che nessuno glielo
+            # dica.
             parts.append(render_template(
                 "agent/orchestrator.md", phone=self._tool_predicate(tool_names)("phone_do"),
             ))
