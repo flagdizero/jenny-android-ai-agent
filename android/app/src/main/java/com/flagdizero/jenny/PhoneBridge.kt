@@ -89,10 +89,16 @@ class PhoneBridge(context: Context) {
             }
         }
         if (!waitUntil(2_000) { pm.isInteractive }) return "failed"
-        if (km.isKeyguardLocked) {
+        // Lo swipe che toglie il blocco a volte arriva mentre lo schermo sta
+        // ancora accendendosi e va a vuoto: su `jenny_s22` il 22/11/2026 il
+        // primo tentativo falliva una volta su due. Si riprova.
+        repeat(3) {
+            if (!km.isKeyguardLocked) return@repeat
+            Thread.sleep(400)
             PhoneActions.run(svc, JSONArray().put(JSONObject().put("action", "swipe").put("direction", "up")))
-            if (!waitUntil(3_000) { !km.isKeyguardLocked }) return "failed"
+            waitUntil(2_500) { !km.isKeyguardLocked }
         }
+        if (km.isKeyguardLocked) return "failed"
         return "woken"
     }
 
@@ -132,6 +138,8 @@ class PhoneBridge(context: Context) {
      *  quella su cui cadrebbe un tocco: Python ci chiede il consenso. */
     fun foreground(): String? =
         HandsService.instance?.rootInActiveWindow?.packageName?.toString()
+            // Jenny non usa se stessa: le sue finestre non le legge nemmeno.
+            ?.takeIf { it != appContext.packageName }
 
     /** Il pacchetto dell'app che il modello ha chiamato per nome, o `null`. */
     fun resolveApp(app: String): String? = PhoneActions.resolvePackage(appContext, app)

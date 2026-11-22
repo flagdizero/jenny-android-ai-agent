@@ -72,6 +72,17 @@ object PhonePill {
     private var drivingText = ""
     private val hide = Runnable { remove() }
 
+    /** I tasti a schermo adesso, per [debugPress]. */
+    private var shownButtons: List<Pair<String, () -> Unit>> = emptyList()
+
+    /** Preme il tasto con quell'etichetta, come farebbe un dito. Solo per le
+     *  prove da adb ([DebugPhoneReceiver]): falso se quel tasto non c'è. */
+    fun debugPress(label: String): Boolean = onMain {
+        val hit = shownButtons.firstOrNull { it.first.equals(label, ignoreCase = true) }
+        hit?.second?.invoke()
+        hit != null
+    }
+
     /** Mostra la domanda *cid*. */
     fun ask(cid: String, title: String, body: String, always: Boolean): Boolean = onMain {
         val svc = HandsService.instance ?: return@onMain false
@@ -181,6 +192,8 @@ object PhonePill {
         onTap: (() -> Unit)? = null,
     ): Boolean {
         remove()
+        shownButtons = buttons
+        Log.i(TAG, "Pill: ${(title ?: body).orEmpty().take(70)} ${buttons.map { it.first }}")
         val pad = dp(svc, 14)
         val column = LinearLayout(svc).apply {
             orientation = LinearLayout.VERTICAL
@@ -230,7 +243,9 @@ object PhonePill {
     private fun outsideTouch() {
         val id = driving ?: return
         if (PhoneActions.paused) return
-        if (SystemClock.elapsedRealtime() - PhoneActions.injectedAt < OWN_TOUCH_MS) return
+        val since = SystemClock.elapsedRealtime() - PhoneActions.injectedAt
+        Log.i(TAG, "Touch outside the pill, ${since}ms after Jenny's last gesture")
+        if (since < OWN_TOUCH_MS) return
         PhoneActions.pause()
         Log.i(TAG, "The user touched the screen: paused")
         drawDriving(id)
@@ -240,6 +255,7 @@ object PhonePill {
         main.removeCallbacks(hide)
         val v = view ?: return
         runCatching { wm(host ?: return).removeView(v) }
+        shownButtons = emptyList()
         view = null
         params = null
     }

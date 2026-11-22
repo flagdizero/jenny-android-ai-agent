@@ -54,13 +54,19 @@ from jenny.runtime import phone as runtime
 from jenny.security.costly_words import COSTLY_RE
 from jenny.session.keys import CRON_SESSION_PREFIX, is_peer_act_session_key
 
+#: Il segno che ``cron/bound_runner.py`` mette sui metadata del turno di un job
+#: (``CRON_TRIGGER_META``). Ripetuto qui perché importarlo chiuderebbe un cerchio
+#: all'avvio; un test tiene i due valori uguali.
+_CRON_TRIGGER_META = "_cron_trigger"
+
 if TYPE_CHECKING:
     # Solo per i tipi: ``jenny.agent`` importa il runner, che importa questo
     # modulo. A freddo sarebbe un ciclo, e il gateway non partirebbe.
     from jenny.agent.tools.context import RequestContext
 
-#: Lo strumento che agisce. ``phone_snapshot`` legge soltanto e non passa di qui.
+#: Lo strumento che agisce, e quello che legge soltanto.
 ACT_TOOL = "phone_do"
+READ_TOOL = "phone_snapshot"
 
 #: Quanto aspetta una domanda prima di valere «nessuna risposta».
 ASK_TTL_S = 600.0
@@ -76,7 +82,8 @@ LOCKED = (
 )
 
 #: Le azioni che cadono sull'app in primo piano.
-_TOUCHING = frozenset({"tap", "long_press", "type", "scroll", "swipe"})
+# ``back`` compreso: Indietro lo riceve l'app davanti, e può chiudere una bozza.
+_TOUCHING = frozenset({"tap", "long_press", "type", "scroll", "swipe", "back"})
 
 #: Quanti turni tenere in memoria con le loro approvazioni.
 _TURNS_KEPT = 32
@@ -281,7 +288,11 @@ def origin_of(ctx: RequestContext | None) -> str:
     key = ctx.session_key or ""
     if is_peer_act_session_key(key):
         return "peer"
-    if key.startswith(CRON_SESSION_PREFIX):
+    if key.startswith(CRON_SESSION_PREFIX) or _CRON_TRIGGER_META in (ctx.metadata or {}):
+        # Un promemoria gira anche nella chat personale, non solo in una
+        # sessione ``cron:``: lo dice il segno che il giro mette sul turno. Senza
+        # guardarlo, un promemoria faceva la domanda a un telefono senza nessuno
+        # davanti (prova su ``jenny_s22``, 22/11/2026).
         return "cron"
     return {
         WEBSOCKET_CHANNEL: "app", FLOATING_CHANNEL: "floating",
@@ -345,11 +356,23 @@ async def _targets(steps: list[dict[str, Any]]) -> list[str]:
             found.append(_link_target(str(step.get("url") or "")))
             opened = True
         elif action in _TOUCHING and not opened:
-            package = await runtime.foreground()
+            package = await _touched_app(step)
             if package:
                 found.append(package)
             opened = True
     return list(dict.fromkeys(found))
+
+
+async def _touched_app(step: dict[str, Any] | None = None) -> str | None:
+    """L'app su cui cade un tocco. Un ``ref`` appartiene all'app dell'ultima
+    lettura, non a quella che è davanti adesso: fra un turno e l'altro davanti
+    torna la chat di Jenny, e la domanda diceva «sta per toccare Elimina in
+    Jenny» (prova su ``jenny_s22``, 22/11/2026)."""
+    if step is None or step.get("ref"):
+        package = (runtime.last_snapshot() or {}).get("package")
+        if package:
+            return str(package)
+    return await runtime.foreground()
 
 
 async def _label(target: str) -> str:
@@ -380,8 +403,30 @@ def _types_password(steps: list[dict[str, Any]]) -> bool:
     return False
 
 
+async def _before_read() -> str | None:
+    """Leggere lo schermo non chiede niente a chi ha fatto la richiesta: è
+    quello che ha davanti. Un promemoria invece legge solo le app su «Sempre»:
+    senza nessuno davanti, guarderebbe quello che capita."""
+    from jenny.agent.tools.context import current_request_context
+
+    settings = _SETTINGS
+    if settings is None or origin_of(current_request_context()) != "cron":
+        return None
+    if settings.mode() == "free":
+        return None
+    target = await runtime.foreground()
+    if target is None or target in settings.trusted():
+        return None
+    return (
+        f"No one is there, and {await _label(target)} — the app on screen — is not one the "
+        "user marked «Always». A reminder reads and uses only those. Say so in your answer."
+    )
+
+
 async def before_tool(name: str, params: Any) -> str | None:
     """``None`` se ``phone_do`` può procedere, altrimenti il rifiuto per il modello."""
+    if name == READ_TOOL:
+        return await _before_read()
     if name != ACT_TOOL:
         return None
     refusal = await availability()
@@ -426,7 +471,7 @@ async def before_tool(name: str, params: Any) -> str | None:
             return _said_no(app) if choice == "no" else _no_answer(app)
         approved.add(target)
     for what in _costly_taps(steps):
-        app = last_app or await _label(await runtime.foreground() or "")
+        app = last_app or await _label(await _touched_app() or "")
         if unattended:
             return (
                 f"«{what}» costs money or deletes something, and no one is there to "

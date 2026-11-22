@@ -73,6 +73,20 @@ async def test_snapshot_shows_the_screen_under_a_banner_and_taints(fake) -> None
     assert fake["untrusted"] == ["phone:com.android.settings"]
 
 
+async def test_a_screen_with_no_readable_app_names_no_app(fake) -> None:
+    fake["snap"] = {"version": 4, "package": "", "app": "", "secure": False, "refs": 0,
+                    "text": "(a system dialog is on screen that hides itself from me)", "index": {}}
+    out = await tool.PhoneSnapshotTool().execute()
+    assert "app:" not in out and "hides itself from me" in out
+
+
+async def test_an_empty_screen_says_it_may_still_be_loading(fake) -> None:
+    fake["snap"] = {"version": 5, "package": "com.x", "app": "X", "secure": False, "refs": 0,
+                    "text": "", "index": {}}
+    out = await tool.PhoneSnapshotTool().execute()
+    assert "may still be loading" in out
+
+
 async def test_snapshot_never_shows_the_index(fake) -> None:
     out = await tool.PhoneSnapshotTool().execute()
     assert "index" not in out

@@ -48,12 +48,20 @@ _MAX_STEPS = 12
 def _render(data: dict[str, Any]) -> str:
     """La lettura come la vede il modello: intestazione scritta dal codice,
     poi lo schermo."""
-    lines = [_UNTRUSTED_BANNER, f"app: {data.get('app')} ({data.get('package')})"]
+    lines = [_UNTRUSTED_BANNER]
+    # Senza una finestra leggibile (un dialogo di sistema che si nasconde) non
+    # c'è un'app da nominare: meglio niente che «app:  ()».
+    if data.get("package"):
+        lines.append(f"app: {data.get('app')} ({data.get('package')})")
     if title := data.get("title"):
         lines.append(f"title: {title}")
     lines.append(f"snapshot v{data.get('version')} — {data.get('refs', 0)} elements with a ref")
     text = str(data.get("text") or "").strip()
-    return "\n".join(lines) + "\n\n" + (text or "(nothing readable on screen)")
+    empty = (
+        "(nothing readable on screen: the app may still be loading — wait a second and "
+        "take a snapshot again — or it draws its screen in a way that cannot be read)"
+    )
+    return "\n".join(lines) + "\n\n" + (text or empty)
 
 
 class _PhoneToolBase(Tool):

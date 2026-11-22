@@ -28,7 +28,7 @@ import org.json.JSONArray
  * ```
  *
  * Comandi (`--es cmd`): `snapshot [--es arg <filtro>]`, `do --es b64 <passi JSON in
- * base64>`, `state`, `wake`, `launch --es arg <pacchetto>`, `pill --es arg app|a11y|off`.
+ * base64>`, `press --es arg <etichetta di un tasto della pillola>`, `state`, `wake`, `launch --es arg <pacchetto>`, `pill --es arg app|a11y|off`.
  * Gli esiti vanno nel log sotto `PhoneDebug`.
  *
  * Nelle build non debuggabili non fa niente; il manifest lo protegge con `DUMP`,
@@ -63,6 +63,16 @@ class DebugPhoneReceiver : BroadcastReceiver() {
         val svc = HandsService.instance
         if (svc == null) {
             Log.i(TAG, "$cmd: hands service is off")
+            return
+        }
+        if (cmd == "drive") {
+            // La pillola di guida senza un turno: per provare pausa e tocchi.
+            val shown = if (arg == "off") PhonePill.done(null) else PhonePill.driving("0".repeat(32), "debug")
+            Log.i(TAG, "drive $arg: $shown")
+            return
+        }
+        if (cmd == "press") {
+            Log.i(TAG, "press $arg: ${PhonePill.debugPress(arg)}")
             return
         }
         if (cmd == "state") {

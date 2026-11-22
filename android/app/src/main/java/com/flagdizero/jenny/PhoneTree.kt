@@ -120,6 +120,21 @@ object PhoneTree {
         val version = synchronized(lock) { ++counter }
         val out = Out(version, filter?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }, maxChars)
         val secure = main != null && isSecure(svc, main, pkg)
+        // Una finestra attiva senza albero: Android la nasconde ai servizi
+        // che non sono strumenti per la disabilità. È il caso dei dialoghi
+        // dei permessi («Consentire a YouTube di inviare notifiche?»), che
+        // dal 14 si dichiarano dati sensibili: Jenny non li legge e non li
+        // tocca, e deve poterlo dire invece di vedere uno schermo vuoto
+        // (trovato su `jenny_s22` il 22/11/2026).
+        val hidden = svc.windows.any {
+            it.isActive && it.root == null && it.type != AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+        } || (main == null && svc.rootInActiveWindow == null)
+        if (hidden) {
+            out.line(
+                "(a system dialog is on screen that hides itself from me — usually a permission " +
+                    "request. I can neither read nor answer it: the user has to. Tell them.)",
+            )
+        }
         if (secure) {
             out.line("(this app hides its screen from screenshots, so it is not read and not touched)")
         } else {
@@ -145,6 +160,22 @@ object PhoneTree {
         )
         synchronized(lock) { latest = snap }
         return snap
+    }
+
+    /**
+     * L'app davanti vieta gli screenshot, adesso? Lo chiede [PhoneActions]
+     * prima di toccare: un'app che non si lascia leggere non si usa nemmeno,
+     * e senza questo uno swipe o un testo scritto «nel campo col cursore»
+     * ci arriverebbero lo stesso, alla cieca.
+     */
+    fun secureNow(svc: AccessibilityService): Boolean {
+        val own = svc.packageName
+        val window = svc.windows.firstOrNull {
+            it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive &&
+                it.root?.packageName?.toString() != own
+        } ?: return false
+        val pkg = window.root?.packageName?.toString() ?: return false
+        return isSecure(svc, window, pkg)
     }
 
     /** Le finestre che contano per chi usa il telefono. */

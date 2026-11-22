@@ -47,11 +47,32 @@ object PhoneActions {
     private const val GESTURE_WAIT_MS = 2_000L
     private const val MAX_WAIT_MS = 5_000L
 
-    /** Quando Jenny ha iniettato l'ultimo gesto: la pillola lo usa per
-     *  distinguere il suo tocco da quello dell'utente. */
+    /** Quanto si aspetta che un'app appena lanciata dia il primo segno. */
+    private const val OPEN_WAIT_MS = 3_000L
+
+    /** Le azioni che cadono dentro l'app davanti. */
+    private val TOUCHING = setOf("tap", "long_press", "type", "scroll", "swipe")
+
+    /**
+     * Quando Jenny ha agito l'ultima volta: la pillola lo usa per distinguere
+     * il suo tocco da quello dell'utente.
+     *
+     * Vale per **ogni** azione, non solo per i gesti a coordinate: anche un
+     * `performAction(ACTION_CLICK)` fa arrivare alla pillola un «tocco fuori».
+     * Misurato su `jenny_s22` il 22/11/2026 sul tasto «Add alarm» dell'Orologio
+     * — il primo passo di una sveglia vera finiva in pausa da solo.
+     */
     @Volatile
     var injectedAt = 0L
         private set
+
+    /** Quando è cominciata l'azione in corso: [settle] aspetta un evento da lì. */
+    @Volatile
+    private var actionStart = 0L
+
+    private fun markOwn() {
+        injectedAt = SystemClock.elapsedRealtime()
+    }
 
     /** L'utente ha toccato lo schermo mentre Jenny guidava ([PhonePill]): i
      *  passi aspettano che dica di continuare. */
@@ -113,7 +134,15 @@ object PhoneActions {
             val action = step.optString("action")
             val detail = try {
                 checkpoint()
-                one(svc, action, step)
+                if (action in TOUCHING && PhoneTree.secureNow(svc)) {
+                    throw Refusal(
+                        "this app hides its screen from screenshots (banking, passwords, incognito), " +
+                            "so I neither read it nor act on it. Tell the user; back and home still work",
+                    )
+                }
+                markOwn()
+                actionStart = SystemClock.elapsedRealtime()
+                one(svc, action, step).also { markOwn() }
             } catch (e: Refusal) {
                 results.put(JSONObject().put("action", action).put("ok", false).put("detail", e.message))
                 break
@@ -166,6 +195,7 @@ object PhoneActions {
             target = target.parent
         }
         if (target != null && target.performAction(what)) {
+            markOwn()
             return "${describe(element)} — settled in ${settle()}ms"
         }
         // Il nodo non accetta il clic: si tocca dov'è.
@@ -242,14 +272,14 @@ object PhoneActions {
             ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             ?: throw Refusal("\"$app\" has no screen to open")
         if (!Intents.tryStart(svc, launch, "PhoneActions", pkg)) throw Refusal("Android refused to open \"$app\"")
-        return "opened $pkg — settled in ${settle()}ms"
+        return "opened $pkg — settled in ${settle(OPEN_WAIT_MS)}ms"
     }
 
     private fun openLink(svc: AccessibilityService, url: String): String {
         if (url.isBlank()) throw Refusal("open_link needs a url")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (!Intents.tryStart(svc, intent, "PhoneActions", "link")) throw Refusal("no app opens that link")
-        return "opened the link — settled in ${settle()}ms"
+        return "opened the link — settled in ${settle(OPEN_WAIT_MS)}ms"
     }
 
     /**
@@ -299,11 +329,24 @@ object PhoneActions {
         return completed
     }
 
-    /** Aspetta che lo schermo si fermi; torna quanto ha aspettato. */
-    fun settle(): Long {
+    /**
+     * Aspetta che lo schermo cambi e poi si fermi; torna quanto ha aspettato.
+     *
+     * Prima aspetta il **primo** evento dopo l'inizio dell'azione, fino a
+     * *expectChangeMs*: senza, «nessun evento da 250 ms» era vero subito — gli
+     * eventi vecchi erano già lontani — e un'app appena lanciata risultava
+     * «ferma» dopo 120 ms, con sotto ancora la schermata di prima (misurato su
+     * `jenny_s22` il 22/11/2026 su tredici app). Poi aspetta il silenzio.
+     */
+    fun settle(expectChangeMs: Long = 500L): Long {
         val t0 = SystemClock.elapsedRealtime()
+        while (HandsService.lastEventAt < actionStart &&
+            SystemClock.elapsedRealtime() - t0 < expectChangeMs
+        ) {
+            Thread.sleep(30)
+        }
         Thread.sleep(120)
-        while (SystemClock.elapsedRealtime() - t0 < SETTLE_MAX_MS) {
+        while (SystemClock.elapsedRealtime() - t0 < SETTLE_MAX_MS + expectChangeMs) {
             if (SystemClock.elapsedRealtime() - HandsService.lastEventAt >= SETTLE_QUIET_MS) break
             Thread.sleep(40)
         }
