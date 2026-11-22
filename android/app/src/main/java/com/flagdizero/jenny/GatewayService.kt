@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
@@ -15,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
 
 /**
@@ -77,18 +79,31 @@ class GatewayService : Service() {
         const val EXTRA_PEER_ACTION = "com.flagdizero.jenny.extra.PEER_ACTION"
         const val EXTRA_PEER_IDENT = "com.flagdizero.jenny.extra.PEER_IDENT"
 
-        /** Le due superfici native da cui può entrare del testo dell'utente.
+        /** Le superfici native da cui può entrare del testo dell'utente.
          *
          *  Valori di protocollo, non etichette: Python li riconosce per stringa
          *  (`_CHANNEL_BY_SOURCE` in `jenny/runtime/native_input.py`, elenco
          *  chiuso) e da lì decide **dove torna la risposta** — un alert per la
-         *  tendina, il fumetto per la mascotte. Una stringa che diverge non
-         *  rompe la compilazione: fa rifiutare ogni messaggio di quella
-         *  superficie, in silenzio. È il legame che
-         *  `tests/runtime/test_native_input.py::TestBoundaryWithKotlin` controlla
-         *  leggendo questo file. */
+         *  tendina, il fumetto per la mascotte, l'orologio per l'orologio. Una
+         *  stringa che diverge non rompe la compilazione: fa rifiutare ogni
+         *  messaggio di quella superficie, in silenzio. È il legame che
+         *  `tests/runtime/test_native_input.py::TestBoundaryWithKotlin` e
+         *  `tests/runtime/test_wear.py` controllano leggendo questo file. */
         const val NATIVE_SOURCE_NOTIFICATION = "notification"
         const val NATIVE_SOURCE_FLOATING = "floating"
+        const val NATIVE_SOURCE_WEAR = "wear"
+
+        /** Testo detto al polso e il suo indirizzo di ritorno (`<nodo>/<id>`),
+         *  quando la domanda deve prima alzare il service. Li mette
+         *  [deliverWearText]. */
+        const val EXTRA_WEAR_TEXT = "com.flagdizero.jenny.extra.WEAR_TEXT"
+        const val EXTRA_WEAR_ADDRESS = "com.flagdizero.jenny.extra.WEAR_ADDRESS"
+
+        /** Le domande dal polso che aspettano di sapere se sono entrate, per
+         *  indirizzo. Servono solo alla strada che deve alzare il service:
+         *  `onStartCommand` consegna e richiama chi aspettava. Stesso processo
+         *  del ricevitore del Data Layer, quindi una mappa basta. */
+        private val pendingWear = ConcurrentHashMap<String, (Boolean) -> Unit>()
 
         /** Quanto insistere per consegnare una risposta prima di arrendersi.
          *
@@ -111,6 +126,12 @@ class GatewayService : Service() {
          *  guarda: cinque secondi di attesa muta sono già tanti, venticinque
          *  sarebbero una mascotte rotta. */
         private const val FLOATING_DELIVERY_BUDGET_MS = 5_000L
+
+        /** Lo stesso budget, per l'orologio. Più lungo della mascotte perché il
+         *  gateway può essere da alzare (il telefono in tasca da un'ora), sotto
+         *  i 30 s del lock di handoff per la ragione scritta sopra. L'orologio
+         *  aspetta la conferma un po' di più (`WearProtocol.ACK_TIMEOUT_MS`). */
+        private const val WEAR_DELIVERY_BUDGET_MS = 20_000L
 
         /** Attesa massima della lettura dello schermo prima di consegnare il
          *  testo del fumetto. Misurata: ~0,3 s per una pagina lunga. */
@@ -253,6 +274,78 @@ class GatewayService : Service() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Floating text delivery failed", e)
                     false
+                }
+                onResult(ok)
+            }
+        }
+
+        /**
+         * Consegna una domanda detta al polso. *onResult* dice se è entrata.
+         *
+         * Lo chiama il ricevitore del Data Layer, che sta nel flavor `play`
+         * perché il Data Layer è codice Google; qui non c'è niente di Google,
+         * solo le due strade per arrivare al gateway:
+         *
+         * * **service già su** — il caso normale: si consegna come la mascotte,
+         *   da un thread, insistendo per [WEAR_DELIVERY_BUDGET_MS];
+         * * **service giù** — Doze l'ha fermato: si prova ad alzarlo con
+         *   `startForegroundService`, portando il testo negli extra. Da
+         *   Android 12 un'app in secondo piano può non avere il diritto di
+         *   farlo, e il Data Layer non è fra le eccezioni documentate: se
+         *   Android rifiuta, *onResult* riceve `false` e l'orologio dice
+         *   "Jenny non raggiungibile" invece di aspettare. È la prima cosa da
+         *   misurare sul telefono vero (`my-data/jenny-orologio.md`).
+         *
+         * Il lock di handoff tiene sveglia la CPU fra la domanda e la consegna,
+         * in entrambe le strade, e si rilascia a consegna tentata.
+         */
+        fun deliverWearText(
+            context: Context,
+            text: String,
+            address: String,
+            onResult: (Boolean) -> Unit,
+        ) {
+            val app = context.applicationContext
+            PowerBridge.acquireHandoffLock(app)
+            if (isRunning) {
+                deliverWearInBackground(text, address, onResult)
+                return
+            }
+            pendingWear[address] = onResult
+            try {
+                val service = Intent(app, GatewayService::class.java)
+                    .putExtra(EXTRA_WEAR_TEXT, text)
+                    .putExtra(EXTRA_WEAR_ADDRESS, address)
+                app.startForegroundService(service)
+                Log.i(TAG, "Wear text handed to the gateway service (chars=${text.length})")
+            } catch (e: Exception) {
+                // Il caso da misurare: `ForegroundServiceStartNotAllowedException`.
+                pendingWear.remove(address)
+                PowerBridge.releaseHandoffLock()
+                Log.w(TAG, "Could not start the gateway service for the watch: ${e.javaClass.simpleName}")
+                onResult(false)
+            }
+        }
+
+        /** La consegna vera, da un thread: gemella di [deliverFloatingText],
+         *  più il rilascio del lock di handoff che [deliverWearText] ha preso. */
+        private fun deliverWearInBackground(
+            text: String,
+            address: String,
+            onResult: (Boolean) -> Unit,
+        ) {
+            thread(name = "jenny-wear-text") {
+                val ok = try {
+                    deliverWithRetry(text, NATIVE_SOURCE_WEAR, address, WEAR_DELIVERY_BUDGET_MS)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    Log.i(TAG, "Wear text delivery interrupted")
+                    false
+                } catch (e: Exception) {
+                    Log.e(TAG, "Wear text delivery failed", e)
+                    false
+                } finally {
+                    PowerBridge.releaseHandoffLock()
                 }
                 onResult(ok)
             }
@@ -461,6 +554,15 @@ class GatewayService : Service() {
         val peerIdent = intent?.getStringExtra(EXTRA_PEER_IDENT)
         if (peerAction != null && peerIdent != null) {
             deliverPeerAction(peerAction, peerIdent)
+        }
+        // La domanda dal polso che ha dovuto alzare il service. Chi aspetta
+        // l'esito è in `pendingWear`; se non c'è più (processo rinato nel
+        // frattempo) si consegna lo stesso e l'orologio lo saprà dalla risposta.
+        val wearText = intent?.getStringExtra(EXTRA_WEAR_TEXT)
+        val wearAddress = intent?.getStringExtra(EXTRA_WEAR_ADDRESS)
+        if (!wearText.isNullOrBlank() && !wearAddress.isNullOrBlank()) {
+            val onResult = pendingWear.remove(wearAddress) ?: { _: Boolean -> }
+            deliverWearInBackground(wearText, wearAddress, onResult)
         }
         return START_STICKY
     }

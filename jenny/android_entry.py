@@ -100,6 +100,7 @@ def _reset_loop_bound_state() -> None:
         from jenny.runtime.screen import reset_screen_state
         from jenny.runtime.timezone_follow import reset_timezone_follow
         from jenny.runtime.update_install import reset_install_state
+        from jenny.runtime.wear import reset_wear_state
         from jenny.webui.android_apps_api import reset_installed_apps_state
         from jenny.webui.settings_api import reset_update_check_state
 
@@ -113,6 +114,8 @@ def _reset_loop_bound_state() -> None:
         # contesto del giro precedente, e il lock dentro BridgeCache è legato a
         # un loop morto.
         reset_floating_state()
+        # Stesso motivo, per il WearBridge dell'orologio.
+        reset_wear_state()
         reset_screen_state()
         reset_location_state()
         # L'updater tiene una fase *sticky* e un ``UpdateBridge`` in cache: senza

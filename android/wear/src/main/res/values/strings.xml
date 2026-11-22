@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Jenny</string>
+    <string name="hello">Tell me.</string>
+    <string name="type_hint">Ask Jenny</string>
+    <string name="mic_denied">Without the microphone I can\'t hear you. Use the keyboard.</string>
+    <string name="heard_nothing">I didn\'t hear anything.</string>
+    <string name="no_network">Without a network I can\'t transcribe.</string>
+    <string name="recognizer_error">The microphone isn\'t working right now.</string>
+    <string name="recognizer_no_mic">«%1$s» has no microphone. Allow it in Settings › Apps.</string>
+    <string name="no_phone">Your phone isn\'t nearby.</string>
+    <string name="unreachable">Jenny can\'t be reached. Try again in a bit.</string>
+    <string name="too_slow">Jenny is taking too long: you\'ll find the answer on your phone.</string>
+    <string name="version_mismatch">Update Jenny: the phone and the watch don\'t speak the same version.</string>
+    <string name="too_long">Too long for the watch.</string>
+    <string name="listening">LISTENING</string>
+    <string name="thinking">THINKING</string>
+    <string name="voice_toggle">Jenny\'s voice</string>
+    <string name="talk">Talk to Jenny</string>
+    <string name="type">Type</string>
+    <string name="voice_on">Voice on</string>
+    <string name="voice_off">Voice off</string>
+    <string name="complication_peek">Jenny peeking</string>
+    <string name="retry_hint">Tap Jenny to try again</string>
+    <string name="timer_started">Timer set for %1$s.</string>
+    <string name="alarm_set">Alarm set for %1$s.</string>
+    <string name="duration_join">%1$s and %2$s</string>
+    <plurals name="hours"><item quantity="one">%d hour</item><item quantity="other">%d hours</item></plurals>
+    <plurals name="minutes"><item quantity="one">%d minute</item><item quantity="other">%d minutes</item></plurals>
+    <plurals name="seconds"><item quantity="one">%d second</item><item quantity="other">%d seconds</item></plurals>
+    <string name="opening_app">Opening %1$s.</string>
+    <string name="navigating">Taking you to: %1$s.</string>
+    <string name="finding_place">Looking for “%1$s” on the map.</string>
+</resources>

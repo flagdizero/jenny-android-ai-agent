@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hello">Dimmi.</string>
+    <string name="type_hint">Chiedi a Jenny</string>
+    <string name="mic_denied">Senza microfono non ti sento. Usa la tastiera.</string>
+    <string name="heard_nothing">Non ho sentito niente.</string>
+    <string name="no_network">Senza rete non riesco a trascrivere.</string>
+    <string name="recognizer_error">Il microfono adesso non funziona.</string>
+    <string name="recognizer_no_mic">«%1$s» non ha il microfono. Dagli il permesso da Impostazioni › App.</string>
+    <string name="no_phone">Il telefono non è vicino.</string>
+    <string name="unreachable">Jenny non raggiungibile. Riprova tra poco.</string>
+    <string name="too_slow">Jenny ci sta mettendo troppo: la risposta la trovi sul telefono.</string>
+    <string name="version_mismatch">Aggiorna Jenny: telefono e orologio non parlano la stessa versione.</string>
+    <string name="too_long">Troppo lungo per l\'orologio.</string>
+    <string name="listening">TI ASCOLTO</string>
+    <string name="thinking">CI PENSO</string>
+    <string name="voice_toggle">Voce di Jenny</string>
+    <string name="talk">Parla con Jenny</string>
+    <string name="type">Scrivi</string>
+    <string name="voice_on">Voce accesa</string>
+    <string name="voice_off">Voce spenta</string>
+    <string name="complication_peek">Jenny che sbuca</string>
+    <string name="retry_hint">Tocca Jenny per riprovare</string>
+    <string name="timer_started">Timer di %1$s avviato.</string>
+    <string name="alarm_set">Sveglia alle %1$s.</string>
+    <string name="duration_join">%1$s e %2$s</string>
+    <plurals name="hours"><item quantity="one">%d ora</item><item quantity="other">%d ore</item></plurals>
+    <plurals name="minutes"><item quantity="one">%d minuto</item><item quantity="other">%d minuti</item></plurals>
+    <plurals name="seconds"><item quantity="one">%d secondo</item><item quantity="other">%d secondi</item></plurals>
+    <string name="opening_app">Apro %1$s.</string>
+    <string name="navigating">Ti porto a: %1$s.</string>
+    <string name="finding_place">Cerco «%1$s» sulla mappa.</string>
+</resources>

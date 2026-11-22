@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Il telefono dice all'orologio "qui c'è Jenny": l'app sul polso cerca questa
+     capability per sapere a quale nodo mandare le domande. Il nome è
+     WearProtocol.CAPABILITY_PHONE. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@array/android_wear_capabilities">
+    <string-array name="android_wear_capabilities" translatable="false">
+        <item>jenny_phone</item>
+    </string-array>
+</resources>

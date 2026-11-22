@@ -151,6 +151,7 @@ class TestBoundaryWithKotlin:
         [
             ("NATIVE_SOURCE_NOTIFICATION", "SOURCE_NOTIFICATION"),
             ("NATIVE_SOURCE_FLOATING", "SOURCE_FLOATING"),
+            ("NATIVE_SOURCE_WEAR", "SOURCE_WEAR"),
         ],
     )
     def test_kotlin_sources_are_recognized(self, kotlin_const, python_source):
@@ -227,6 +228,26 @@ class TestDelivery:
         assert ni.on_native_text("ciao", ni.SOURCE_FLOATING) is True
         await asyncio.wait_for(bus.arrived.wait(), 2)
         assert ni.NATIVE_THREAD_KEY not in bus.inbound[0].metadata
+
+    async def test_the_watch_enters_on_its_own_channel_with_its_address(self):
+        """La domanda dal polso torna al polso: canale suo, e l'indirizzo
+        (``<nodo>/<id>``) viaggia nel *thread* intatto, perché solo Kotlin lo
+        legge. Nessuna lettura dello schermo: quella vale solo per la mascotte."""
+        from jenny.bus.events import WEAR_CHANNEL
+
+        bus = await _bound()
+        assert ni.on_native_text(
+            "come stanno le piante", ni.SOURCE_WEAR, "node-1/q-42", '{"package": "x"}'
+        ) is True
+        await asyncio.wait_for(bus.arrived.wait(), 2)
+
+        (msg,) = bus.inbound
+        assert msg.channel == WEAR_CHANNEL
+        assert msg.metadata[ni.NATIVE_SOURCE_KEY] == ni.SOURCE_WEAR
+        assert msg.metadata[ni.NATIVE_THREAD_KEY] == "node-1/q-42"
+        assert msg.session_key == UNIFIED_SESSION_KEY
+        from jenny.runtime.screen import SCREEN_META_KEY
+        assert SCREEN_META_KEY not in msg.metadata
 
     async def test_the_mascot_carries_the_screen_reading(self):
         """Il riassunto della lettura presa al tocco entra nei metadata del

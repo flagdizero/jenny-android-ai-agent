@@ -151,6 +151,12 @@ android {
                     .builtBy("copyScriptAssets", "copyPackageSourceAssets")
             )
         }
+        // Il protocollo con l'orologio, scritto una volta e compilato anche dal
+        // modulo `:wear` (v. `android/wear-protocol/.../WearProtocol.kt`). Solo
+        // nella `play`: è lì che vive il Data Layer che lo parla.
+        getByName("play") {
+            java.srcDir("../wear-protocol")
+        }
     }
 }
 
@@ -321,4 +327,10 @@ dependencies {
     // copia notturna (`src/play/.../DriveBridge.kt`). La `foss` non ha
     // nessuna libreria Google.
     "playImplementation"("com.google.android.gms:play-services-auth:21.2.0")
+
+    // Solo nel flavor `play`: il Data Layer con l'orologio
+    // (`src/play/.../WearListener.kt`, `WearBridge.kt`). Stessa ragione della
+    // riga sopra: la `foss` non ha nessuna libreria Google, e senza questa
+    // libreria Jenny sull'orologio semplicemente non c'è.
+    "playImplementation"("com.google.android.gms:play-services-wearable:19.0.0")
 }

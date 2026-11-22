@@ -81,6 +81,13 @@ NOTIFICATION_CHANNEL = "notification"
 # i due lati opposti dello stesso giro.
 FLOATING_CHANNEL = "floating"
 
+# Channel name dell'orologio: l'app Wear OS che parla con Jenny via Data Layer.
+# Sta qui per la stessa ragione degli altri due — la importano l'ingresso
+# (``runtime/native_input.py``) e l'uscita (``channels/wear.py``). La parte
+# Google (il Data Layer) vive solo nel flavor ``play``, in Kotlin: questo nome
+# è soltanto un'etichetta, e nella ``foss`` nessuno lo usa.
+WEAR_CHANNEL = "wear"
+
 # Flag di metadata che marcano un outbound come coordinamento/streaming: tutto
 # ciò che NON è un messaggio finale user-visible. Sorgente unica condivisa dal
 # dispatcher (che vi aggiunge ``_mirror``) e dal canale Telegram (webui-only),

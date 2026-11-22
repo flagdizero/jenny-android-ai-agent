@@ -1,10 +1,11 @@
 """Ingresso del testo dell'utente dalle superfici native di Android.
 
-Due superfici, oggi: la **tendina** delle notifiche — la risposta rapida
+Tre superfici, oggi: la **tendina** delle notifiche — la risposta rapida
 (``RemoteInput``) che si scrive senza aprire l'app, rovescio di
-``jenny/runtime/notifier.py`` — e la **mascotte flottante**, la finestra che sta
-sopra le altre app e apre un campo al tocco. Entrambe scrivono testo dell'utente
-da fuori dalla WebUI, ed entrambe entrano da qui.
+``jenny/runtime/notifier.py`` —, la **mascotte flottante**, la finestra che sta
+sopra le altre app e apre un campo al tocco, e l'**orologio**, che manda la
+domanda detta al polso via Data Layer. Tutte scrivono testo dell'utente da fuori
+dalla WebUI, e tutte entrano da qui.
 
 **Il testo non prende una strada nuova.** Diventa un ``InboundMessage`` su un
 canale utente come gli altri, e da lì in poi tutto il resto esiste già: la
@@ -49,7 +50,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.bus.events import FLOATING_CHANNEL, NOTIFICATION_CHANNEL, InboundMessage
+from jenny.bus.events import FLOATING_CHANNEL, NOTIFICATION_CHANNEL, WEAR_CHANNEL, InboundMessage
 from jenny.runtime.screen import SCREEN_META_KEY, parse_summary
 
 if TYPE_CHECKING:
@@ -79,6 +80,13 @@ SOURCE_NOTIFICATION = "notification"
 # ``GatewayService.deliverNativeText``), anche questa di protocollo.
 SOURCE_FLOATING = "floating"
 
+# La sorgente "orologio": una domanda detta al polso, arrivata via Data Layer
+# (``WearListener`` nel flavor ``play`` → ``GatewayService``). Il *thread* qui
+# non è il tag di una notifica ma l'indirizzo della risposta — il nodo
+# dell'orologio e l'id della domanda, nella forma ``<nodo>/<id>`` — e Python
+# non lo interpreta: lo riporta indietro così com'è, e solo Kotlin lo legge.
+SOURCE_WEAR = "wear"
+
 # Sorgente → canale di consegna della risposta. Elenco chiuso: v. il docstring.
 #
 # Le due sorgenti sono due superfici native diverse e vogliono due canali
@@ -89,6 +97,7 @@ SOURCE_FLOATING = "floating"
 _CHANNEL_BY_SOURCE: dict[str, str] = {
     SOURCE_NOTIFICATION: NOTIFICATION_CHANNEL,
     SOURCE_FLOATING: FLOATING_CHANNEL,
+    SOURCE_WEAR: WEAR_CHANNEL,
 }
 
 # ``chat_id`` dei messaggi che entrano da qui. La session key non lo guarda

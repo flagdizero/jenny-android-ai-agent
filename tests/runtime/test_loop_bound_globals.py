@@ -59,6 +59,7 @@ ALLOWED: dict[str, str] = {
     "jenny/agent/tools/ssh_jobs.py:_store._lock": "reset_job_store",
     "jenny/config/store.py:_LOCK": "reset_config_store_state",
     "jenny/runtime/floating.py:_BRIDGE.lock": "reset_floating_state",
+    "jenny/runtime/wear.py:_BRIDGE.lock": "reset_wear_state",
     "jenny/runtime/screen.py:_BRIDGE.lock": "reset_screen_state",
     "jenny/runtime/location.py:_BRIDGE.lock": "reset_location_state",
     "jenny/runtime/notifier.py:_BRIDGE.lock": "reset_notifier_state",

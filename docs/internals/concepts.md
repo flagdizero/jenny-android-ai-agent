@@ -10,7 +10,7 @@ Use this page when you want to understand how Jenny works before touching advanc
 |---|---|
 | Agent loop | Builds context, selects the session, calls the provider, runs tools, and publishes replies |
 | Providers | User-defined LLM endpoints, each using the OpenAI-compatible or Anthropic wire format — no built-in provider catalog |
-| Channels | Four: the built-in WebSocket channel (the WebUI, always on), an optional paired Telegram bot, and two Android-only ones — a reply typed into a notification, and the floating mascot's bubble |
+| Channels | Five: the built-in WebSocket channel (the WebUI, always on), an optional paired Telegram bot, and three Android-only ones — a reply typed into a notification, the floating mascot's bubble, and a question asked on the watch |
 | Tools | Capabilities the model may call — files, `python_exec`, Android web search/fetch, location, cron, subagents, mini-app actions, and more |
 | Memory | Workspace files and session history that keep useful context across turns, consolidated periodically by Dream |
 | Gateway | The single long-running process that serves every channel and the HTTP API behind the WebUI |
@@ -78,7 +78,7 @@ See [Providers and models](../reference/providers.md) for practical setup and [C
 
 ## Channels and sessions
 
-Jenny has four channels: the built-in WebSocket channel (always active — it's how the in-app WebUI talks to the gateway), an optional Telegram bot paired from Settings, and two that exist only on Android — a reply typed into one of Jenny's notifications, and the floating mascot's bubble. All four are owned by the same outbound dispatcher, which fans replies out to whichever channels are active.
+Jenny has five channels: the built-in WebSocket channel (always active — it's how the in-app WebUI talks to the gateway), an optional Telegram bot paired from Settings, and three that exist only on Android — a reply typed into one of Jenny's notifications, the floating mascot's bubble, and a question asked on the Wear OS watch app (Play Store build only). All five are owned by the same outbound dispatcher, which fans replies out to whichever channels are active.
 
 Every inbound message from any channel routes into the same single unified conversation session (`unified:default`) — Jenny is a single-user assistant with one continuous thread, not a per-channel or per-device conversation. This has a sharp edge worth knowing up front: because there is only one session, `/new` issued from Telegram resets the WebUI's conversation too, and vice versa — whoever has access to the paired bot can reset the chat on the phone. Internal work (cron, Dream) runs under separate internal session keys so it never pollutes the user-visible conversation.
 
