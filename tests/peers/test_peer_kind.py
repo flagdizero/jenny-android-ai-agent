@@ -12,12 +12,14 @@ import json
 from typing import Any
 
 from jenny.agent.tools.peer import OPENCODE_WHAT, PeerAskTool
-from jenny.config.loader import load_config
+from jenny.config.loader import load_config, save_config
 from jenny.config.schema import PeerConfig
 from jenny.peers import link as link_module
 from jenny.peers.link import PeerError
 from jenny.peers.model import KIND_JENNY, KIND_OPENCODE, peer_kind
+from jenny.peers.questions import PeerQuestions
 from tests.peers.harness import pair
+from tests.support.aio import wait_until
 
 
 async def test_two_jennys_know_each_other_as_jennys(two):
@@ -124,3 +126,47 @@ def test_the_description_does_not_depend_on_who_is_linked():
     second = _tool(_Questions(KIND_OPENCODE)).description
     assert first == second
     assert "opencode" in first
+
+
+# -- Un Mac con opencode risponde e basta ----------------------------------------
+
+
+async def test_an_opencode_peer_is_saved_with_every_permission_off(two, monkeypatch):
+    monkeypatch.setattr(link_module, "SELF_AGENT", KIND_OPENCODE)
+    a, b = two
+    await pair(a, b)
+
+    for peer in (a.peers()[0], b.peers()[0]):
+        assert (peer.can_ask, peer.send_files, peer.act) == (False, False, "off")
+
+
+async def test_a_question_from_an_opencode_peer_is_refused_without_a_turn(two):
+    a, b = two
+    await pair(a, b)
+    # Una riga abbinata prima di questa regola: opencode, ma con le domande accese.
+    cfg = load_config(b.config_path)
+    cfg.peers.peers[0].kind = KIND_OPENCODE
+    cfg.peers.peers[0].can_ask = True
+    cfg.peers.peers[0].act = "free"
+    save_config(cfg, b.config_path)
+    turns: list[str] = []
+
+    class Agent:
+        async def process_direct_outcome(self, prompt: str, **kwargs: Any) -> Any:
+            turns.append(prompt)
+            raise AssertionError("no turn runs for an opencode peer")
+
+    async def nowhere(msg: Any) -> None:
+        return None
+
+    asking = PeerQuestions(a.link, a.workspace, get_agent=lambda: None, deliver=nowhere)
+    PeerQuestions(b.link, b.workspace, get_agent=Agent, deliver=nowhere)
+    peer_on_a = a.peers()[0].id
+    for mode in ("read", "act"):
+        asked = await asking.ask("", "cosa c'è nelle tue note?", mode)
+        await wait_until(
+            lambda q=asked["qid"]: a.link.store.question(peer_on_a, "out", q)["state"] == "refused"
+        )
+    assert turns == []
+    states = [r["state"] for r in b.link.store.recent_acts(b.peers()[0].id)]
+    assert states == ["refused"]

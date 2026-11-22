@@ -36,7 +36,7 @@ from typing import Any
 from loguru import logger
 
 from .link import PeerError, PeerLink
-from .model import is_id, peer_kind, text_field
+from .model import KIND_OPENCODE, is_id, peer_kind, text_field
 from .store import new_id, now_ms
 
 KIND_ASK = "ask"
@@ -413,6 +413,9 @@ class PeerQuestions:
             {"qid": qid, "text": text[:300], "mode": mode},
         )
         # In disparte: il messaggio ha già il suo ``ack``, la risposta è un altro.
+        if peer_kind(peer.kind) == KIND_OPENCODE:
+            self._spawn(self._refuse(peer, qid, mode))
+            return
         self._spawn(self._answer(peer, qid, text, mode))
 
     async def _answer(self, peer: Any, qid: str, text: str, mode: str = "read") -> None:
@@ -472,6 +475,26 @@ class PeerQuestions:
         await asyncio.to_thread(
             self.store.log, peer.id, "out", KIND_ANSWER,
             {"qid": qid, "status": status, "files": len(infos)},
+        )
+
+    async def _refuse(self, peer: Any, qid: str, mode: str) -> None:
+        """Una domanda o una richiesta da un collegato che non ne fa: rifiutata, senza turno.
+
+        Vale per opencode sul Mac (``kind``): quel collegato risponde e basta, e
+        il pannello non ne mostra i permessi. Se un giorno chiede — un plugin
+        difettoso, o qualcuno che ha preso il suo segreto dal Mac — questo
+        telefono non legge niente per lui, qualunque cosa dica la riga in config.
+        """
+        logger.warning("peers: {} ({}) asked something, refused", peer.name, peer.kind)
+        await asyncio.to_thread(
+            self.store.set_question, peer.id, "in", qid, state="refused", answer=""
+        )
+        body: dict[str, Any] = {"qid": qid, "status": "refused", "text": "", "files": []}
+        if mode == "act":
+            body["mode"] = "act"
+        await self._link.send(peer.id, KIND_ANSWER, body)
+        await asyncio.to_thread(
+            self.store.log, peer.id, "out", KIND_ANSWER, {"qid": qid, "status": "refused"}
         )
 
     async def _run_turn(self, agent: Any, peer: Any, text: str) -> tuple[str, list[Path]]:

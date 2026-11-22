@@ -66,7 +66,7 @@ Rules on each side:
 - **A** checks frame 3 before anything else. A wrong MAC costs one of the 5 tries and closes the connection. After frame 5 checks out, A forgets the code and stores B. A also refuses a `pair` whose `from` is its own id or not an id.
 - **B** stores A only after frame 4's MAC checks out and the box opens to exactly 32 bytes, and after sending frame 5. If no code is open on A, A just closes the connection.
 
-**`agent`** says what is on each side: `"jenny"` or `"opencode"` (the `opencode-jenny` plugin on the user's computer). Each side sends it in its own frames (`pair`, `pair_challenge`, `pair_ok`) and stores what the other said with the new peer: a Jenny shows an opencode peer as a computer, not as another Jenny. The field is optional: a missing or unknown value means `"jenny"`, and older Jennys, which don't send it, are read that way. B takes it from `pair_ok`, or from `pair_challenge` if `pair_ok` doesn't carry it.
+**`agent`** says what is on each side: `"jenny"` or `"opencode"` (the `opencode-jenny` plugin on the user's computer). Each side sends it in its own frames (`pair`, `pair_challenge`, `pair_ok`) and stores what the other said with the new peer: a Jenny shows an opencode peer as a computer, not as another Jenny. A Jenny also saves an opencode peer with every permission off and answers `refused`, without running a turn, to any `ask` it sends: that side only answers. The field is self-declared and not covered by the MACs, so it can only take permissions away, never add any. The field is optional: a missing or unknown value means `"jenny"`, and older Jennys, which don't send it, are read that way. B takes it from `pair_ok`, or from `pair_challenge` if `pair_ok` doesn't carry it.
 
 ## Every connection after pairing
 

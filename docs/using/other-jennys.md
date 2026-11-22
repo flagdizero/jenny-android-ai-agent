@@ -85,7 +85,7 @@ The other side doesn't have to be a phone. If you use [opencode](https://opencod
 - **What it can read.** One folder you choose when installing (by default `~/Documents/GitHub`), and only to read: `git status`, `log`, `diff`, and GitHub's PRs, checks and runs through `gh`. It can't edit files, run other commands or open web pages. Each question is a session you can open in opencode to see what it did.
 - **Regular checks** are reminders, set in words: "every hour, ask the Mac whether the CI of PR 85 is green, and tell me only if it changes". Nothing to set up on the Mac.
 
-In the panel the Mac is marked *Mac · opencode*. It doesn't ask your phone anything, so it has no permission rows. The details of the link are in the [Peer protocol](../internals/peer-protocol.md).
+In the panel the Mac is marked *Mac · opencode*. It doesn't ask your phone anything, so it has no permission rows; and if something on the Mac did ask, your phone would refuse without looking at anything. The details of the link are in the [Peer protocol](../internals/peer-protocol.md).
 
 ## Permissions are decided by whoever receives
 

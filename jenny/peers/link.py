@@ -36,6 +36,7 @@ from jenny.snapshot.crypto_backends.base import CryptoAuthError
 from . import auth, files, model
 from .model import (
     ACT_LEVELS,
+    KIND_OPENCODE,
     KIND_PING,
     KIND_UNPAIR,
     SELF_AGENT,
@@ -589,6 +590,12 @@ class PeerLink:
                 entry.can_ask, entry.send_files, entry.act = old.can_ask, old.send_files, old.act
                 if keep_name:
                     entry.name = old.name
+            if kind == KIND_OPENCODE:
+                # Un Mac con opencode risponde e basta. Che non chieda niente
+                # non può restare una promessa del plugin: qui nasce senza
+                # permessi, e il pannello non ne mostra (né li eredita da una
+                # riga che aveva prima lo stesso indirizzo).
+                entry.can_ask, entry.send_files, entry.act = False, False, "off"
             replaced.extend(p.id for p in peers.peers if p.id != peer_id and same_phone(p))
             peers.peers = [p for p in peers.peers if not same_phone(p)] + [entry]
             peers.enabled = True
