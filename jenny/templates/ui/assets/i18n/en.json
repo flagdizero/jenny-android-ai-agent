@@ -562,6 +562,8 @@
       "canAskHint": "I look at my things and answer. I don't write, send or schedule anything.",
       "sendFiles": "Answers can carry files",
       "sendFilesHint": "A document I attach leaves this phone.",
+      "phoneConfirm": "She can confirm phone use from her phone",
+      "phoneConfirmHint": "When she asks me to use the apps on this phone, the question “about to use…, ok?” also reaches her phone, and the answer given there counts.",
       "history": "History",
       "historyEmpty": "Nothing yet.",
       "log": {
@@ -644,7 +646,25 @@
     "updatesLiveInHome": "Checking for and installing updates happens in the home, under «Updates».",
     "addProviderHint": "Name, format, endpoint, key and the first model. A brand without a working model is not a brand you have.",
     "answersNow": "answers",
-    "contextWindow": "Context window"
+    "contextWindow": "Context window",
+    "phone": {
+      "title": "Uses the phone",
+      "mode": {
+        "off": "Off",
+        "confirm": "Asks first",
+        "free": "Doesn't ask"
+      },
+      "hint": {
+        "off": "{name} does not open or touch other apps.",
+        "confirm": "{name} opens apps, reads the screen, taps and types for you. Before using an app she asks: Ok covers that request, Always covers that app. You can stop her at any moment, and touching the screen pauses her.",
+        "free": "{name} uses apps without asking. She still asks before paying, buying, deleting or transferring, and never types passwords."
+      },
+      "serviceOff": "One step is missing: in Accessibility turn on “Jenny — using the phone”. If Android calls it a restricted setting, unlock it from the app info (⋮ → Allow restricted settings).",
+      "unsupported": "Not possible on this phone: it needs Android 14.",
+      "openService": "Open Accessibility",
+      "trusted": "Apps {name} uses without asking",
+      "forget": "Remove"
+    }
   },
   "common": {
     "loading": "Loading...",

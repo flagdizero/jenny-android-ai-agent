@@ -236,7 +236,8 @@ def test_every_route_that_reaches_a_phone_action_refuses_remote_callers() -> Non
                 assert refuses, f"{module.__name__}.{m.group(1)} non rifiuta da fuori"
     # Sei metodi: le tre route delle app del telefono sono un metodo solo dal 02/11/2026.
     assert len(found) >= 6, found
-    assert len(PHONE_ONLY_ROUTES) == 8
+    # Nove dal 22/11/2026: la pagina di Accessibilità per «Usa il telefono».
+    assert len(PHONE_ONLY_ROUTES) == 9
 
 
 # -- File statici: impronta, 304, compressione -----------------------------------------

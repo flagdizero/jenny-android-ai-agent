@@ -562,6 +562,8 @@
       "canAskHint": "Guardo le mie cose e rispondo. Non scrivo, non mando, non programmo niente.",
       "sendFiles": "Le risposte possono avere file",
       "sendFilesHint": "Un documento che allego esce da questo telefono.",
+      "phoneConfirm": "Può confermare l'uso del telefono dal suo",
+      "phoneConfirmHint": "Quando mi chiede di usare le app di questo telefono, la domanda «sto per usare…, ok?» arriva anche sul suo telefono, e vale la risposta data lì.",
       "history": "Cronologia",
       "historyEmpty": "Ancora niente.",
       "log": {
@@ -644,7 +646,25 @@
     "updatesLiveInHome": "Il controllo e l'installazione degli aggiornamenti sono in casa, da «Aggiornamenti».",
     "addProviderHint": "Nome, formato, indirizzo, chiave e il primo modello. Una marca senza un modello che funziona non è una marca che c'è.",
     "answersNow": "risponde",
-    "contextWindow": "Finestra di contesto"
+    "contextWindow": "Finestra di contesto",
+    "phone": {
+      "title": "Usa il telefono",
+      "mode": {
+        "off": "Spento",
+        "confirm": "Chiede prima",
+        "free": "Non chiede"
+      },
+      "hint": {
+        "off": "{name} non apre e non tocca le altre app.",
+        "confirm": "{name} apre le app, legge lo schermo, tocca e scrive al posto tuo. Prima di usare un'app ti chiede: Ok vale per quella richiesta, Sempre per quell'app. Puoi fermarla in ogni momento, e toccando lo schermo si mette in pausa.",
+        "free": "{name} usa le app senza chiedere. Chiede comunque prima di pagare, comprare, eliminare o trasferire, e non scrive mai le password."
+      },
+      "serviceOff": "Manca un passo: in Accessibilità attiva «Jenny — usa il telefono». Se Android la dice un'impostazione con restrizioni, sbloccala dalle info dell'app (⋮ → Consenti impostazioni con restrizioni).",
+      "unsupported": "Su questo telefono non si può: serve Android 14.",
+      "openService": "Apri Accessibilità",
+      "trusted": "App che {name} usa senza chiedere",
+      "forget": "Togli"
+    }
   },
   "common": {
     "loading": "Caricamento...",

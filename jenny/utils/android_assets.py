@@ -226,6 +226,7 @@ _UI_MANIFEST = [
     "assets/home-backup.js",
     "assets/home-chat.js",
     "assets/home-jenny.js",
+    "assets/home-phone.js",
     "assets/home-board.js",
     "assets/home-board-drawer.js",
     "assets/home-board-automation.js",

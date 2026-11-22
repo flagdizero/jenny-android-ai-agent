@@ -116,6 +116,10 @@ When you link again, the other phone replaces its old row for this Jenny and kee
 
 The details: [Security model](../internals/security-model.md#other-jennys). The config keys: [`peers`](../reference/configuration.md#peers).
 
+## Using the other phone
+
+A request to act can include using the apps on that phone — "ask Work to read me today's mail". The acting phone still asks before using an app, and by default the question waits there. Turn on **She can confirm phone use from her phone** for a Jenny, on the phone that acts, and the question reaches you where you are instead. Details, and what a locked phone does, in [Using the phone](phone-use.md#from-another-jenny).
+
 ## See also
 
 - [Settings](../reference/settings.md#other-jennys): the panel, field by field.

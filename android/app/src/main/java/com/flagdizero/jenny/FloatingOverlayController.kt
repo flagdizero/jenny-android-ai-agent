@@ -1438,14 +1438,6 @@ object FloatingOverlayController {
         }
     }
 
-    /**
-     * Ritorno a parcheggiata: via il fuoco, via lo scrim, via il fumetto.
-     *
-     * Quello che **non** si butta è il testo già scritto nel campo. Una frase a
-     * metà è lavoro dell'utente, e ritrovarla al tocco dopo costa meno che
-     * riscriverla; il timer di inattività, del resto, non scatta nemmeno
-     * finché c'è del testo lì dentro (v. `armHold`).
-     */
     /** Chiude la chat flottante da fuori: Jenny sta per usare l'app che c'è
      *  sotto, e con la chat aperta quell'app per il servizio di accessibilità
      *  non esiste (v. [expand]). `false` se era già chiusa. Sul main thread. */
@@ -1455,6 +1447,14 @@ object FloatingOverlayController {
         return true
     }
 
+    /**
+     * Ritorno a parcheggiata: via il fuoco, via lo scrim, via il fumetto.
+     *
+     * Quello che **non** si butta è il testo già scritto nel campo. Una frase a
+     * metà è lavoro dell'utente, e ritrovarla al tocco dopo costa meno che
+     * riscriverla; il timer di inattività, del resto, non scatta nemmeno
+     * finché c'è del testo lì dentro (v. `armHold`).
+     */
     private fun collapse() {
         val ctx = appContext ?: return
         main.removeCallbacks(holdRunnable)
