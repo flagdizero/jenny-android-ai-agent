@@ -686,6 +686,10 @@ class NotifierBridge(context: Context) {
                 peerAction(appContext, R.string.phone_stop_label,
                     PeerActionReceiver.ACTION_STOP, id, needsUnlock = false),
             ),
+            // Sempre silenziosa: è uno stato, con Stop, non una notizia. A
+            // comparsa scendeva sopra l'app che Jenny stava usando, e lei
+            // doveva scorrerla via per vedere (Titan, 23/11/2026).
+            quiet = true,
         )
 
     /** Dice che una richiesta dell'altra Jenny è fatta, con «Annulla». Lo

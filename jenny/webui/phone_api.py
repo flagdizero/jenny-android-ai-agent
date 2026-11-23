@@ -26,8 +26,15 @@ async def phone_section(config: Config | None = None) -> dict[str, Any]:
     """La sezione ``phone`` del payload delle impostazioni."""
     phone = (config or load_config()).tools.phone
     service = await runtime.phone_state()
+    from jenny.phone.consent import can_be_trusted
+
     trusted = []
     for target in phone.trusted_apps:
+        # Una voce messa prima che «Sempre» valesse solo per app e siti (una
+        # finestra di sistema, un link ``market://``) non conta più: non si
+        # mostra, e il primo «Rimuovi» su un'altra non la tocca.
+        if not can_be_trusted(target):
+            continue
         label = target[5:] if target.startswith("link:") else await runtime.app_label(target)
         trusted.append({"target": target, "label": label})
     return {

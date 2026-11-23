@@ -367,11 +367,13 @@ _SYSTEM_PACKAGES = frozenset({
 })
 
 
-def _can_be_trusted(target: str) -> bool:
+def can_be_trusted(target: str) -> bool:
     """Si può mettere su «Sempre»? Un'app sì, un sito sì; una finestra di
     sistema o un link che non è una pagina web no: lì si chiede ogni volta."""
     if target.startswith("link:"):
-        return not target.endswith(":")
+        # Un sito ha un punto nel nome; «link:details» è quello che restava di
+        # un ``market://details`` letto come host prima del 23/11/2026.
+        return not target.endswith(":") and "." in target
     return target not in _SYSTEM_PACKAGES
 
 
@@ -509,7 +511,7 @@ async def before_tool(name: str, params: Any) -> str | None:
     approved = _approved(ctx)
     free = settings.mode() == "free"
     # Una voce rimasta in elenco da prima di questa regola non vale più.
-    trusted = {t for t in settings.trusted() if _can_be_trusted(t)}
+    trusted = {t for t in settings.trusted() if can_be_trusted(t)}
     last_app = ""
     for target in await _targets(steps):
         app = last_app = await _label(target)
@@ -522,7 +524,7 @@ async def before_tool(name: str, params: Any) -> str | None:
                 f"No one is there to confirm, and {app} is not an app the user marked "
                 "«Always». A reminder can only use those. Say so in your answer."
             )
-        options = ("ok", "always", "no") if _can_be_trusted(target) else ("ok", "no")
+        options = ("ok", "always", "no") if can_be_trusted(target) else ("ok", "no")
         choice = await pending.ask(
             kind="app", target=target, app=app, goal=goal, what="", origin=origin,
             options=options, ctx=ctx,

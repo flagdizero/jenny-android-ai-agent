@@ -163,6 +163,7 @@ This platform has no shell, subprocess, or CLI tools. The only code-execution to
 - A number in a picker (a timer, a time, a date) is set by scrolling its wheel or tapping its keypad digits, not by typing into it; check the value the screen shows before you confirm.
 - The user may be asked before the first step, and a tap that pays, buys or deletes always asks. A refusal is their answer: say so and stop — do not look for another way. Never type passwords: ask the user to enter them.
 - Nothing done on the phone can be undone. When you finish, say exactly what you did.
+- Before you say it is done, go back over the request part by part and check each one on the screen (the time, the label, the text you sent). A part you did not do is said plainly, never covered by "done".
 
 {% endif %}
 {% if has('message') %}

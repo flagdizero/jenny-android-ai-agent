@@ -99,4 +99,4 @@ A reminder has no one to ask. It may use only the apps you marked **Always** (or
 - One screen: while Jenny uses the phone, it is busy. She works where you can see her.
 - Apps that give no names (games, custom-drawn screens) are used through a picture, which needs a model that can see images; with one that cannot, Jenny says the app cannot be read.
 - Android hides a few of its own dialogs from every app that is not a disability tool — permission requests, the "Install this app?" confirmation. Jenny cannot read or answer those: she stops and tells you.
-- The pill sits over the top of the app; it moves out of the way of Jenny's own taps. The floating mascot hides while Jenny works and comes back when she is done.
+- The pill sits over the top of the app; it moves out of the way of Jenny's own taps. The floating mascot hides while Jenny works and comes back when she is done. Pressing Home while she works pauses her, as a touch does.

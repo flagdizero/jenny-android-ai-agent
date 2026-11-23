@@ -15,7 +15,9 @@ import android.view.accessibility.AccessibilityEvent
  * Qui dentro c'è solo il guscio, come in [ScreenService]: la lettura la fa
  * [PhoneTree], le azioni [PhoneActions]. Gli eventi servono a una cosa sola,
  * sapere quando lo schermo ha smesso di cambiare dopo un'azione
- * ([PhoneActions.settle]); il loro contenuto non si guarda.
+ * ([PhoneActions.settle]), e accorgersi che l'utente è tornato alla home
+ * mentre Jenny guidava ([PhonePill.foregroundChanged]); il loro contenuto non
+ * si guarda.
  */
 class HandsService : AccessibilityService() {
 
@@ -29,6 +31,9 @@ class HandsService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         lastEventAt = SystemClock.elapsedRealtime()
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            PhonePill.foregroundChanged(event.packageName?.toString(), event.className?.toString())
+        }
     }
 
     override fun onInterrupt() = Unit

@@ -65,7 +65,9 @@ async def test_the_first_step_shows_it_and_later_ones_only_update(phone) -> None
     first = await drive.begin(_ctx(), "apro l'orologio")
     second = await drive.begin(_ctx(), "metto la sveglia")
     assert first is second
-    assert phone["collapsed"] == 1 and phone["notice"] == ["apro l'orologio"]
+    # Il fumetto si chiude una volta; la notifica segue il passo di adesso.
+    assert phone["collapsed"] == 1
+    assert phone["notice"] == ["apro l'orologio", "metto la sveglia"]
     assert phone["pill"] == [("driving", "apro l'orologio"), ("driving", "metto la sveglia")]
 
 
@@ -98,3 +100,35 @@ async def test_stop_halts_the_hands_denies_questions_and_stops_the_turn(phone) -
     assert await drive.stop("0" * 32) is False
     assert await drive.stop(d.ident) is True
     assert phone["halted"] == 1 and phone["stopped"] == [("websocket", "c1")]
+
+
+async def test_a_read_from_the_mascot_closes_the_bubble_and_answers_on_the_pill(phone) -> None:
+    """Una lettura dalla mascotte chiude il fumetto (aperto copre l'app), e
+    allora la risposta va sulla pillola anche senza una guida."""
+    ctx = _ctx("floating")
+    await drive.collapse_for_reading(ctx)
+    assert phone["collapsed"] == 1
+    await drive.end_turn(ctx)
+    assert await drive.show_result("**08:30** — spenta\n- **09:00** — spenta")
+    assert phone["pill"][-1] == ("done", "08:30 — spenta · 09:00 — spenta")
+
+
+async def test_a_read_from_the_app_chat_touches_no_bubble(phone) -> None:
+    ctx = _ctx("websocket")
+    await drive.collapse_for_reading(ctx)
+    await drive.end_turn(ctx)
+    assert phone["collapsed"] == 0
+    assert not await drive.show_result("x")
+
+
+async def test_a_bubble_already_closed_leaves_no_mark(phone, monkeypatch) -> None:
+    from jenny.runtime import floating
+
+    async def closed() -> bool:
+        return False
+
+    monkeypatch.setattr(floating, "collapse", closed)
+    ctx = _ctx("floating")
+    await drive.collapse_for_reading(ctx)
+    await drive.end_turn(ctx)
+    assert not await drive.show_result("x")

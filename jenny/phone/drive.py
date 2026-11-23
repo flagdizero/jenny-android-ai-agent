@@ -20,6 +20,7 @@ non ha niente da riprendere.
 
 from __future__ import annotations
 
+import re
 import secrets
 import time
 from collections.abc import Awaitable, Callable
@@ -51,6 +52,9 @@ class Drive:
 
 _DRIVES: dict[str, Drive] = {}
 _ENDED: tuple[str, float] | None = None
+# I turni partiti dalla mascotte che hanno chiuso il fumetto solo per leggere:
+# a fine turno la risposta va sulla pillola come dopo una guida.
+_READ_ONLY: set[str] = set()
 
 # Chi ferma davvero il turno: lo registra chi costruisce il gateway.
 _STOPPER: Callable[[Drive], Awaitable[None]] | None = None
@@ -69,6 +73,7 @@ def install(
     global _STOPPER, _NOTICE, _CLEAR, _ENDED
     _STOPPER, _NOTICE, _CLEAR = stopper, notice, clear
     _DRIVES.clear()
+    _READ_ONLY.clear()
     _ENDED = None
 
 
@@ -97,21 +102,41 @@ async def begin(ctx: RequestContext | None, goal: str) -> Drive:
         from jenny.runtime import floating
 
         await floating.collapse()
-        if _NOTICE is not None:
-            try:
-                _NOTICE(drive.ident, text)
-            except Exception:  # noqa: BLE001 — la notifica non ferma la guida
-                logger.opt(exception=True).debug("phone: driving notice failed")
+    # La notifica dice il passo di adesso, come la pillola: lo stesso id la
+    # sostituisce in silenzio. Prima restava al primo passo del turno.
+    if _NOTICE is not None:
+        try:
+            _NOTICE(drive.ident, text)
+        except Exception:  # noqa: BLE001 — la notifica non ferma la guida
+            logger.opt(exception=True).debug("phone: driving notice failed")
     await runtime.pill_driving(drive.ident, text)
     return drive
+
+
+async def collapse_for_reading(ctx: RequestContext | None) -> None:
+    """Chiude il fumetto della mascotte prima di una lettura, se la richiesta
+    viene da lì: aperto, copre l'app che Jenny deve leggere."""
+    if consent.origin_of(ctx) != "floating":
+        return
+    from jenny.runtime import floating
+
+    if await floating.collapse():
+        _READ_ONLY.add(_turn_key(ctx))
 
 
 async def end_turn(ctx: RequestContext | None) -> None:
     """Il turno è finito: se guidava, si smette di mostrarlo. Mai solleva."""
     global _ENDED
     try:
-        drive = _DRIVES.pop(_turn_key(ctx), None)
+        key = _turn_key(ctx)
+        drive = _DRIVES.pop(key, None)
+        read_only = key in _READ_ONLY
+        _READ_ONLY.discard(key)
         if drive is None:
+            if read_only:
+                # Il fumetto l'ha chiuso Jenny per leggere: la risposta non
+                # ha più dove comparire, se non sulla pillola.
+                _ENDED = ("floating", time.monotonic())
             return
         if _CLEAR is not None:
             _CLEAR(drive.ident)
@@ -137,7 +162,16 @@ async def show_result(text: str) -> bool:
     if time.monotonic() - ended[1] > RESULT_WINDOW_S:
         return False
     _ENDED = None
-    return await runtime.pill_done(" ".join(text.split())[:320])
+    return await runtime.pill_done(_plain(text)[:320])
+
+
+def _plain(text: str) -> str:
+    """La risposta come testo semplice: la pillola non disegna il markdown, e
+    sul Titan mostrava «**08:30**» con gli asterischi (23/11/2026)."""
+    text = re.sub(r"(\*\*|__|`)", "", text)
+    text = re.sub(r"(?m)^\s*#+\s*", "", text)
+    text = re.sub(r"(?m)^\s*[-*]\s+", "· ", text)
+    return " ".join(text.split())
 
 
 async def stop(ident: str) -> bool:

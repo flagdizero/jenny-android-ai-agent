@@ -63,6 +63,9 @@ object PhonePill {
     /** Un tocco entro questo tempo da un gesto iniettato è di Jenny. */
     private const val OWN_TOUCH_MS = 600L
 
+    /** La home che arriva entro questo tempo dal passo `home` di Jenny è sua. */
+    private const val OWN_SWITCH_MS = 3_000L
+
     /** Quanto resta a schermo l'esito: il tempo di leggere tre o quattro
      *  righe. A 8 s, sull'emulatore il 22/11/2026, spariva a metà lettura. */
     private const val DONE_MS = 20_000L
@@ -290,6 +293,38 @@ object PhonePill {
             false
         }
     }
+
+    /**
+     * Davanti è arrivata un'altra finestra. Se è la home o Jenny stessa, e
+     * non l'ha portata lei, l'utente ha premuto Home (o ha aperto Jenny): è
+     * come un tocco, si mette in pausa. Home è un tasto, non un tocco, e la
+     * pillola non lo sentiva: sul Titan, il 23/11/2026, Jenny continuava a
+     * scorrere sulla propria chat credendo di essere ancora in Files.
+     */
+    fun foregroundChanged(pkg: String?, cls: String?) {
+        if (driving == null || pkg == null) return
+        val svc = HandsService.instance ?: return
+        // Pillola e mascotte sono finestre di Jenny anche loro, e comparire le
+        // fa annunciare: di Jenny conta solo la chat, cioè l'attività.
+        val jenny = pkg == svc.packageName && cls == MainActivity::class.java.name
+        if (!jenny && (pkg == svc.packageName || pkg != homePackage(svc))) return
+        main.post {
+            if (driving == null || question != null || PhoneActions.paused) return@post
+            // L'unico passo con cui Jenny porta lei la home è `home`. Una
+            // finestra dopo ogni passo era troppo larga: un Home premuto meno
+            // di 3 s dopo un tocco di Jenny passava per suo (Titan, 23/11/2026).
+            val since = SystemClock.elapsedRealtime() - PhoneActions.ownHomeAt
+            if (since < OWN_SWITCH_MS) return@post
+            PhoneActions.pause()
+            Log.i(TAG, "The user went to $pkg: paused")
+            draw()
+        }
+    }
+
+    private fun homePackage(context: Context): String? =
+        context.packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0,
+        )?.activityInfo?.packageName
 
     /** Un tocco fuori dalla pillola mentre Jenny guida: se non è suo, pausa. */
     private fun outsideTouch() {
