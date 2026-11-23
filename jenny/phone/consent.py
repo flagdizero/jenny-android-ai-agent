@@ -347,8 +347,32 @@ def _approved(ctx: RequestContext | None) -> set[str]:
 
 
 def _link_target(url: str) -> str:
-    host = urlsplit(url if "://" in url else f"https://{url}").hostname or "a link"
-    return f"link:{host}"
+    """Un link vale per il suo sito. Uno che non è una pagina web (``market://``,
+    ``tel:``, ``geo:``) non ha un sito: vale per il suo tipo, e «details» —
+    quello che ``urlsplit`` chiama host in ``market://details?id=…`` — non è il
+    nome di niente (finì fra le app su «Sempre» sul Titan, il 22/11/2026)."""
+    parts = urlsplit(url if "://" in url or ":" in url.split("/")[0] else f"https://{url}")
+    if parts.scheme in ("http", "https"):
+        return f"link:{parts.hostname or 'a link'}"
+    return f"link:{parts.scheme}:"
+
+
+#: Le finestre di Android stesso: il selettore «Apri con», l'installer, la
+#: barra di sistema. Non sono un'app di cui fidarsi una volta per tutte —
+#: «Sempre» per ``android`` varrebbe per ogni finestra che il sistema apre.
+_SYSTEM_PACKAGES = frozenset({
+    "android", "com.android.systemui", "com.android.packageinstaller",
+    "com.google.android.packageinstaller", "com.android.permissioncontroller",
+    "com.google.android.permissioncontroller", "com.android.intentresolver",
+})
+
+
+def _can_be_trusted(target: str) -> bool:
+    """Si può mettere su «Sempre»? Un'app sì, un sito sì; una finestra di
+    sistema o un link che non è una pagina web no: lì si chiede ogni volta."""
+    if target.startswith("link:"):
+        return not target.endswith(":")
+    return target not in _SYSTEM_PACKAGES
 
 
 async def _targets(steps: list[dict[str, Any]]) -> list[str]:
@@ -387,7 +411,8 @@ async def _touched_app(step: dict[str, Any] | None = None) -> str | None:
 
 async def _label(target: str) -> str:
     if target.startswith("link:"):
-        return target[5:]
+        # ``link:market:`` è un tipo di link, non un sito: «a market link».
+        return f"a {target[5:-1]} link" if target.endswith(":") else target[5:]
     return await runtime.app_label(target)
 
 
@@ -483,7 +508,8 @@ async def before_tool(name: str, params: Any) -> str | None:
     unattended = origin == "cron"
     approved = _approved(ctx)
     free = settings.mode() == "free"
-    trusted = settings.trusted()
+    # Una voce rimasta in elenco da prima di questa regola non vale più.
+    trusted = {t for t in settings.trusted() if _can_be_trusted(t)}
     last_app = ""
     for target in await _targets(steps):
         app = last_app = await _label(target)
@@ -496,9 +522,10 @@ async def before_tool(name: str, params: Any) -> str | None:
                 f"No one is there to confirm, and {app} is not an app the user marked "
                 "«Always». A reminder can only use those. Say so in your answer."
             )
+        options = ("ok", "always", "no") if _can_be_trusted(target) else ("ok", "no")
         choice = await pending.ask(
             kind="app", target=target, app=app, goal=goal, what="", origin=origin,
-            options=("ok", "always", "no"), ctx=ctx,
+            options=options, ctx=ctx,
         )
         if choice == "always":
             await settings.trust(target)
