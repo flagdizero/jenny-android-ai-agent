@@ -318,6 +318,17 @@ dependencies {
     implementation("io.noties.markwon:linkify:4.6.2")
     implementation("io.noties.markwon:html:4.6.2")
 
+    // Il lettore del QR d'abbinamento fra due Jenny (QrScanActivity): CameraX
+    // per l'anteprima e i fotogrammi, ZXing per leggere il QR (Android non ha un
+    // lettore suo). Nessuna delle due tocca Google Play Services: vanno anche
+    // nella `foss`. CameraX ferma alla 1.5.x finché il plugin Kotlin è il 2.0:
+    // la 1.6 porta kotlin-stdlib 2.1 e la 1.7 la 2.2, che il compilatore 2.0
+    // non legge.
+    implementation("androidx.camera:camera-camera2:1.5.3")
+    implementation("androidx.camera:camera-lifecycle:1.5.3")
+    implementation("androidx.camera:camera-view:1.5.3")
+    implementation("com.google.zxing:core:3.5.4")
+
     // Test JVM delle regole native senza Android (`./gradlew testFossDebugUnitTest`).
     // La CI non costruisce l'APK, quindi non li gira: si lanciano a mano prima
     // di un install. Il primo è `ImeBindingPolicyTest`.

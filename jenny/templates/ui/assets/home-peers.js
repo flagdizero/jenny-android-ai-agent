@@ -358,8 +358,14 @@ export class HomePeers {
       b.append(text, icon('ti-chevron-right', 'home-row-go'));
       return b;
     };
+    /* Il lettore interno c'è solo nell'app Android: nel browser la scelta
+       non compare. */
+    const scan = globalThis.window?.JennyNative?.scanPairQr;
     card.append(
       choice('ti-qrcode', t('showQr'), t('showQrSub'), () => this._startQr()),
+      ...(typeof scan === 'function'
+        ? [choice('ti-scan', t('scanQr'), t('scanQrSub'), () => scan())]
+        : []),
       choice('ti-keyboard', t('haveCode'), t('haveCodeSub'), () => {
         this._link = null;
         this.view = 'join';

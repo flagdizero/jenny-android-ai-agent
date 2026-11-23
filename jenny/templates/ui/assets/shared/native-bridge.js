@@ -61,6 +61,10 @@
        (`shared/places.js`). App Maps, poi qualunque app di mappe, poi il
        browser. */
     'openMap',
+    /* `scanPairQr()`: apre il lettore del QR d'abbinamento
+       (`QrScanActivity.kt`). Il link letto torna come quello della fotocamera
+       di sistema: `window.jennyPeer.onPairLink()`, poi `takePairLink()`. */
+    'scanPairQr',
     /* `extensionCall(estensione, metodo, ...argomenti)`: il comando di
        un'estensione nativa (`NativeExtension.kt`). Uno solo e generico, così
        questo elenco non nomina le estensioni che una build non ha. */

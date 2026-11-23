@@ -73,4 +73,10 @@
     <string name="hands_service_label">Jenny — using the phone</string>
     <string name="hands_service_summary">Jenny opens apps, taps and types for you, when you ask her</string>
     <string name="hands_service_description">When you ask Jenny to do something on the phone, she opens the app, reads what is on screen, taps, types and scrolls like you would. She asks before she starts, you can stop her at any moment, and she never types passwords.</string>
+
+    <string name="qr_scan_hint">Point at the other Jenny\'s QR</string>
+    <string name="qr_scan_not_jenny">This QR is not a Jenny pairing code</string>
+    <string name="qr_scan_no_camera">Jenny needs the camera to read the QR. You can type the code by hand instead.</string>
+    <string name="qr_scan_failed">The camera did not start. You can type the code by hand instead.</string>
+    <string name="qr_scan_close">Close</string>
 </resources>

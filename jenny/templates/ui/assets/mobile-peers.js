@@ -177,6 +177,8 @@ export class PeersPanel {
       parts.push(`<div class="remote-actions">
         <button class="settings-btn-add" type="button" data-peers="show-qr">
           <i class="ti ti-qrcode" aria-hidden="true"></i> ${escapeHtml(t('showQr'))}</button>
+        ${typeof globalThis.window?.JennyNative?.scanPairQr === 'function' ? `<button class="settings-btn-add" type="button" data-peers="scan">
+          <i class="ti ti-scan" aria-hidden="true"></i> ${escapeHtml(t('scanQr'))}</button>` : ''}
         <button class="settings-btn-add" type="button" data-peers="join">
           <i class="ti ti-keyboard" aria-hidden="true"></i> ${escapeHtml(t('haveCode'))}</button>
       </div>`);
@@ -405,6 +407,8 @@ export class PeersPanel {
     } else if (what === 'cancel') {
       this._pair = null;
       await this._run(() => rpc.peer('pair.cancel'));
+    } else if (what === 'scan') {
+      globalThis.window?.JennyNative?.scanPairQr?.();
     } else if (what === 'join') {
       this.join(null);
     } else if (what === 'ping') {
