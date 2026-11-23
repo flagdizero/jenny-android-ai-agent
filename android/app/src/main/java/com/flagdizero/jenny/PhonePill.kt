@@ -81,9 +81,21 @@ object PhonePill {
     private var drivingText = ""
 
     /** La domanda a schermo, finché non ha una risposta ([askDone]). */
-    private class Question(val cid: String, val title: String, val body: String, val always: Boolean)
+    private class Question(
+        val cid: String,
+        val title: String,
+        val body: String,
+        val always: Boolean,
+        /** Il centro, sullo schermo, di quello di cui si chiede; `null` se
+         *  non si sa (aprire un'app non ha un punto). */
+        val target: Pair<Float, Float>?,
+    )
 
     private var question: Question? = null
+
+    /** Perché è in pausa: un tocco sullo schermo o l'uscita dall'app (Home).
+     *  La pillola lo dice com'è andata. */
+    private var pausedByLeaving = false
     private val hide = Runnable { remove() }
 
     /** I tasti a schermo adesso, per [debugPress]. */
@@ -98,9 +110,9 @@ object PhonePill {
     }
 
     /** Mostra la domanda *cid*. */
-    fun ask(cid: String, title: String, body: String, always: Boolean): Boolean = onMain {
+    fun ask(cid: String, title: String, body: String, always: Boolean, where: String = ""): Boolean = onMain {
         HandsService.instance ?: return@onMain false
-        question = Question(cid, title, body, always)
+        question = Question(cid, title, body, always, locate(where))
         // La domanda riguarda il passo che sta per partire: dopo la risposta
         // la guida mostra quello, non il testo del passo di prima.
         val goal = body.trim().removeSurrounding("«", "»").trim()
@@ -147,10 +159,10 @@ object PhonePill {
         } else {
             // L'esito è un testo da leggere, non un titolo: va nel corpo, che
             // tiene più righe. Toccarlo porta alla chat, dove c'è intero.
-            show(svc, null, text, listOf("✕" to { remove() })) {
+            show(svc, null, text, listOf("✕" to { remove() }), onTap = {
                 remove()
                 Intents.tryStart(svc, MainActivity.openChatIntent(svc), TAG, "the chat")
-            }
+            })
             main.postDelayed(hide, DONE_MS)
         }
         true
@@ -196,6 +208,27 @@ object PhonePill {
         Thread.sleep(120)
     }
 
+    /**
+     * Dove sta *where* sullo schermo: `ref:3:e12` (un elemento dell'ultima
+     * lettura) o `pt:x,y` (un punto dell'ultima foto). La pillola sta in alto,
+     * e chiedendo «Elimina?» copriva proprio la riga da eliminare (Titan,
+     * 23/11/2026): sapendo dov'è, si sposta.
+     */
+    private fun locate(where: String): Pair<Float, Float>? = runCatching {
+        when {
+            where.startsWith("ref:") -> {
+                val element = PhoneTree.current()?.elements?.get(where.removePrefix("ref:")) ?: return null
+                val box = Rect().also { element.node.getBoundsInScreen(it) }
+                if (box.isEmpty) null else box.exactCenterX() to box.exactCenterY()
+            }
+            where.startsWith("pt:") && PhoneShot.ready -> {
+                val (x, y) = where.removePrefix("pt:").split(",").map { it.trim().toDouble() }
+                PhoneShot.toScreen(x, y)
+            }
+            else -> null
+        }
+    }.getOrNull()
+
     /** Disegna la faccia giusta per lo stato di adesso: la domanda, se ce n'è
      *  una; altrimenti la pausa o la guida. */
     private fun draw(): Boolean {
@@ -208,12 +241,17 @@ object PhonePill {
                 }
                 add(svc.getString(R.string.phone_ok_label) to { send(svc, PeerActionReceiver.ACTION_ALLOW, q.cid) })
             }
-            return show(svc, q.title, q.body, buttons)
+            // Quello di cui si chiede sta nei due terzi alti: la pillola va giù.
+            // Con la metà, un «Delete» poco sotto il centro la lasciava in alto,
+            // sopra la sveglia stessa che si stava per eliminare (Titan,
+            // 23/11/2026): quello che conta vedere sta di solito sopra il tasto.
+            val low = q.target?.let { it.second < svc.resources.displayMetrics.heightPixels * 2f / 3f } ?: false
+            return show(svc, q.title, q.body, buttons, atBottom = low)
         }
         val id = driving ?: return false
         return if (PhoneActions.paused) {
             show(
-                svc, svc.getString(R.string.phone_paused), null,
+                svc, svc.getString(if (pausedByLeaving) R.string.phone_paused_left else R.string.phone_paused), null,
                 listOf(
                     svc.getString(R.string.phone_stop_label) to { send(svc, PeerActionReceiver.ACTION_STOP, id) },
                     svc.getString(R.string.phone_continue_label) to {
@@ -245,6 +283,7 @@ object PhonePill {
         body: String?,
         buttons: List<Pair<String, () -> Unit>>,
         onTap: (() -> Unit)? = null,
+        atBottom: Boolean = false,
     ): Boolean {
         remove()
         shownButtons = buttons
@@ -279,7 +318,7 @@ object PhonePill {
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            gravity = (if (atBottom) Gravity.BOTTOM else Gravity.TOP) or Gravity.CENTER_HORIZONTAL
             y = dp(svc, 48)
         }
         return try {
@@ -316,6 +355,7 @@ object PhonePill {
             val since = SystemClock.elapsedRealtime() - PhoneActions.ownHomeAt
             if (since < OWN_SWITCH_MS) return@post
             PhoneActions.pause()
+            pausedByLeaving = true
             Log.i(TAG, "The user went to $pkg: paused")
             draw()
         }
@@ -336,6 +376,7 @@ object PhonePill {
         Log.i(TAG, "Touch outside the pill, ${since}ms after Jenny's last gesture")
         if (since < OWN_TOUCH_MS) return
         PhoneActions.pause()
+        pausedByLeaving = false
         Log.i(TAG, "The user touched the screen: paused")
         draw()
     }

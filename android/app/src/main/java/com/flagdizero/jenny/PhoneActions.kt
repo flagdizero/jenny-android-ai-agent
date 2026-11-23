@@ -281,6 +281,16 @@ object PhoneActions {
             throw Refusal("the field did not take the text")
         }
         var note = "typed ${text.length} characters"
+        // Un campo che accetta il testo e poi mostra altro è quasi sempre un
+        // selettore (le cifre di un timer, una rotella): sul Titan, il
+        // 23/11/2026, «01» scritto nei minuti diventava un timer da 55. Lo si
+        // dice subito, invece di lasciarlo scoprire dalla lettura dopo.
+        target.refresh()
+        val shown = target.text?.toString().orEmpty()
+        if (text.isNotEmpty() && !shown.contains(text)) {
+            note += ", but the field now shows \"${shown.take(40)}\" — it does not take typed text " +
+                "as is (a picker or a keypad?): scroll its wheel or tap its digits instead"
+        }
         if (step.optBoolean("enter", false)) {
             val sent = target.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
             note += if (sent) ", then Enter" else ", but the field has no Enter action — tap its send or search button"

@@ -43,6 +43,9 @@
     <string name="phone_stop_label">Ferma</string>
     <string name="phone_continue_label">Continua</string>
     <string name="phone_paused">In pausa: hai toccato lo schermo</string>
+    <string name="phone_channel_name">Uso del telefono</string>
+    <string name="phone_channel_description">Cosa sta facendo Jenny sul telefono, con Ferma, mentre la pillola lo mostra a schermo</string>
+    <string name="phone_paused_left">In pausa: hai lasciato l\'app</string>
 
     <string name="hands_service_label">Jenny — usa il telefono</string>
     <string name="hands_service_summary">Jenny apre le app, tocca e scrive al posto tuo, quando glielo chiedi</string>

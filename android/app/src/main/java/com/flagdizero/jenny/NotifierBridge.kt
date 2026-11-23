@@ -33,6 +33,12 @@ class NotifierBridge(context: Context) {
     companion object {
         private const val TAG = "NotifierBridge"
         private const val CHANNEL_ID = "jenny_alerts"
+
+        /** Il canale delle notifiche che la pillola mostra già a schermo:
+         *  importanza bassa, quindi mai a comparsa sopra l'app. `setSilent` non
+         *  bastava: con due notifiche, Android le raggruppava e il gruppo
+         *  scendeva lo stesso sopra l'Orologio (Titan, 23/11/2026). */
+        private const val QUIET_CHANNEL_ID = "jenny_phone"
         // ID fisso + tag variabile: alert con lo stesso tag si sostituiscono
         // (niente pila infinita per la stessa sorgente), tag diversi convivono.
         // `internal` perché `ReplyReceiver` cancella con questo ID l'alert a cui
@@ -748,12 +754,19 @@ class NotifierBridge(context: Context) {
         }
         return try {
             val tag = peerTag(kind, ident)
-            val builder = NotificationCompat.Builder(appContext, CHANNEL_ID)
+            if (quiet) {
+                JennyChannels.ensure(
+                    appContext, QUIET_CHANNEL_ID, R.string.phone_channel_name,
+                    R.string.phone_channel_description, NotificationManager.IMPORTANCE_LOW,
+                    silent = true,
+                )
+            }
+            val builder = NotificationCompat.Builder(appContext, if (quiet) QUIET_CHANNEL_ID else CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_jenny)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setPriority(if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 // Il tocco sul corpo apre la chat, ma la notifica resta: i suoi
                 // pulsanti sono l'unico posto da cui si risponde.
@@ -769,9 +782,6 @@ class NotifierBridge(context: Context) {
                     )
                 )
             actions.forEach { builder.addAction(it) }
-            // «Silenziosa» toglie suono, vibrazione e la comparsa sopra l'app;
-            // il canale resta quello degli avvisi, che l'utente conosce.
-            if (quiet) builder.setSilent(true)
             val manager = appContext.getSystemService(NotificationManager::class.java)
                 ?: return false
             manager.notify(tag, PEER_NOTICE_ID, builder.build())

@@ -66,6 +66,9 @@
     <string name="phone_stop_label">Stop</string>
     <string name="phone_continue_label">Continue</string>
     <string name="phone_paused">Paused: you touched the screen</string>
+    <string name="phone_channel_name">Using the phone</string>
+    <string name="phone_channel_description">What Jenny is doing on the phone, with Stop, while the pill shows it on screen</string>
+    <string name="phone_paused_left">Paused: you left the app</string>
 
     <string name="hands_service_label">Jenny — using the phone</string>
     <string name="hands_service_summary">Jenny opens apps, taps and types for you, when you ask her</string>

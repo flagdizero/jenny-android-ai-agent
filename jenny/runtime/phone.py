@@ -153,9 +153,11 @@ async def app_label(package: str) -> str:
     return str(label) if label else str(package)
 
 
-async def pill_ask(cid: str, title: str, body: str, *, always: bool) -> bool:
-    """La domanda *cid* sulla pillola sopra l'app. Falso se non si può mostrare."""
-    return bool(await _call("pillAsk", cid, title, body, bool(always)))
+async def pill_ask(cid: str, title: str, body: str, *, always: bool, where: str = "") -> bool:
+    """La domanda *cid* sulla pillola sopra l'app. *where* (``ref:…`` o
+    ``pt:x,y``) è quello di cui si chiede: la pillola non lo copre. Falso se
+    non si può mostrare."""
+    return bool(await _call("pillAsk", cid, title, body, bool(always), str(where)))
 
 
 async def pill_ask_done() -> bool:
