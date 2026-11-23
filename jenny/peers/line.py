@@ -495,6 +495,12 @@ class PeerLines:
                 channel, chat_id = _split_key(row["key"])
                 await self.close(channel, chat_id, reason=reason, tell_peer=False)
 
+    async def peers_changed(self) -> None:
+        """Le Jenny collegate sono cambiate: la WebUI rilegge lo stato."""
+        from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID
+
+        await self._emit(WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID, {"kind": "peers"})
+
     async def peer_gone(self, peer_id: str) -> None:
         """*peer_id* si scollega: via le linee nei due versi, senza scriverle più."""
         await self.close_for_peer(peer_id, reason="unpaired")

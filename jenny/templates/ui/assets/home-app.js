@@ -79,7 +79,7 @@ import { HomeLine } from './home-line.js';
 import { HomePeers, peersSummary } from './home-peers.js';
 import { sessionManager } from './shared/session-manager.js';
 import { chatIdOf, wsManager } from './shared/ws-manager.js';
-import { stashPairLink, watchPairLinks } from './shared/peer-link.js';
+import { watchPairLinks } from './shared/peer-link.js';
 import './shared/theme.js';
 
 /* Quanto aspettare prima di dire che il filo e' interrotto. Il socket si riapre
@@ -338,6 +338,7 @@ class HomeApp {
       openHome: (name) => (name ? this._enterNotebookChat(name) : this.openChat(null)),
       openPeers: ({ add } = {}) => this.openPeers({ add }),
       onChange: () => this._applyConversationTexts(),
+      onPeers: () => this.peersRoom?.peek(),
     });
     /* «Altre Jenny»: la stanza delle collegate, dalle Impostazioni e dal + del
        foglio «Con chi parli». «Parla» apre la linea e porta alla chat. */
@@ -606,12 +607,10 @@ class HomeApp {
     });
 
     /* Un QR d'abbinamento di un'altra Jenny, inquadrato con la fotocamera:
-       Android lo passa qui (`shared/peer-link.js`), e il modulo per collegarla
-       sta in officina. Il link viaggia in `sessionStorage`, non nell'URL. */
-    watchPairLinks((link) => {
-      stashPairLink(link);
-      api.navigate('/html-mobile/workshop.html?mode=hands');
-    });
+       Android lo passa qui (`shared/peer-link.js`), e lo si apre nella stanza
+       «Altre Jenny», col modulo già compilato e il terzo passo (il nome, la
+       linea). L'officina resta per chi ci sta già: lo prende da sé. */
+    watchPairLinks((link) => this.openPeers({ link }));
 
     // La barra di selezione che riappariva al rientro: v. `releaseSelectionOnBlur`.
     releaseSelectionOnBlur();
@@ -1403,9 +1402,9 @@ class HomeApp {
   }
 
   /** «Altre Jenny»; con `add`, dritta al collegamento di una nuova. */
-  openPeers({ add = false } = {}) {
+  openPeers({ add = false, link = null } = {}) {
     this._setView('peers');
-    this.peersRoom.open({ add });
+    this.peersRoom.open({ add, link });
   }
 
   /** «Backup». */

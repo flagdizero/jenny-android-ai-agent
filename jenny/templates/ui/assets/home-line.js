@@ -83,6 +83,7 @@ export class HomeLine {
    */
   constructor({
     shell, chatEl, composer = {}, sheet, isPersonal, notebooks, openHome, openPeers, onChange,
+    onPeers,
   } = {}) {
     this.shell = shell;
     this.chatEl = chatEl;
@@ -95,6 +96,8 @@ export class HomeLine {
     this.openHome = openHome || (() => {});
     this.openPeers = openPeers || (() => {});
     this.onChange = onChange || (() => {});
+    /** Le Jenny collegate sono cambiate (frame `peers`). */
+    this.onPeers = onPeers || (() => {});
     /** Lo stato dei collegamenti (`peer.status`), o `null` prima di saperlo. */
     this.status = null;
     /** La linea aperta sulla chat di sempre, o `null`. */
@@ -354,6 +357,11 @@ export class HomeLine {
       this._appendAsk(msg.ask);
     } else if (msg.kind === 'ask_closed') {
       this._dropAsk(msg.cid);
+    } else if (msg.kind === 'peers') {
+      /* Collegata o scollegata una Jenny, anche dall'altro telefono: si
+         rilegge chi c'e' (il tasto, il foglio, la riga delle Impostazioni). */
+      this.onPeers();
+      this.refresh();
     } else if (msg.kind === 'closed') {
       const reason = msg.reason;
       this._setLine(null);

@@ -634,3 +634,11 @@ async def test_a_superseded_reply_of_a_line_turn_reaches_the_other_jenny(tmp_pat
     ]
     # Fuori da una linea non c'è niente da mandare.
     assert AgentLoop._line_reply_callback(loop, WS, CHAT, {}) is None  # type: ignore[arg-type]
+
+
+async def test_a_change_of_linked_jennys_tells_the_house(two):
+    # Sui due emulatori (23/11): scollegata dall'altro telefono, in casa il
+    # tasto ⇄ e la riga «Altre Jenny» restavano col nome di prima.
+    side_a, _side_b = await _linked(two)
+    await side_a.lines.peers_changed()
+    assert side_a.frames[-1] == {"channel": WS, "chat_id": CHAT, "kind": "peers"}

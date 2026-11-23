@@ -861,6 +861,11 @@ class GatewayContainer:
                     self._register_peers_job(fresh)
                 if self._peer_questions is not None:
                     await self._peer_questions.refresh()
+                # La casa rilegge chi è collegato: uno scollegamento fatto
+                # dall'altro telefono lasciava il tasto ⇄ e la riga «Altre Jenny»
+                # col nome di prima (sui due emulatori, 23/11).
+                if link.lines is not None:
+                    await link.lines.peers_changed()
 
             link.on_change = peers_changed
             self._wire_peer_questions(link, config)
