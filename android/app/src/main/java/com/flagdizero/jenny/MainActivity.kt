@@ -628,27 +628,83 @@ class MainActivity : AppCompatActivity() {
             callback?.onReceiveValue(resolveFileChooserResult(result, cameraUri))
         }
 
+    /** Il lettore del QR d'abbinamento ([QrScanActivity], aperto da
+     *  [NativeCommands.scanPairQr]). Il link letto entra dallo stesso punto di
+     *  un QR inquadrato con la fotocamera di sistema: [capturePairLink], poi la
+     *  pagina avvisata lo chiede e apre il modulo già compilato. */
+    private val qrScanLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val link = result.data?.getStringExtra(QrScanActivity.EXTRA_LINK)
+            if (result.resultCode != Activity.RESULT_OK || link == null) return@registerForActivityResult
+            if (capturePairLink(Intent(Intent.ACTION_VIEW, Uri.parse(link)))) {
+                webView?.evaluateJavascript(
+                    "if (window.jennyPeer && window.jennyPeer.onPairLink) window.jennyPeer.onPairLink()"
+                ) {}
+            }
+        }
+
     /** Apre il chooser di sistema: file manager + galleria (ACTION_GET_CONTENT
      *  su qualsiasi MIME, multiplo) e, se disponibile, lo scatto foto come
      *  intent iniziale. Lancia da onShowFileChooser dopo aver registrato il
      *  callback WebView. */
     private fun launchFileChooser() {
+        // Da quando il manifest dichiara CAMERA (per il lettore QR), Android
+        // rifiuta ACTION_IMAGE_CAPTURE a un'app che lo dichiara senza averlo:
+        // la voce Fotocamera del chooser falliva in silenzio (SecurityException
+        // nel chooser, misurato su jenny_s22 il 23/11/2026). Quindi prima il
+        // permesso, se c'è un'app fotocamera; negato, il chooser esce senza
+        // quella voce. Dopo due «No» Android non mostra più la domanda e la
+        // risposta arriva subito.
+        val needsAsk = cameraCaptureAvailable() &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) !=
+            PackageManager.PERMISSION_GRANTED
+        if (needsAsk) {
+            attachCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        } else {
+            openFileChooser()
+        }
+    }
+
+    private val attachCameraPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
+            // Il callback della WebView è ancora in attesa: senza chooser
+            // resterebbe appeso. Se nel frattempo è stato annullato, niente.
+            if (filePickerCallback != null) openFileChooser()
+        }
+
+    private fun cameraCaptureAvailable(): Boolean =
+        Intent(MediaStore.ACTION_IMAGE_CAPTURE).resolveActivity(packageManager) != null
+
+    private fun openFileChooser() {
         val getContent = Intent(Intent.ACTION_GET_CONTENT).apply {
             type = "*/*"
             addCategory(Intent.CATEGORY_OPENABLE)
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         }
         val chooser = Intent.createChooser(getContent, null)
-        buildCameraCaptureIntent()?.let { camera ->
-            chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(camera))
+        val cameraAllowed = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        if (cameraAllowed) {
+            buildCameraCaptureIntent()?.let { camera ->
+                chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(camera))
+            }
         }
-        fileChooserLauncher.launch(chooser)
+        try {
+            fileChooserLauncher.launch(chooser)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "file chooser unavailable (${e.javaClass.simpleName})")
+            discardCameraTemp(pendingCameraUri)
+            pendingCameraUri = null
+            filePickerCallback?.onReceiveValue(null)
+            filePickerCallback = null
+        }
     }
 
     /** Intent di scatto foto che scrive su un file temporaneo in cacheDir
      *  esposto via FileProvider. Ritorna null se non c'è un'app fotocamera (il
-     *  chooser mostra solo file/galleria). Nessun permesso CAMERA necessario:
-     *  la cattura è delegata all'app fotocamera di sistema. */
+     *  chooser mostra solo file/galleria). La cattura è delegata all'app
+     *  fotocamera di sistema, ma serve il permesso CAMERA concesso (v.
+     *  [launchFileChooser]). */
     private fun buildCameraCaptureIntent(): Intent? {
         val capture = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
         if (capture.resolveActivity(packageManager) == null) return null
@@ -1901,6 +1957,7 @@ class MainActivity : AppCompatActivity() {
             "requestExactAlarmPermission" -> requestExactAlarmPermission()
             "openBatterySettings" -> openBatterySettings()
             "takePairLink" -> takePairLink()
+            "scanPairQr" -> scanPairQr().let { null }
             "extensionCall" -> extensionCall(a).let { null }
             else -> throw IllegalArgumentException("unknown native command")
         }
@@ -2472,6 +2529,13 @@ class MainActivity : AppCompatActivity() {
             val link = pendingPairLink ?: return ""
             pendingPairLink = null
             return link
+        }
+
+        /** Apre il lettore del QR d'abbinamento ([qrScanLauncher]). */
+        fun scanPairQr() {
+            launchPicker("scanPairQr", {}) {
+                qrScanLauncher.launch(Intent(this@MainActivity, QrScanActivity::class.java))
+            }
         }
 
         /** Porta l'utente dove la restrizione si toglie davvero.

@@ -84,6 +84,13 @@
          che possa risponderle. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- La fotocamera serve a un solo schermo: il lettore del QR d'abbinamento
+         fra due Jenny (QrScanActivity). Si chiede lì, al primo tocco su
+         «Inquadra il QR», mai all'avvio. Non obbligatoria: un telefono senza
+         fotocamera installa Jenny lo stesso e abbina scrivendo il codice. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <!-- Makes launchable apps (MAIN/LAUNCHER) visible to PackageManager for the
          "App Android" tab, without requiring QUERY_ALL_PACKAGES. -->
     <queries>
@@ -92,8 +99,9 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <!-- Rende visibile l'app fotocamera per lo scatto foto da allegare
-             (chooser di sistema del composer); niente permesso CAMERA: la
-             cattura è delegata all'app di sistema via ACTION_IMAGE_CAPTURE. -->
+             (chooser di sistema del composer): la cattura è delegata all'app di
+             sistema via ACTION_IMAGE_CAPTURE. Il permesso CAMERA qui sopra è
+             solo del lettore QR. -->
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
@@ -192,6 +200,13 @@
                 <data android:scheme="jenny" android:host="pair" />
             </intent-filter>
         </activity>
+
+        <!-- Il lettore del QR d'abbinamento: lo apre solo la pagina Altre Jenny
+             (`scanPairQr`) e restituisce il link `jenny://pair` a MainActivity. -->
+        <activity
+            android:name=".QrScanActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Jenny" />
 
         <service
             android:name=".GatewayService"
