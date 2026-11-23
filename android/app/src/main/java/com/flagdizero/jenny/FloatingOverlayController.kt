@@ -1029,6 +1029,8 @@ object FloatingOverlayController {
             // cioè una mascotte accesa e invisibile.
             syncFace()
             placeColumn(ctx, parkX(ctx), parkTop(ctx))
+            // Montata durante una guida: nasce già nascosta.
+            applyDrivingVisibility()
             Log.i(TAG, "Floating mascot attached (x=${glp.x} y=${glp.y})")
             true
         } catch (e: Exception) {
@@ -1456,7 +1458,22 @@ object FloatingOverlayController {
      * non ricevono tocchi. Sul main thread.
      */
     fun hideForDriving(hidden: Boolean) {
-        val visibility = if (hidden) View.GONE else View.VISIBLE
+        hiddenForDriving = hidden
+        applyDrivingVisibility()
+    }
+
+    /**
+     * Nascosta per la guida: uno stato, non un gesto sulle finestre di quel
+     * momento. Quando la richiesta parte dalla chat dell'app la mascotte è
+     * smontata (Jenny è davanti), il «nascondi» non trovava niente, e appena
+     * Jenny apriva l'altra app la mascotte si rimontava visibile — sopra la
+     * freccia «vai in fondo» di Telegram X (Titan, 23/11/2026). [attach] lo
+     * rilegge.
+     */
+    private var hiddenForDriving = false
+
+    private fun applyDrivingVisibility() {
+        val visibility = if (hiddenForDriving) View.GONE else View.VISIBLE
         mascotWin?.visibility = visibility
         grip?.visibility = visibility
     }

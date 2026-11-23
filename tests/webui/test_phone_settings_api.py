@@ -81,3 +81,12 @@ async def test_the_command_is_refused_from_a_remote_connection(config_file, monk
     with pytest.raises(CommandError):
         await phone_update(None, {"mode": "free"})  # type: ignore[arg-type]
     assert load_config(config_file).tools.phone.mode == "confirm"
+
+
+async def test_entries_that_no_longer_count_are_not_shown(config_file) -> None:
+    """Una finestra di sistema o un link non web su «Sempre», messi prima che
+    valesse solo per app e siti, non contano più e non si mostrano."""
+    config = load_config(config_file)
+    config.tools.phone.trusted_apps += ["android", "link:details", "link:market:"]
+    section = await phone_api.phone_section(config)
+    assert [t["target"] for t in section["trusted"]] == ["com.whatsapp", "link:maps.example.org"]

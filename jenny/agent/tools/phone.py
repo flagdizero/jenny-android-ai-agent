@@ -191,6 +191,12 @@ class PhoneSnapshotTool(_PhoneToolBase):
     ) -> Any:
         if (refusal := await consent.availability()) is not None:
             return f"Error: {refusal}"
+        # Dalla mascotte la prima cosa è spesso una lettura: con il fumetto
+        # aperto l'app sotto non si legge e la foto è il fumetto sfocato (Titan,
+        # 23/11/2026). Si chiude qui come al primo passo.
+        from jenny.agent.tools.context import current_request_context
+
+        await drive.collapse_for_reading(current_request_context())
         return await self._snapshot(filter, screenshot=bool(screenshot))
 
 

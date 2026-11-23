@@ -284,3 +284,28 @@ def test_the_mascot_hides_while_jenny_drives_and_in_a_screenshot() -> None:
     assert "FloatingOverlayController.hideForDriving(false)" in done
     hidden = pill[pill.index("fun hidden("):pill.index("fun dodge(")]
     assert "FloatingOverlayController.hideForDriving(hide)" in hidden
+
+
+def test_the_mascot_stays_hidden_when_it_is_attached_during_a_drive() -> None:
+    """Dalla chat dell'app la mascotte è smontata quando la guida comincia: il
+    «nascondi» è uno stato che il montaggio rilegge (Titan, 23/11/2026)."""
+    src = read_source("FloatingOverlayController")
+    attach = src[src.index("private fun attach("):src.index("private fun detach(")]
+    assert "applyDrivingVisibility()" in attach
+    hide = src[src.index("fun hideForDriving("):src.index("private fun applyDrivingVisibility(")]
+    assert "hiddenForDriving = hidden" in hide
+
+
+def test_going_home_during_a_drive_pauses_it() -> None:
+    service = read_source("HandsService")
+    assert "PhonePill.foregroundChanged(" in service
+    pill = read_source("PhonePill")
+    changed = pill[pill.index("fun foregroundChanged("):pill.index("private fun homePackage(")]
+    assert "MainActivity::class.java.name" in changed and "PhoneActions.pause()" in changed
+    assert "OWN_SWITCH_MS" in changed
+
+
+def test_the_driving_notification_is_always_quiet() -> None:
+    src = read_source("NotifierBridge")
+    driving = src[src.index("fun postPhoneDriving"):src.index("fun postPeerDone")]
+    assert "quiet = true" in driving

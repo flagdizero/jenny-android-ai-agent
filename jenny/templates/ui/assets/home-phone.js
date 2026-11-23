@@ -38,6 +38,24 @@ export class HomePhone {
       const btn = e.target.closest('[data-forget]');
       if (btn) this.forget(btn.dataset.forget);
     });
+    /* Il servizio si accende e si spegne in Android, fuori da qui: tornando
+       nell'app lo stato si rilegge. Prima restava quello dell'apertura delle
+       Impostazioni, e a servizio spento la pagina non lo diceva (Titan,
+       23/11/2026). */
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') this.refresh();
+    });
+  }
+
+  /** Rilegge la sezione dal server, se la pagina la sta mostrando. */
+  async refresh() {
+    if (!this.section?.available || !this.root || this.root.offsetParent === null) return;
+    try {
+      const payload = await api.getSettings();
+      if (payload?.phone) this.set(payload.phone);
+    } catch (err) {
+      console.warn('home.phone: state not reread', err);
+    }
   }
 
   /** La sezione `phone` di `/api/settings`, o `null` se non si sa. */
