@@ -735,6 +735,10 @@ class PeerLines:
             return None
         if now_ms() - int(row["last_ms"]) > IDLE_CLOSE_MS:
             await self._close_in(peer_id, row, trace=False)
+            # Il motivo vero prima del «no_line» del chiamante, che all'altra
+            # arriva a linea già chiusa e non dice più niente: senza, l'utente
+            # leggeva «aveva già chiuso la linea».
+            await self._reply_state(peer_id, lid, "closed", reason="idle")
             return None
         return row
 

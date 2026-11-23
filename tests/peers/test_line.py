@@ -642,3 +642,18 @@ async def test_a_change_of_linked_jennys_tells_the_house(two):
     side_a, _side_b = await _linked(two)
     await side_a.lines.peers_changed()
     assert side_a.frames[-1] == {"channel": WS, "chat_id": CHAT, "kind": "peers"}
+
+
+async def test_a_line_idle_for_too_long_says_so(two):
+    from jenny.peers.line import IDLE_CLOSE_MS
+
+    side_a, side_b = await _linked(two)
+    await _open(side_a, side_b)
+    lines_b = side_b.lines
+    await lines_b._db(lines_b.store.line_update, "in", side_a.jenny.id,
+                      last_ms=1)
+    assert IDLE_CLOSE_MS > 0
+    await side_a.lines.route(WS, CHAT, "ci sei ancora?")
+    await wait_until(lambda: "closed" in side_a.kinds())
+    closed = next(f for f in side_a.frames if f["kind"] == "closed")
+    assert closed["reason"] == "idle"
