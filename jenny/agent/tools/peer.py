@@ -43,7 +43,10 @@ _REFUSALS = {
 # detto al modello accanto al suo nome. Testo fisso: la descrizione del tool non
 # cambia con i peer collegati (la cache del provider parte dalla lista dei tool),
 # il nome e il tipo arrivano solo nei risultati.
-OPENCODE_WHAT = "opencode on the user's computer: code, git, GitHub, read-only"
+OPENCODE_WHAT = (
+    "opencode on the user's computer: code, git, GitHub; does things there only if the "
+    "user turned that on on the computer"
+)
 
 
 def _label(name: str, kind: str) -> str:
@@ -100,8 +103,9 @@ class PeerAskTool(Tool):
             "mode='act' you ask her to do something on her phone instead; she may refuse "
             "if the user hasn't allowed it there, and the user of that phone may have to "
             "allow anything that leaves it. A linked peer can also be the user's computer "
-            "(opencode on their Mac): ask it about code, git and GitHub; it only reads and "
-            "can't act. The request is queued and this returns at once: the answer, with "
+            "(opencode on their Mac): ask it about code, git and GitHub; with mode='act' it "
+            "does things there (commands, files) if the user turned that on on the Mac, and "
+            "refuses otherwise. The request is queued and this returns at once: the answer, with "
             "what was done, shows up later in this chat as a separate card, by itself. "
             "Don't wait for it and never guess what it will say."
         )

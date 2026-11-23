@@ -37,7 +37,7 @@ from loguru import logger
 
 from . import gate
 from .link import PeerError, PeerLink
-from .model import KIND_OPENCODE, is_id, peer_kind, text_field
+from .model import KIND_JENNY, KIND_OPENCODE, is_id, peer_kind, text_field
 from .store import new_id, now_ms
 
 KIND_ASK = "ask"
@@ -292,6 +292,7 @@ class PeerQuestions:
             peer_id=peer_id,
             done=done,
             working=working,
+            kind=peer.kind if peer is not None else KIND_JENNY,
         )
         await asyncio.to_thread(
             self.store.set_question, peer_id, "out", qid, state=state, answer=text,
@@ -308,7 +309,7 @@ class PeerQuestions:
         self, *, name: str, question: str, status: str, text: str,
         media: list[Path], missing: list[str], mode: str = "read", qid: str = "",
         peer_id: str = "", done: list[dict[str, Any]] | None = None, working: bool = False,
-        undo: dict[str, int] | None = None,
+        undo: dict[str, int] | None = None, kind: str = KIND_JENNY,
     ) -> None:
         """La risposta nella chat personale: una scheda, la stessa dal vivo e riletta."""
         from jenny.bus.events import (
@@ -331,6 +332,10 @@ class PeerQuestions:
             "missing": missing,
             "at": now_ms(),
         }
+        if peer_kind(kind) == KIND_OPENCODE:
+            # Dall'altra parte c'è un computer: la scheda non gli fa dire cose da
+            # telefono («si accende nell'Officina di …»).
+            card["kind"] = KIND_OPENCODE
         if mode == "act":
             # Una richiesta di fare: l'elenco di cosa ha toccato (dal codice
             # dell'altra), se ci sta ancora lavorando, e chi e quale per il
@@ -404,6 +409,7 @@ class PeerQuestions:
             await self._deliver_card(
                 name=peer.name if peer is not None else q["peer"][:8],
                 question=q["text"], status="expired", text="", media=[], missing=[],
+                kind=peer.kind if peer is not None else KIND_JENNY,
             )
             expired += 1
         return expired
