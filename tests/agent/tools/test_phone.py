@@ -254,7 +254,8 @@ def test_the_question_notification_is_quiet_when_the_pill_shows() -> None:
     src = read_source("NotifierBridge")
     ask = src[src.index("fun postPhoneAsk"):src.index("fun postPhoneDriving")]
     assert "quiet = PhonePill.canShow(appContext)" in ask
-    assert "if (quiet) builder.setSilent(true)" in src
+    assert "if (quiet) QUIET_CHANNEL_ID else CHANNEL_ID" in src
+    assert "NotificationManager.IMPORTANCE_LOW" in src
 
 
 def test_an_unknown_app_name_lists_the_apps_that_are_there() -> None:

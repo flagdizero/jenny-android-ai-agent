@@ -241,8 +241,11 @@ object PhonePill {
                 }
                 add(svc.getString(R.string.phone_ok_label) to { send(svc, PeerActionReceiver.ACTION_ALLOW, q.cid) })
             }
-            // Quello di cui si chiede sta nella metà alta: la pillola va giù.
-            val low = q.target?.let { it.second < svc.resources.displayMetrics.heightPixels / 2f } ?: false
+            // Quello di cui si chiede sta nei due terzi alti: la pillola va giù.
+            // Con la metà, un «Delete» poco sotto il centro la lasciava in alto,
+            // sopra la sveglia stessa che si stava per eliminare (Titan,
+            // 23/11/2026): quello che conta vedere sta di solito sopra il tasto.
+            val low = q.target?.let { it.second < svc.resources.displayMetrics.heightPixels * 2f / 3f } ?: false
             return show(svc, q.title, q.body, buttons, atBottom = low)
         }
         val id = driving ?: return false
