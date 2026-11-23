@@ -832,6 +832,15 @@ class PeerConfig(Base):
     # (``jenny.peers.phone_consent``). Spento di default: senza, risponde solo
     # chi ha in mano questo telefono.
     phone_confirm: bool = False
+    # ``line``: quella Jenny può **passare la linea** qui (``jenny.peers.line``):
+    # l'utente, dal suo telefono, scrive direttamente a questa Jenny, con i
+    # poteri che avrebbe scrivendole da qui. Spento di default: chi ha in mano
+    # l'altro telefono comanda anche questo.
+    line: bool = False
+    # ``line_trace``: alla chiusura di una linea questa Jenny manda all'altra
+    # due righe su cosa si è detto e fatto. È l'unica cosa della conversazione
+    # che esce da questo telefono; spento, di là resta solo «hai parlato con…».
+    line_trace: bool = True
     # ``kind``: che cosa c'è dall'altra parte, come l'ha detto lei abbinandosi
     # (il campo ``agent`` del protocollo): ``jenny`` o ``opencode`` (le mani sul
     # Mac, il plugin ``opencode-jenny``). Testo libero e non ``Literal``: un
@@ -846,6 +855,8 @@ class PeerPermissionsUpdate(Base):
     can_ask: bool | None = None
     send_files: bool | None = None
     phone_confirm: bool | None = None
+    line: bool | None = None
+    line_trace: bool | None = None
     act: Literal["off", "confirm", "free"] | None = None
 
 

@@ -35,6 +35,21 @@ KIND_PING = "ping"
 KIND_UNPAIR = "unpair"
 KNOWN_KINDS = frozenset({KIND_PING, KIND_UNPAIR})
 
+# La linea passata (``jenny.peers.line``): l'utente scrive a un'altra Jenny
+# attraverso questa. Chi passa manda ``line_open``, ``line_say``, ``line_move``,
+# ``line_list``, ``line_close``; chi riceve risponde con ``line_state``,
+# ``line_text``, ``line_chats``, ``line_trace``. Una Jenny di una versione prima
+# non ha i gestori e risponde ``nack unsupported``.
+KIND_LINE_OPEN = "line_open"
+KIND_LINE_SAY = "line_say"
+KIND_LINE_MOVE = "line_move"
+KIND_LINE_LIST = "line_list"
+KIND_LINE_CLOSE = "line_close"
+KIND_LINE_STATE = "line_state"
+KIND_LINE_TEXT = "line_text"
+KIND_LINE_CHATS = "line_chats"
+KIND_LINE_TRACE = "line_trace"
+
 # I livelli del permesso di *fare* (``PeerConfig.act``), dal più chiuso.
 ACT_LEVELS = ("off", "confirm", "free")
 

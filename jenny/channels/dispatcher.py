@@ -471,6 +471,7 @@ class WebSocketDispatcher:
                     # live). Inline — non ri-accodata sul bus — così la riga
                     # arriva prima del turn_end già in coda.
                     await self._mirror_final_to_webui_view(msg)
+                    await self._return_line_final(msg)
                 elif not msg.metadata.get("_runtime_model_updated"):
                     logger.warning("Unknown channel: {}", msg.channel)
 
@@ -491,6 +492,25 @@ class WebSocketDispatcher:
                 if consecutive_errors >= 5:
                     await asyncio.sleep(min(0.1 * consecutive_errors, 1.0))
                 continue
+
+    async def _return_line_final(self, msg: OutboundMessage) -> None:
+        """Il finale di un turno arrivato da una linea torna alla Jenny che l'ha passata.
+
+        Un messaggio scritto dall'utente dall'altro suo telefono entra nella
+        chat di qui come uno della WebUI (``WebSocketChannel.inject_user_message``),
+        e la risposta è già andata alle finestre di qui: questa è la copia per
+        chi ha scritto. Cosa passa lo decide ``PeerLines.on_outbound``.
+        """
+        if msg.channel != WEBSOCKET_CHANNEL or not msg.metadata.get("_line_peer"):
+            return
+        ws_channel = self.channels.get(WEBSOCKET_CHANNEL)
+        lines = getattr(getattr(ws_channel, "peer_link", None), "lines", None)
+        if lines is None:
+            return
+        try:
+            await lines.on_outbound(msg)
+        except Exception:
+            logger.opt(exception=True).warning("A line reply could not be sent back")
 
     async def _mirror_final_to_webui_view(self, msg: OutboundMessage) -> None:
         """Consegna alla vista WebUI il finale di un turno di un altro canale utente.

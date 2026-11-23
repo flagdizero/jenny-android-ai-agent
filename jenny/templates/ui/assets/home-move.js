@@ -278,6 +278,14 @@ export class ChatMove {
     for (const el of copy.querySelectorAll('.is-plan, .is-plan-off')) {
       el.classList.remove('is-plan', 'is-plan-off');
     }
+    /* Lo stesso per la linea passata (`home-line.js`): il tasto, il filo e la
+       striscia sono della chat di sempre mentre la linea e' aperta, non di
+       una foto. */
+    for (const el of copy.querySelectorAll('.home-line-toggle, .home-line-thread, .home-line-wire')) {
+      el.remove();
+    }
+    copy.classList?.remove('is-line');
+    for (const el of copy.querySelectorAll('.is-line')) el.classList.remove('is-line');
     /* La bozza e' della conversazione di chi scatta la foto, e resta con lei
        (`_drafts`): in una copia mostrerebbe testo che non e' di quella pagina.
        Un clone di `<textarea>` si porta dietro il valore, per specifica — e

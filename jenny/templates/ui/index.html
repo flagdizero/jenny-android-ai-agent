@@ -306,6 +306,15 @@
             <span class="home-row-value" id="home-jenny-value"></span>
             <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
           </button>
+          <!-- Le altre Jenny dell'utente (un secondo telefono, il computer): i
+               nomi delle collegate, e dentro il collegamento di una nuova
+               (`home-peers.js`). I permessi fini restano in officina. -->
+          <button class="home-row" id="home-row-peers" type="button">
+            <i class="ti ti-arrows-exchange" aria-hidden="true"></i>
+            <span class="home-row-label" id="home-peers-label"></span>
+            <span class="home-row-value" id="home-peers-value"></span>
+            <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
+          </button>
           <!-- Gli aggiornamenti. La riga porta la versione, quindi la riga muta
                che la scriveva in fondo alla pagina non serve piu': un numero e
                basta non e' un'impostazione, e' un'etichetta. -->
@@ -618,6 +627,13 @@
     </div>
   </section>
 
+  <!-- ── «Altre Jenny» ───────────────────────────────────────────────────
+       Le collegate, se possono passare la linea qui, e il collegamento di una
+       nuova in tre passi. La riempie `home-peers.js`. -->
+  <section class="home-peers-room" id="home-peers-room">
+    <div class="home-you-scroll" id="home-peers-body"></div>
+  </section>
+
   <!-- ── L'ottava stanza: «Backup» ───────────────────────────────────────
        Le righe del core: il file cifrato e il suo ripristino (la terza vista
        di `shared/backup-flow.js`) e la storia locale, tutte aperte. Una build
@@ -731,6 +747,12 @@
 
 <!-- Chi sveglia Jenny di piu' (`home-wakes.js`): la forma dei fogli del piano. -->
 <dialog class="oc-sheet home-plan-sheet home-wakes-sheet" id="home-wakes-sheet">
+  <div class="oc-sheet-inner home-plan-sheet-inner"></div>
+</dialog>
+
+<!-- «Con chi parli» (`home-line.js`): le Jenny in alto, le chat di quella
+     accesa sotto. La forma dei fogli del piano. -->
+<dialog class="oc-sheet home-plan-sheet home-line-sheet" id="home-line-sheet">
   <div class="oc-sheet-inner home-plan-sheet-inner"></div>
 </dialog>
 

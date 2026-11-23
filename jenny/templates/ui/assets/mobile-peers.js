@@ -203,6 +203,8 @@ export class PeersPanel {
         ${mac ? '' : this._permHtml(p, 'send_files', 'sendFiles', 'sendFilesHint')}
         ${mac ? '' : this._actHtml(p)}
         ${mac ? '' : this._permHtml(p, 'phone_confirm', 'phoneConfirm', 'phoneConfirmHint')}
+        ${mac ? '' : this._permHtml(p, 'line', 'line', 'lineHint')}
+        ${mac ? '' : this._permHtml(p, 'line_trace', 'lineTrace', 'lineTraceHint')}
         ${this._pendingHtml((s.pending || []).filter((c) => c.peer === p.id))}
         <div class="remote-actions">
           <button class="settings-btn-add" type="button" data-peers="ping" ${p.has_secret ? '' : 'disabled'}>
@@ -304,6 +306,11 @@ export class PeersPanel {
         'sys:confirm': [d.allowed ? 'log.confirmYes' : 'log.confirmNo', { target: d.target || '' }],
         'sys:undo': ['log.undo', { files: d.restored || 0, jobs: d.jobs || 0 }],
         'out:undo': ['log.undoAsked', {}],
+        'out:line_open': ['log.lineOut', {}],
+        'in:line_open': ['log.lineIn', {}],
+        'out:line_close': ['log.lineOutClosed', {}],
+        'in:line_close': ['log.lineInClosed', {}],
+        'in:line_trace': ['log.lineTrace', {}],
         'in:undone': ['log.undone', {}],
       }[`${row.direction}:${row.kind}`];
       if (!key) return '';

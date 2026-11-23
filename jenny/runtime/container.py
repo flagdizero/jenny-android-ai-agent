@@ -993,8 +993,75 @@ class GatewayContainer:
 
         native_input.set_peer_action_handler(on_peer_action)
         self._peer_questions = questions
+        questions.lines = self._wire_peer_lines(link, config)
         if self._agent is not None:
             self._agent.attach_peer_questions(questions)
+
+    def _wire_peer_lines(self, link: Any, config: Config) -> Any:
+        """Le linee passate fra Jenny (``jenny.peers.line``), sopra lo stesso collegamento."""
+        from pathlib import Path
+
+        from jenny.bus.events import WEBSOCKET_CHANNEL
+        from jenny.config.paths import get_wikis_path
+        from jenny.peers.line import PeerLines
+
+        workspace = Path(config.workspace_path)
+        channels = getattr(self.channels, "channels", None) or {}
+        ws = channels.get(WEBSOCKET_CHANNEL)
+
+        async def emit(channel: str, chat_id: str, frame: dict[str, Any]) -> None:
+            if channel == WEBSOCKET_CHANNEL:
+                if ws is not None:
+                    await ws.send_line_event(chat_id, frame)
+                return
+            await self._line_frame_as_text(channel, chat_id, frame)
+
+        def places() -> list[str]:
+            # I quaderni apribili come chat: la stessa regola dell'elenco della casa.
+            from jenny.webui.wiki_routes import _collect_projects
+
+            openable, _ = _collect_projects(get_wikis_path(workspace))
+            return [str(p["name"]) for p in openable]
+
+        return PeerLines(
+            link,
+            workspace,
+            get_agent=lambda: self._agent,
+            deliver=self._deliver_to_channel,
+            emit=emit,
+            inject=getattr(ws, "inject_user_message", None),
+            places=places,
+        )
+
+    async def _line_frame_as_text(self, channel: str, chat_id: str, frame: dict[str, Any]) -> None:
+        """Un fatto di una linea per un canale di solo testo (Telegram).
+
+        La risposta dell'altra Jenny arriva col suo nome davanti; il resto
+        (aperta, chiusa, spostata) in una riga. Va dritta sul bus, marcata
+        ``_mirror``: il dispatcher non la copia nella chat della WebUI, perché
+        di una linea su questo telefono non resta il testo.
+        """
+        from jenny.bus.events import OutboundMessage
+        from jenny.runtime.user_text import say
+
+        line = frame.get("line") or {}
+        kind = frame.get("kind")
+        text = ""
+        if kind == "item":
+            item = frame.get("item") or {}
+            if item.get("role") == "peer":
+                text = f"{frame.get('name') or '⇄'}: {item.get('text') or ''}"
+            elif item.get("role") == "place":
+                text = say("peer.line_moved", place=item.get("text") or "—")
+        elif kind == "state" and line.get("state") == "opening":
+            text = say("peer.line_opened", peer=line.get("name") or "")
+        elif kind == "closed":
+            text = say("peer.line_closed", peer=frame.get("name") or "")
+        if not text.strip() or self.bus is None:
+            return
+        await self.bus.publish_outbound(OutboundMessage(
+            channel=channel, chat_id=chat_id, content=text, metadata={"_mirror": True},
+        ))
 
     def _wire_phone(self) -> None:
         """Le mani di Jenny: lega il consenso (``jenny.phone.consent``) alle
@@ -1137,6 +1204,12 @@ class GatewayContainer:
             peer_phone = PeerPhoneConsent(
                 link, asks, show=show_remote, hide=hide_remote, spawn=spawn,
             )
+            # La stessa domanda anche nel filo della linea, se è da lì che
+            # l'utente sta scrivendo a quella Jenny.
+            lines = getattr(link, "lines", None)
+            if lines is not None:
+                peer_phone.line_show = lines.show_ask
+                peer_phone.line_hide = lines.hide_ask
 
         def on_phone_action(action: str, ident: str) -> bool:
             # Un tasto della pillola o di una notifica, già sul loop. Vero se era nostro.

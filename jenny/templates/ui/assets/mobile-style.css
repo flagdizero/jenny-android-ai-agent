@@ -376,6 +376,20 @@
    tinta di un tema lo dice invece di lasciarlo scoprire a chi guarda. */
 /* La bacheca nei temi chiari: un sughero chiaro, e il filo piu' scuro perche'
    si legga sulla carta. Synthwave tinge il filo del suo rosa. */
+/* Il colore di un'altra Jenny quando la linea e' passata a lei
+   (`home-line.js`): testa, composer, tasto manda. Diverso dall'oro del piano
+   e dall'accento del tema, perche' deve dire «non stai parlando con questa». */
+:root {
+  --peer:     #6fd3c1;
+  --peer-ink: #06231e;
+}
+[data-theme="comic"],
+[data-theme="y2k"],
+[data-theme="stone"] {
+  --peer:     #0b7f6e;
+  --peer-ink: #ffffff;
+}
+
 [data-theme="comic"],
 [data-theme="y2k"],
 [data-theme="stone"] {

@@ -874,6 +874,15 @@ class WebSocketChannel(OutboundSenderMixin):
             # il loop ripulisca il messaggio, falliva la codifica e spariva.
             content = scrub_lone_surrogates(content)
 
+            # Una chat passata a un'altra Jenny (``jenny.peers.line``): quel che
+            # l'utente scrive va a lei e qui non diventa un turno. Prima del
+            # transcript e dei media: di quella conversazione qui non resta
+            # niente su disco.
+            lines = getattr(self._peer_link, "lines", None)
+            if lines is not None and await lines.route(self.name, cid, content):
+                self._attach(connection, cid)
+                return
+
             raw_media = envelope.get("media")
             media_paths: list[str] = []
             if raw_media is not None:
@@ -985,6 +994,54 @@ class WebSocketChannel(OutboundSenderMixin):
         await self._send_event(
             connection, "error",
             detail=f"unknown type: {t!r}", reason="unknown_type",
+        )
+
+    # -- La linea passata (``jenny.peers.line``) -----------------------------
+
+    async def inject_user_message(
+        self, chat_id: str, content: str, origin: dict[str, str], metadata: dict[str, Any],
+    ) -> None:
+        """Un messaggio dell'utente arrivato da una linea, nella chat *chat_id*.
+
+        Stessa strada di un messaggio scritto da un'altra finestra (il ramo
+        ``message`` qui sopra): la riga nel transcript con la sua provenienza,
+        l'eco alle finestre aperte, e il turno sul bus. Chi l'ha scritto è
+        l'utente, dal suo altro telefono: l'ha già deciso ``PeerLines``, che
+        chiama solo con il permesso ``line`` acceso.
+        """
+        meta: dict[str, Any] = {
+            "webui": True,
+            **self._transcripts.client_turn_metadata(None),
+            **metadata,
+            "origin_channel": origin["origin"],
+        }
+        if origin.get("device"):
+            meta["origin_device"] = origin["device"]
+        written = self._transcripts.append_user_message(
+            chat_id, content, metadata=meta, origin=origin,
+        )
+        if written is not None:
+            await self._echo_user_to_others(None, chat_id, written)
+        if self.supports_streaming:
+            meta = {**meta, "_wants_stream": True}
+        await self.bus.publish_inbound(InboundMessage(
+            channel=self.name,
+            sender_id="peer-line",
+            chat_id=chat_id,
+            content=content,
+            metadata=meta,
+        ))
+
+    async def send_line_event(self, chat_id: str, frame: dict[str, Any]) -> None:
+        """Un fatto di una linea aperta su *chat_id*, alle finestre di quella chat.
+
+        Non passa dal transcript: il filo di una linea non resta su questo
+        telefono (v. ``jenny.peers.line``).
+        """
+        await self._emit(
+            self._chat_conns(chat_id, None),
+            {"event": "line", "chat_id": chat_id, **frame},
+            "line",
         )
 
     # -- RPC client→server -------------------------------------------------
@@ -1108,7 +1165,9 @@ class WebSocketChannel(OutboundSenderMixin):
             )
             if self._peer_link is None:
                 raise CommandError("unavailable", "peers are not available")
-            if self._remote.is_remote(connection) and method != "peer.status":
+            if self._remote.is_remote(connection) and method not in (
+                "peer.status", "peer.line.status",
+            ):
                 raise CommandError("forbidden", "peers are managed from the phone")
             remote = await self._remote.status()
             result = await peer_rpc.handle(

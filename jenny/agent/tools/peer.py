@@ -32,6 +32,9 @@ _REFUSALS = {
     "not_found": "There is no linked Jenny with that name.",
     "bad_question": "Write the question to ask.",
     "disabled": "Linking with other Jennys is turned off.",
+    "from_line": "The user is writing to you through another Jenny: from here you can't "
+                 "ask a third one. They go back first (the back arrow, or /torna) and ask "
+                 "their own Jenny.",
     "from_peer": "This work was asked for by another Jenny, so it can't ask a Jenny in turn: "
                  "only the user of this phone starts questions.",
 }
@@ -123,6 +126,14 @@ class PeerAskTool(Tool):
         # rimanda domande indietro da solo. Il cancello è legato in tutti e tre.
         if current_act() is not None:
             return _REFUSALS["from_peer"]
+        # Un salto solo: chi scrive attraverso un'altra Jenny non ne interroga
+        # una terza da qui (``jenny.peers.line``).
+        from jenny.agent.tools.context import current_request_context
+        from jenny.peers.line import line_of
+
+        ctx = current_request_context()
+        if ctx is not None and line_of(ctx.metadata) is not None:
+            return _REFUSALS["from_line"]
         mode = "act" if mode == "act" else "read"
         try:
             asked = await self._questions.ask(str(peer or ""), str(question or ""), mode)
@@ -220,6 +231,197 @@ class PeerAttachTool(Tool):
         return f"Attached {candidate.name}: it goes with your answer. Mention it in your reply."
 
 
+_LINE_REFUSALS = {
+    "no_peers": _REFUSALS["no_peers"],
+    "not_found": _REFUSALS["not_found"],
+    "disabled": _REFUSALS["disabled"],
+    "bad_place": "That is not the name of a notebook.",
+    "bad_channel": "The line can't be passed from here: only from the chat in the app or Telegram.",
+    "from_line": "The user is already writing to you through another Jenny: from here the "
+                 "line can't be passed on to a third one. Tell them to go back first (the "
+                 "back arrow, or /torna) and ask their own Jenny.",
+}
+
+# Perché l'altra non ha preso la linea (il motivo che torna da `PeerLines.settled`).
+_LINE_CLOSED = {
+    "not_allowed": "{name} does not take the line from this phone: the user allows it on "
+                   "{name}'s phone, in her Settings, under the other Jennys, with the switch "
+                   "that lets this phone pass the line there (describe it in the user's "
+                   "language; do not quote an English label).",
+    "unsupported": "{name} runs an older version that cannot take the line yet: it needs "
+                   "an update.",
+    "unpaired": "{name} is no longer linked to this phone.",
+}
+
+
+@tool_parameters(
+    tool_parameters_schema(
+        peer=StringSchema(
+            "The name of the user's other Jenny (or linked computer) to hand the chat to, "
+            "as the user calls it. Empty when only one is linked.",
+            nullable=True,
+        ),
+        notebook=StringSchema(
+            "Only when the user names one of HER notebooks to talk to there ('pass me "
+            "Work, in the suppliers notebook'): its name. Otherwise leave it empty: the "
+            "line opens on her main chat.",
+            nullable=True,
+        ),
+    )
+)
+class PeerLineTool(Tool):
+    """Passa la chat a un'altra Jenny: da lì in poi l'utente scrive direttamente a lei."""
+
+    _scopes = {"core", "orchestrator"}
+
+    def __init__(self) -> None:
+        self._questions: Any | None = None
+
+    def bind_questions(self, questions: Any) -> None:
+        self._questions = questions
+
+    @property
+    def name(self) -> str:
+        return "peer_line"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Hand this chat over to the user's other Jenny (or to their linked computer), "
+            "when the user asks to talk to her directly: 'pass me Work', 'let me talk to "
+            "the work Jenny', 'put me through to…'. From then on what the user writes here "
+            "goes straight to her, and you neither read it nor answer, until they come "
+            "back (the back arrow, or /torna). Use it only on such a request. To get one "
+            "answer from her while staying here, use peer_ask instead. After calling it, "
+            "reply with one short line saying you are passing them over and how to come back."
+        )
+
+    @property
+    def read_only(self) -> bool:
+        return False
+
+    async def execute(self, peer: Any = None, notebook: Any = None, **kwargs: Any) -> str:
+        from jenny.agent.tools.context import current_request_context
+        from jenny.peers.gate import current_act
+        from jenny.peers.line import line_of
+        from jenny.peers.link import PeerError
+        from jenny.session.keys import is_personal_session_key
+
+        lines = getattr(self._questions, "lines", None)
+        if lines is None:
+            return _LINE_REFUSALS["no_peers"]
+        ctx = current_request_context()
+        if ctx is None or not is_personal_session_key(ctx.session_key or ""):
+            return "The line is passed from the user's main chat, not from here."
+        if line_of(ctx.metadata) is not None:
+            return _LINE_REFUSALS["from_line"]
+        if current_act() is not None:
+            return _REFUSALS["from_peer"]
+        try:
+            line = await lines.open(
+                ctx.channel, ctx.chat_id, str(peer or ""), str(notebook or "").strip(),
+            )
+        except PeerError as exc:
+            if exc.code == "which_peer":
+                names = ", ".join(p.name for p in await self._questions.peers())
+                return f"Say which one: {names}."
+            return _LINE_REFUSALS.get(exc.code, f"Could not pass the line: {exc.code}.")
+        name = line["name"]
+        outcome = await lines.settled(ctx.channel, ctx.chat_id, line["lid"])
+        if outcome == "open":
+            asked = str(notebook or "").strip()
+            now = await lines.status(ctx.channel, ctx.chat_id) or {}
+            if asked and now.get("place") != asked:
+                return (
+                    f"The line is passed to {name}, but on her main chat: she has no "
+                    f"notebook called '{asked}'. The user's next messages in this chat go to "
+                    "her, not to you. Reply now with one short line saying both things, and "
+                    "that they come back with the back arrow or by writing /torna."
+                )
+            return (
+                f"The line is passed to {name}: the user's next messages in this chat go "
+                "to her, not to you. Reply now with one short line: that you are passing them "
+                "over, and that they come back with the back arrow or by writing /torna."
+            )
+        if outcome == "waiting":
+            return (
+                f"The line to {name} is open on this side, but {name} has not answered yet "
+                "(that phone may be asleep or offline): what the user writes in this chat now "
+                "waits and reaches her when she is back; it does not come to you. Reply now "
+                "with one short line saying exactly that, and that they come back with the "
+                "back arrow or by writing /torna."
+            )
+        why = _LINE_CLOSED.get(outcome, "{name} closed the line at once.").format(name=name)
+        return (
+            f"The line was NOT passed: {why} The user is still talking to you. Tell them so "
+            "in one short line; do not say you are passing them over."
+        )
+
+
+@tool_parameters(
+    tool_parameters_schema(
+        notebook=StringSchema(
+            "The name of one of your notebooks to move the conversation to. Empty to go "
+            "back to your main chat.",
+            nullable=True,
+        ),
+    )
+)
+class LineMoveTool(Tool):
+    """Dentro una linea: sposta la conversazione nella chat di un quaderno di questa Jenny."""
+
+    _scopes = {"core", "orchestrator"}
+
+    def __init__(self) -> None:
+        self._questions: Any | None = None
+
+    def bind_questions(self, questions: Any) -> None:
+        self._questions = questions
+
+    @property
+    def name(self) -> str:
+        return "line_move"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Only while the user is writing to you from their other phone, through their "
+            "other Jenny (those messages are marked as coming from her): move the "
+            "conversation to the chat of one of your notebooks, when they ask ('let's move "
+            "to the plants notebook'), or back to your main chat. Their next message "
+            "arrives there. Anywhere else this does nothing."
+        )
+
+    @property
+    def read_only(self) -> bool:
+        return False
+
+    async def execute(self, notebook: Any = None, **kwargs: Any) -> str:
+        from jenny.agent.tools.context import current_request_context
+        from jenny.peers.line import line_of
+
+        lines = getattr(self._questions, "lines", None)
+        ctx = current_request_context()
+        peer_id = line_of(ctx.metadata) if ctx is not None else None
+        if lines is None or peer_id is None:
+            return (
+                "Not available here: this is only for when the user writes to you through "
+                "another Jenny. In the app they open a notebook themselves."
+            )
+        place = str(notebook or "").strip()
+        refusal = await lines.move_here(peer_id, place)
+        if refusal == "no_place":
+            names = ", ".join(lines.place_names()[:40]) or "none"
+            return f"There is no notebook called {place!r}. The notebooks are: {names}."
+        if refusal is not None:
+            return "The line is no longer open."
+        where = f"the {place} notebook" if place else "your main chat"
+        return (
+            f"Moved: the user's next message arrives in {where}, and is answered there. "
+            "Reply now with one short line saying so."
+        )
+
+
 # Registrazione esplicita: il ToolLoader legge questa lista. Il modulo va anche
 # aggiunto a ``_HARDCODED_TOOL_MODULES`` in ``loader.py``.
-TOOLS = [PeerAskTool, PeerAttachTool]
+TOOLS = [PeerAskTool, PeerAttachTool, PeerLineTool, LineMoveTool]

@@ -21,6 +21,9 @@ const ORIGINS = {
   /* Scritto da un altro dispositivo del tailnet (il Mac, un secondo
      telefono). Col nome che gli da' MagicDNS, quando c'e': «dal mac». */
   remote: { icon: 'ti-device-laptop', key: 'home.origin.remote', named: 'home.origin.remoteNamed' },
+  /* Scritto dall'utente dal suo altro telefono, attraverso la Jenny di là
+     (`jenny/peers/line.py`): «da Personale». */
+  peer_line: { icon: 'ti-arrows-exchange', key: 'home.origin.peer_line', named: 'home.origin.peer_lineNamed' },
 };
 
 /** Il markup dell'etichetta (icona e nome), o `''` per un messaggio scritto

@@ -115,6 +115,26 @@ SCHEMA = Schema(
         ALTER TABLE peer_questions ADD COLUMN done TEXT NOT NULL DEFAULT '[]';
         ALTER TABLE peer_questions ADD COLUMN journals TEXT NOT NULL DEFAULT '[]';
         """,
+        # Le linee passate (``jenny.peers.line``), nei due versi. ``out``: una
+        # chat di questa Jenny passata a un'altra, ``key`` = canale e chat
+        # (``websocket\ndefault``); ``in``: la linea che un'altra ha aperto
+        # qui, ``key`` = il suo id. ``place`` è la chat di là: vuoto per quella
+        # di sempre, il nome del quaderno altrimenti. Sta su disco perché il
+        # gateway su Android riparte spesso: una linea dimenticata vorrebbe
+        # dire che il messaggio dopo va alla Jenny sbagliata.
+        """
+        CREATE TABLE peer_lines (
+          direction TEXT NOT NULL,
+          key TEXT NOT NULL,
+          peer TEXT NOT NULL,
+          lid TEXT NOT NULL,
+          place TEXT NOT NULL DEFAULT '',
+          state TEXT NOT NULL DEFAULT 'open',
+          since_ms INTEGER NOT NULL,
+          last_ms INTEGER NOT NULL,
+          PRIMARY KEY (direction, key)
+        );
+        """,
     ),
     shards={"peer_log": "at_ms / 86400000"},
 )
@@ -311,6 +331,7 @@ class PeerStore:
             conn.execute("DELETE FROM peer_outbox WHERE peer = ?", (peer,))
             conn.execute("DELETE FROM peer_inbox WHERE peer = ?", (peer,))
             conn.execute("DELETE FROM peer_state WHERE peer = ?", (peer,))
+            conn.execute("DELETE FROM peer_lines WHERE peer = ?", (peer,))
 
     # -- Arrivi --
 
@@ -366,6 +387,61 @@ class PeerStore:
             "last_try_ms": int(row["last_try_ms"]),
             "last_error": str(row["last_error"]),
         }
+
+    # -- Linee --
+
+    def line_put(
+        self, direction: str, key: str, *, peer: str, lid: str, place: str = "",
+        state: str = "open", at_ms: int | None = None,
+    ) -> None:
+        when = now_ms() if at_ms is None else at_ms
+        with self._db().write() as conn:
+            conn.execute(
+                "INSERT INTO peer_lines(direction, key, peer, lid, place, state, since_ms, last_ms) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(direction, key) DO UPDATE SET peer = excluded.peer, "
+                "lid = excluded.lid, place = excluded.place, state = excluded.state, "
+                "since_ms = excluded.since_ms, last_ms = excluded.last_ms",
+                (direction, key, peer, lid, place, state, when, when),
+            )
+
+    def line(self, direction: str, key: str) -> dict[str, Any] | None:
+        rows = self._db().read(
+            "SELECT * FROM peer_lines WHERE direction = ? AND key = ?", (direction, key)
+        )
+        return dict(rows[0]) if rows else None
+
+    def line_by_lid(self, direction: str, lid: str) -> dict[str, Any] | None:
+        rows = self._db().read(
+            "SELECT * FROM peer_lines WHERE direction = ? AND lid = ?", (direction, lid)
+        )
+        return dict(rows[0]) if rows else None
+
+    def lines(self, direction: str | None = None) -> list[dict[str, Any]]:
+        if direction is None:
+            rows = self._db().read("SELECT * FROM peer_lines ORDER BY since_ms")
+        else:
+            rows = self._db().read(
+                "SELECT * FROM peer_lines WHERE direction = ? ORDER BY since_ms", (direction,)
+            )
+        return [dict(r) for r in rows]
+
+    def line_update(self, direction: str, key: str, **fields: Any) -> None:
+        allowed = {k: v for k, v in fields.items() if k in ("place", "state", "last_ms")}
+        if not allowed:
+            return
+        sets = ", ".join(f"{k} = ?" for k in allowed)
+        with self._db().write() as conn:
+            conn.execute(
+                f"UPDATE peer_lines SET {sets} WHERE direction = ? AND key = ?",
+                (*allowed.values(), direction, key),
+            )
+
+    def line_drop(self, direction: str, key: str) -> None:
+        with self._db().write() as conn:
+            conn.execute(
+                "DELETE FROM peer_lines WHERE direction = ? AND key = ?", (direction, key)
+            )
 
     # -- Domande --
 

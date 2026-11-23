@@ -75,6 +75,8 @@ import { i18n, tr } from './shared/i18n.js';
 import { HomeAppsTrash } from './home-apps-trash.js';
 import { HomeStaged } from './home-staged.js';
 import { HomePlan } from './home-plan.js';
+import { HomeLine } from './home-line.js';
+import { HomePeers, peersSummary } from './home-peers.js';
 import { sessionManager } from './shared/session-manager.js';
 import { chatIdOf, wsManager } from './shared/ws-manager.js';
 import { stashPairLink, watchPairLinks } from './shared/peer-link.js';
@@ -123,6 +125,8 @@ const BACK_TO = {
   model: 'settings',
   updates: 'settings',
   backup: 'settings',
+  /* «Altre Jenny»: l'elenco delle collegate e il collegamento (`home-peers.js`). */
+  peers: 'settings',
 };
 
 /* Le stanze di un quaderno: da qui Jenny apre la chat **del quaderno**, da
@@ -291,6 +295,7 @@ class HomeApp {
       onModel: () => this.openModel(),
       onUpdates: () => this.openUpdates(),
       onBackup: () => this.openBackup(),
+      onPeers: () => this.openPeers(),
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
@@ -310,6 +315,47 @@ class HomeApp {
        e quella deve riscrivere la riga **e** la cache del guscio. */
     this.updatesRoom = new HomeUpdates({
       onVersion: (version) => this._keepVersion(version),
+    });
+    /* La linea passata a un'altra Jenny (`home-line.js`): il tasto ⇄ accanto
+       al tasto Piano, il foglio «Con chi parli», la testa e il filo. Dopo il
+       piano: il suo tasto si mette accanto a quello. */
+    this.line = new HomeLine({
+      shell: this.shell,
+      chatEl: document.getElementById('home-chat'),
+      composer: {
+        field: this.input?.closest?.('.home-field') || null,
+        input: this.input,
+        send: this.send,
+      },
+      sheet: document.getElementById('home-line-sheet'),
+      isPersonal: () => sessionManager.currentKey === sessionManager.personalKey,
+      /* L'elenco lo chiede il foglio quando si apre: quello della pagina
+         Quaderni si carica solo aprendola. */
+      notebooks: async () => {
+        const data = await api.listProjects();
+        return (data?.projects || []).map((it) => it.name).filter(isOpenableProjectName);
+      },
+      openHome: (name) => (name ? this._enterNotebookChat(name) : this.openChat(null)),
+      openPeers: ({ add } = {}) => this.openPeers({ add }),
+      onChange: () => this._applyConversationTexts(),
+    });
+    /* «Altre Jenny»: la stanza delle collegate, dalle Impostazioni e dal + del
+       foglio «Con chi parli». «Parla» apre la linea e porta alla chat. */
+    this.peersRoom = new HomePeers({
+      body: document.getElementById('home-peers-body'),
+      sheet: document.getElementById('home-line-sheet'),
+      onTalk: async (peer) => {
+        this.openChat(null);
+        await this.line.open(peer.id, '');
+      },
+      onStatus: (status) => {
+        this.you.sayPeers(peersSummary(status));
+        if (!status) return;
+        /* Una Jenny collegata o scollegata cambia anche il tasto in chat. */
+        this.line.status = { ...status, line: this.line.line };
+        this.line.apply();
+      },
+      onWorkshop: () => api.navigate('/html-mobile/workshop.html?mode=hands'),
     });
     /* «Troppi risvegli»: la pastiglia sopra il campo e il foglio di chi sveglia
        Jenny di piu'. L'elenco intero sta in officina, nel cassetto Mani. */
@@ -616,6 +662,7 @@ class HomeApp {
       this._readRuntimeModel(e.detail);
       this.staged.handleFrame(e.detail);
       this.plan.handleFrame(e.detail);
+      this.line.handleFrame(e.detail);
       this.chat.handleFrame(e.detail);
     });
 
@@ -676,7 +723,12 @@ class HomeApp {
     this.pathRoot?.addEventListener('click', () => this.goToPathRoot());
     this.editBtn?.addEventListener('click', () => this.reader.startEdit());
     /* Le voci del percorso nel velo (v. `_applyOverTitle`). */
-    this.overBack?.addEventListener('click', () => this.closeChatOver());
+    /* A linea passata la freccia del velo torna alla tua Jenny (e il velo
+       resta); altrimenti lo chiude, come Indietro. */
+    this.overBack?.addEventListener('click', () => {
+      if (this.line?.isOpenHere()) this.line.close();
+      else this.closeChatOver();
+    });
     this.overNotebooks?.addEventListener('click', () => this._overToNotebooks());
     this.overNotebook?.addEventListener('click', () => this._overToBoard());
 
@@ -1350,6 +1402,12 @@ class HomeApp {
     this.updatesRoom.open();
   }
 
+  /** «Altre Jenny»; con `add`, dritta al collegamento di una nuova. */
+  openPeers({ add = false } = {}) {
+    this._setView('peers');
+    this.peersRoom.open({ add });
+  }
+
   /** «Backup». */
   openBackup() {
     this._setView('backup');
@@ -1600,6 +1658,9 @@ class HomeApp {
       this.homePages.goTo(this.homePages.chatIndex);
       return true;
     }
+    /* Dentro «Altre Jenny» il collegamento ha i suoi passi: Indietro ne fa
+       uno alla volta, e solo dall'elenco esce dalla stanza. */
+    if (this.view === 'peers' && this.peersRoom.back()) return true;
     const target = this._backTarget();
     if (!target) return false;
     if (target === 'page') {
@@ -1853,6 +1914,7 @@ class HomeApp {
        piu'. Rientrando si riaggancia da se' (`open()`), perche' l'installazione
        intanto e' andata avanti per conto suo. */
     if (view !== 'updates') this.updatesRoom?.close();
+    if (view !== 'peers') this.peersRoom?.close();
 
     if (view !== 'board' && view !== 'drawer') this.boardSheet?.close();
     if (view === 'chat') {
@@ -1928,6 +1990,7 @@ class HomeApp {
     if (this.view === 'model') this._setHeadTitle(i18n.t('home.model.title'));
     if (this.view === 'updates') this._setHeadTitle(i18n.t('home.updates.title'));
     if (this.view === 'backup') this._setHeadTitle(i18n.t('home.backup.title'));
+    if (this.view === 'peers') this._setHeadTitle(i18n.t('home.peers.title'));
     this._applyPath(notebook);
     this._applyBackLabel();
   }
@@ -2190,6 +2253,12 @@ class HomeApp {
    */
   handleHardwareBack() {
     if (this._closeOverlays()) return;
+    /* La linea passata: Indietro dalla chat di sempre torna a casa, come la
+       freccia in testa. */
+    if (this.line?.isOpenHere() && this.view === 'chat' && this.shell?.dataset?.page === 'chat') {
+      this.line.close();
+      return;
+    }
     /* Poi le stanze, una per pressione: lettore, pagine, il quaderno aperto
        nei Quaderni, la pagina in cui sei. Una per pressione: dalle pagine un
        tocco solo non deve far sparire due cose, la stanza e il quaderno che la
@@ -2687,6 +2756,16 @@ class HomeApp {
       this._autosize();
       return true;
     }
+    /* La chat di sempre passata a un'altra Jenny: quel che scrivi va a lei, e
+       qui non parte un turno (`home-line.js`). Solo testo: gli allegati a
+       linea aperta non ci sono. */
+    if (this.line?.isOpenHere()) {
+      if (!text) return false;
+      this.line.say(text);
+      this.input.value = '';
+      this._autosize();
+      return true;
+    }
     /* Il tasto Piano (e una revisione) vale per questo messaggio, e lo si
        dice qui, esplicito: `sendToChat` non legge piu' uno stato globale, che
        avrebbe fatto di `/stop` o di un comando di una bolla un turno di
@@ -2907,6 +2986,8 @@ class HomeApp {
     this.staged?.refresh();
     this.plan?.refresh();
     this.plan?.refreshList();
+    this.line?.refresh();
+    this.peersRoom?.peek();
     /* Al boot le impostazioni non si leggevano, quindi non si sa se questo e'
        il primo avvio: il socket aperto dice che il gateway adesso c'e', e si
        richiede. Una volta sola — un secondo «non lo so» resta nella casa. */
@@ -2983,7 +3064,11 @@ class HomeApp {
          chat spenta mentre corre (v. `HomePlan.placeholder`). */
       const planned = this.plan?.placeholder();
       if (planned) this.input.placeholder = planned;
+      /* A linea aperta si scrive all'altra Jenny, e il campo lo dice. */
+      const passed = this.line?.placeholder();
+      if (passed) this.input.placeholder = passed;
     }
+    this.line?.apply();
     this._applyOverTitle();
   }
 
@@ -3014,6 +3099,18 @@ class HomeApp {
     this._paintDot(this.overDot, color);
     if (color) this.overHead?.style.setProperty('--path-line', color);
     else this.overHead?.style.removeProperty('--path-line');
+    /* La chat di sempre passata a un'altra Jenny (`home-line.js`): anche sul
+       velo la testa dice con chi parli — il suo nome, e il quaderno se la
+       linea e' li' — nel suo colore, e la freccia torna a casa. */
+    const line = this.line?.isOpenHere() ? this.line.line : null;
+    this.overHead?.classList.toggle('is-line', Boolean(line));
+    if (line) {
+      this.overName.textContent = line.place ? `${line.name} › ${line.place}` : line.name;
+      if (this.overBack) this.overBack.hidden = false;
+      this.overHead?.style.setProperty('--path-line', 'var(--peer)');
+    }
+    this.overBack?.setAttribute('aria-label',
+      i18n.t(line ? 'home.line.back' : 'home.over.close'));
   }
 
   /** QUADERNI, nella testa del velo: la chat scende e si va all'elenco dei
@@ -3064,7 +3161,7 @@ class HomeApp {
     this.over?.host?.setAttribute('aria-label', i18n.t('home.over.label'));
     this.pathEl?.setAttribute('aria-label', i18n.t('home.path.label'));
     document.getElementById('home-over-path')?.setAttribute('aria-label', i18n.t('home.path.label'));
-    this.overBack?.setAttribute('aria-label', i18n.t('home.over.close'));
+    if (!this.line?.isOpenHere()) this.overBack?.setAttribute('aria-label', i18n.t('home.over.close'));
     if (this.editLabel) this.editLabel.textContent = i18n.t('home.reader.edit');
     this.reader?.applyTranslations();
     this.audit?.applyTranslations();

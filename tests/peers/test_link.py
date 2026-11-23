@@ -266,7 +266,8 @@ async def test_linking_again_keeps_the_rows_and_their_permissions(two):
     await pair(a, b)
     old_b = b.id
     await a.link.rename(old_b, "Personale")
-    await a.link.set_permissions(old_b, act="confirm", send_files=True)
+    await a.link.set_permissions(old_b, act="confirm", send_files=True, line=True,
+                                 line_trace=False)
     await b.link.set_permissions(a.id, can_ask=False)
 
     # b perde segreti e identità, come un telefono nuovo ripristinato da backup.
@@ -280,6 +281,8 @@ async def test_linking_again_keeps_the_rows_and_their_permissions(two):
     rows = a.peers()
     assert [p.id for p in rows] == [b.id]
     assert (rows[0].name, rows[0].act, rows[0].send_files) == ("Personale", "confirm", True)
+    # Anche il permesso di passare la linea e quello del riassunto restano.
+    assert (rows[0].line, rows[0].line_trace) == (True, False)
     assert read_secret(a.workspace, old_b) is None
     mine = b.peers()
     assert [p.id for p in mine] == [a.id]

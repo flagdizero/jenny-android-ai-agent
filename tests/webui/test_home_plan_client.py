@@ -600,7 +600,9 @@ const send = card().querySelector('.home-plan-answer-send');
 assert.equal(send.disabled, false);
 rpcAnswers['plan.answer'] = () => ({ ok: true });
 send.click();
-await tick(30);
+// La bolla arriva dopo la risposta dell'RPC: si aspetta lei, non 30 ms (su un
+// runner carico non bastavano).
+await until(() => shown().at(-1) === 'you: my note', { msg: 'la bolla della risposta' });
 assert.deepEqual(rpcs('plan.answer')[0].params, { id: 'p1', text: 'my note' });
 // La risposta non passa dal registro della chat: la bolla la disegna la casa.
 assert.equal(shown().at(-1), 'you: my note');

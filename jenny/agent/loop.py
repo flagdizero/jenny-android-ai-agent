@@ -634,9 +634,10 @@ class AgentLoop(
         WebSocket, che lo possiede, nasce dopo l'agente al boot normale.
         """
         self.peer_questions = questions
-        tool = self.tools.get("peer_ask")
-        if tool is not None and hasattr(tool, "bind_questions"):
-            tool.bind_questions(questions)
+        for tool_name in ("peer_ask", "peer_line", "line_move"):
+            tool = self.tools.get(tool_name)
+            if tool is not None and hasattr(tool, "bind_questions"):
+                tool.bind_questions(questions)
         # Gli aiutanti di una richiesta di fare: il loro registro è della
         # richiesta, e lei sa di avere ancora qualcuno al lavoro.
         acts = getattr(questions, "acts", None)
@@ -668,6 +669,26 @@ class AgentLoop(
             await acts.turn_ended(meta, getattr(outcome, "final_text", "") or "")
         except Exception:  # noqa: BLE001 — il turno è comunque finito
             logger.opt(exception=True).warning("Peer request: end-of-turn hook failed")
+
+    async def _routed_to_line(self, msg: InboundMessage) -> bool:
+        """Vero se *msg* era per una linea aperta su quella chat, e ci è andato.
+
+        Vale per Telegram. La WebUI lo fa prima, nel canale
+        (``WebSocketChannel``), dove il messaggio non è ancora nel transcript;
+        e qui non deve valere per il canale ``websocket``: un messaggio arrivato
+        *da* una linea entra proprio da lì, e rimandarlo a una terza Jenny
+        sarebbe il secondo salto (``jenny.peers.line``).
+        """
+        if msg.channel != "telegram":
+            return False
+        lines = getattr(getattr(self, "peer_questions", None), "lines", None)
+        if lines is None:
+            return False
+        try:
+            return bool(await lines.route(msg.channel, msg.chat_id, msg.content))
+        except Exception:  # noqa: BLE001 — nel dubbio il messaggio resta a questa Jenny
+            logger.opt(exception=True).warning("Line: could not route a message")
+            return False
 
     def _peers_available(self) -> bool:
         questions = getattr(self, "peer_questions", None)
@@ -870,6 +891,14 @@ class AgentLoop(
             # di risposta, che ha la sua vista.
             if name == "peer_ask":
                 return not (personal or personal_cron) or not self._peers_available()
+            # Passare la linea: solo dalla chat personale (non dai suoi
+            # promemoria: lo chiede l'utente, adesso). ``line_move`` serve a chi
+            # la linea la riceve, nella chat di sempre e in quelle dei quaderni;
+            # fuori da un turno arrivato da una linea risponde col motivo.
+            if name == "peer_line":
+                return not personal or not self._peers_available()
+            if name == "line_move":
+                return not (personal or in_project) or not self._peers_available()
             if name == "peer_attach":
                 return True
             if peer_act_session and name == "install_update":
@@ -1841,6 +1870,10 @@ class AgentLoop(
                 logger.warning("Error consuming inbound message: {}, continuing...", e)
                 continue
 
+            # Una chat passata a un'altra Jenny: il messaggio va a lei e qui non
+            # diventa un turno, nemmeno un comando.
+            if await self._routed_to_line(msg):
+                continue
             raw = msg.content.strip()
             effective_key = self._effective_session_key(msg)
             # Prima di tutto il resto, ``/init`` compreso: se la cartella legata
