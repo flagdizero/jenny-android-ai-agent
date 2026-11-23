@@ -50,6 +50,9 @@ object PhoneActions {
     /** Quanto si aspetta che un'app appena lanciata dia il primo segno. */
     private const val OPEN_WAIT_MS = 3_000L
 
+    /** Quanti nomi di app stanno nel rifiuto di [notFound]. */
+    private const val MAX_APP_NAMES = 60
+
     /** Le azioni che cadono dentro l'app davanti. */
     private val TOUCHING = setOf("tap", "long_press", "type", "scroll", "swipe")
 
@@ -157,11 +160,11 @@ object PhoneActions {
     private fun one(svc: AccessibilityService, action: String, step: JSONObject): String = when (action) {
         "open_app" -> openApp(svc, step.optString("app"))
         "open_link" -> openLink(svc, step.optString("url"))
-        "tap" -> tap(svc, node(step), long = false)
-        "long_press" -> tap(svc, node(step), long = true)
+        "tap" -> if (step.has("x")) tapAt(svc, step, long = false) else tap(svc, node(step), long = false)
+        "long_press" -> if (step.has("x")) tapAt(svc, step, long = true) else tap(svc, node(step), long = true)
         "type" -> type(svc, step)
         "scroll" -> scroll(svc, step)
-        "swipe" -> swipe(svc, step.optString("direction", "up"))
+        "swipe" -> if (step.has("x")) swipeAt(svc, step) else swipe(svc, step.optString("direction", "up"))
         "back" -> global(svc, AccessibilityService.GLOBAL_ACTION_BACK)
         "home" -> global(svc, AccessibilityService.GLOBAL_ACTION_HOME)
         "recents" -> global(svc, AccessibilityService.GLOBAL_ACTION_RECENTS)
@@ -214,6 +217,43 @@ object PhoneActions {
             throw Refusal("${describe(element)} did not take the tap")
         }
         return "${describe(element)} (by touch) — settled in ${settle()}ms"
+    }
+
+    /** Un punto del passo (`x`, `y` nei pixel dell'ultima foto) sullo schermo. */
+    private fun point(svc: AccessibilityService, step: JSONObject, xKey: String, yKey: String): Pair<Float, Float> {
+        if (!PhoneShot.ready) {
+            throw Refusal(
+                "x and y are points of a screenshot, and there is none yet: call phone_snapshot " +
+                    "with screenshot=true first, then give the point as you see it in that picture",
+            )
+        }
+        if (!step.has(xKey) || !step.has(yKey)) throw Refusal("this action needs both $xKey and $yKey")
+        val (x, y) = PhoneShot.toScreen(step.optDouble(xKey), step.optDouble(yKey))
+        val dm = svc.resources.displayMetrics
+        if (x < 0 || y < 0 || x >= dm.widthPixels || y >= dm.heightPixels) {
+            throw Refusal("that point is outside the screenshot")
+        }
+        return x to y
+    }
+
+    /** Un tocco in un punto: per le app che non danno nomi ai loro tasti. */
+    private fun tapAt(svc: AccessibilityService, step: JSONObject, long: Boolean): String {
+        val (x, y) = point(svc, step, "x", "y")
+        PhonePill.dodge(x, y)
+        val path = Path().apply { moveTo(x, y) }
+        if (!gesture(svc, path, if (long) 700 else 60)) throw Refusal("the screen did not take the tap")
+        val at = "(${step.optInt("x")}, ${step.optInt("y")})"
+        return "${if (long) "long-pressed" else "tapped"} at $at — settled in ${settle()}ms"
+    }
+
+    /** Un trascinamento da un punto a un altro. */
+    private fun swipeAt(svc: AccessibilityService, step: JSONObject): String {
+        val (x, y) = point(svc, step, "x", "y")
+        val (x2, y2) = point(svc, step, "x2", "y2")
+        PhonePill.dodge(x, y)
+        val path = Path().apply { moveTo(x, y); lineTo(x2, y2) }
+        if (!gesture(svc, path, 300)) throw Refusal("the swipe was cancelled")
+        return "swiped between the two points — settled in ${settle()}ms"
     }
 
     private fun type(svc: AccessibilityService, step: JSONObject): String {
@@ -274,7 +314,7 @@ object PhoneActions {
 
     private fun openApp(svc: AccessibilityService, app: String): String {
         if (app.isBlank()) throw Refusal("open_app needs the app's name or package")
-        val pkg = resolvePackage(svc, app) ?: throw Refusal("no installed app is called \"$app\"")
+        val pkg = resolvePackage(svc, app) ?: throw Refusal(notFound(svc, app))
         val launch = svc.packageManager.getLaunchIntentForPackage(pkg)
             ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             ?: throw Refusal("\"$app\" has no screen to open")
@@ -290,20 +330,58 @@ object PhoneActions {
     }
 
     /**
-     * Da un nome scritto dal modello («WhatsApp», «orologio») al pacchetto:
-     * prima il pacchetto esatto, poi l'etichetta uguale, poi quella che lo
-     * contiene. Serve anche a Python, che chiede il consenso per pacchetto.
+     * Da un nome scritto dal modello («WhatsApp», «Google Maps») al pacchetto:
+     * il pacchetto esatto, poi l'etichetta uguale, poi quella che contiene il
+     * nome, poi quella che il nome contiene come parole intere — «Google Maps»
+     * è l'app che il telefono chiama «Maps». Serve anche a Python, che chiede
+     * il consenso per pacchetto.
      */
     fun resolvePackage(context: Context, app: String): String? {
         val pm = context.packageManager
         val wanted = app.trim()
+        if (wanted.isEmpty()) return null
         if (pm.getLaunchIntentForPackage(wanted) != null) return wanted
+        val apps = launcherApps(context)
+        apps.firstOrNull { it.second.equals(wanted, ignoreCase = true) }?.let { return it.first }
+        apps.firstOrNull { it.second.contains(wanted, ignoreCase = true) }?.let { return it.first }
+        val words = wanted.lowercase().split(Regex("\\s+"))
+        // Fra più etichette contenute vince quella con cui il nome finisce —
+        // «Google Clock» è «Clock», non l'app «Google» — e poi la più lunga.
+        return apps
+            .mapNotNull { (pkg, label) ->
+                val parts = label.lowercase().split(Regex("\\s+"))
+                if (label.length < 3 || parts.size > words.size) return@mapNotNull null
+                if (words.windowed(parts.size).none { it == parts }) return@mapNotNull null
+                Triple(pkg, words.takeLast(parts.size) == parts, label.length)
+            }
+            .maxWithOrNull(compareBy({ it.second }, { it.third }))?.first
+    }
+
+    private fun launcherApps(context: Context): List<Pair<String, String>> {
+        val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val apps = pm.queryIntentActivities(launcher, 0).map {
+        return pm.queryIntentActivities(launcher, 0).map {
             it.activityInfo.packageName to it.loadLabel(pm).toString()
         }
-        return apps.firstOrNull { it.second.equals(wanted, ignoreCase = true) }?.first
-            ?: apps.firstOrNull { it.second.contains(wanted, ignoreCase = true) }?.first
+    }
+
+    /**
+     * Il rifiuto per un'app che non si trova, con di che riprovare al primo
+     * colpo: i nomi delle app che ci sono, come li scrive questo telefono.
+     * Sul Titan, il 22/11/2026, «Orologio» non trovava «Clock» e il modello
+     * tirava a indovinare un pacchetto dopo l'altro.
+     */
+    private fun notFound(context: Context, app: String): String {
+        val installed = runCatching { context.packageManager.getApplicationInfo(app.trim(), 0) }.isSuccess
+        if (installed) {
+            return "\"$app\" is installed but has no screen of its own to open (no launcher icon): " +
+                "it cannot be opened by name. Use another app that does the same job, and say so"
+        }
+        val names = launcherApps(context).map { it.second }.distinct().sortedBy { it.lowercase() }
+        val shown = names.take(MAX_APP_NAMES).joinToString(", ")
+        val more = if (names.size > MAX_APP_NAMES) ", … (${names.size - MAX_APP_NAMES} more)" else ""
+        return "no installed app is called \"$app\". Names may be in the phone's language. " +
+            "Apps on this phone: $shown$more"
     }
 
     private fun describe(element: PhoneTree.Element): String =

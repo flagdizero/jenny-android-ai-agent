@@ -386,3 +386,98 @@ def test_a_reminder_in_the_personal_chat_is_still_a_reminder() -> None:
     ctx = RequestContext(channel="websocket", chat_id="default",
                          session_key="unified:default", metadata={CRON_TRIGGER_META: {}})
     assert consent.origin_of(ctx) == "cron"
+
+
+# ── Tocchi a coordinate: un punto non dice che cosa tocca ────────────────────
+
+POINT = {"goal": "aprire il gruppo", "steps": [{"action": "tap", "x": 300, "y": 420}]}
+
+
+def _names(monkeypatch: pytest.MonkeyPatch, name: str | None) -> None:
+    async def name_at(x: float, y: float) -> str | None:
+        return name
+
+    monkeypatch.setattr(consent.runtime, "name_at", name_at)
+
+
+async def test_a_tap_on_a_point_with_no_name_asks_even_in_a_trusted_app(
+    phone, turn, monkeypatch,
+) -> None:
+    settings, asks = phone
+    settings._trusted.add("com.whatsapp")
+    _names(monkeypatch, "")
+    turn()
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+    assert await consent.before_tool("phone_do", POINT) is None
+    assert [a["kind"] for a in seen] == ["costly"]
+    assert seen[0]["options"] == ["ok", "no"]
+
+
+async def test_a_no_to_a_point_with_no_name_refuses_the_tap(phone, turn, monkeypatch) -> None:
+    settings, asks = phone
+    settings._trusted.add("com.whatsapp")
+    _names(monkeypatch, None)
+    turn()
+    _answer(asks, "no", [])
+    refusal = await consent.before_tool("phone_do", POINT)
+    assert refusal is not None and "did not agree" in refusal
+
+
+async def test_a_point_on_a_named_ordinary_button_is_a_tap_like_any_other(
+    phone, turn, monkeypatch,
+) -> None:
+    settings, asks = phone
+    settings._trusted.add("com.whatsapp")
+    _names(monkeypatch, "Send")
+    turn()
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+    assert await consent.before_tool("phone_do", POINT) is None
+    assert seen == []
+
+
+async def test_a_point_on_a_costly_button_asks_even_in_free_mode(
+    phone, turn, monkeypatch,
+) -> None:
+    settings, asks = phone
+    settings._mode = "free"
+    _names(monkeypatch, "Elimina chat")
+    turn()
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+    assert await consent.before_tool("phone_do", POINT) is None
+    assert [a["what"] for a in seen] == ["Elimina chat"]
+
+
+async def test_free_mode_does_not_ask_for_a_point_with_no_name(phone, turn, monkeypatch) -> None:
+    settings, asks = phone
+    settings._mode = "free"
+    _names(monkeypatch, "")
+    turn()
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+    assert await consent.before_tool("phone_do", POINT) is None
+    assert seen == []
+
+
+async def test_a_reminder_never_taps_a_point_with_no_name(phone, turn, monkeypatch) -> None:
+    settings, asks = phone
+    settings._trusted.add("com.whatsapp")
+    _names(monkeypatch, "")
+    turn(session_key="cron:job1")
+    refusal = await consent.before_tool("phone_do", POINT)
+    assert refusal is not None and "no one is there" in refusal
+
+
+async def test_a_swipe_between_two_points_asks_nothing_more(phone, turn, monkeypatch) -> None:
+    settings, asks = phone
+    settings._trusted.add("com.whatsapp")
+    _names(monkeypatch, "")
+    turn()
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+    swipe = {"goal": "scorrere", "steps": [
+        {"action": "swipe", "x": 300, "y": 800, "x2": 300, "y2": 200}]}
+    assert await consent.before_tool("phone_do", swipe) is None
+    assert seen == []

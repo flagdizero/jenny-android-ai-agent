@@ -403,6 +403,32 @@ def _costly_taps(steps: list[dict[str, Any]]) -> list[str]:
     return names
 
 
+async def _point_taps(steps: list[dict[str, Any]]) -> tuple[list[str], bool]:
+    """I tocchi a coordinate: i nomi che costano fra quelli su cui cadono, e se
+    almeno uno cade dove non c'è un nome.
+
+    Un punto non dice che cosa tocca. Dove l'app ha un albero lo si chiede a
+    lei (``name_at``), e il tocco vale come quello di un ``ref``; dove non ce
+    l'ha — un'app che disegna tutto da sola — nessuno può sapere se lì c'è
+    «Elimina», e lo decide l'utente."""
+    costly: list[str] = []
+    unnamed = False
+    for step in steps:
+        if step.get("action") not in ("tap", "long_press") or step.get("ref"):
+            continue
+        if step.get("x") is None or step.get("y") is None:
+            continue
+        try:
+            name = await runtime.name_at(float(step["x"]), float(step["y"]))
+        except (TypeError, ValueError):
+            name = None
+        if not name:
+            unnamed = True
+        elif COSTLY_RE.search(name):
+            costly.append(name)
+    return costly, unnamed
+
+
 def _types_password(steps: list[dict[str, Any]]) -> bool:
     for step in steps:
         if step.get("action") != "type":
@@ -480,12 +506,21 @@ async def before_tool(name: str, params: Any) -> str | None:
             approved.add(f"no:{target}")
             return _said_no(app) if choice == "no" else _no_answer(app)
         approved.add(target)
-    for what in _costly_taps(steps):
+    point_costly, unnamed_point = await _point_taps(steps)
+    whats = [*_costly_taps(steps), *point_costly]
+    if unnamed_point and not free:
+        # In «free» l'utente ha scelto di non essere interpellato, e qui non
+        # c'è un nome che dica che il tocco costa: vale la sua scelta.
+        from jenny.runtime.user_text import say
+
+        whats.append(say("phone.blind_what"))
+    for what in whats:
         app = last_app or await _label(await _touched_app() or "")
         if unattended:
             return (
-                f"«{what}» costs money or deletes something, and no one is there to "
-                "confirm. A reminder never taps it. Say so in your answer."
+                f"«{what}» needs the user's go-ahead — it may cost money or delete "
+                "something — and no one is there to give it. A reminder never taps it. "
+                "Say so in your answer."
             )
         choice = await pending.ask(
             kind="costly", target="", app=app, goal=goal, what=what, origin=origin,

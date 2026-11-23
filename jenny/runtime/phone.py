@@ -99,6 +99,22 @@ async def snapshot(filter_text: str | None, max_chars: int) -> dict[str, Any] | 
     return data
 
 
+async def screenshot(path: str, max_side: int) -> dict[str, Any] | None:
+    """Fotografa lo schermo in *path* (JPEG ridotto a *max_side*). Torna
+    ``{"width", "height"}``, ``{"secure": True}`` per un'app che vieta gli
+    screenshot, o ``None`` se non si è potuto."""
+    data = _json(await _call("screenshot", str(path), int(max_side)))
+    return data if isinstance(data, dict) else None
+
+
+async def name_at(x: float, y: float) -> str | None:
+    """Il nome di quello che sta nel punto (x, y) dell'ultima foto: ``""`` se
+    lì non c'è niente con un nome, ``None`` se non si può sapere (nessuna foto,
+    servizio spento)."""
+    name = await _call("nameAt", float(x), float(y))
+    return None if name is None else str(name)
+
+
 def last_snapshot() -> dict[str, Any] | None:
     """L'ultima lettura fatta, o ``None``."""
     return _LAST

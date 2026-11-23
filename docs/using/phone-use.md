@@ -31,10 +31,18 @@ No answer within ten minutes counts as a no.
 
 The question appears where you are: on a small pill above whatever is on screen, in a notification, in Telegram if you asked from there, or on your other phone (see below).
 
+While the pill is on screen the notification with the same question arrives silently: it is in the shade, not on top of the app. A question stays on the pill until you answer it — touching the screen does not hide it.
+
 **Doesn't ask** skips the question for every app. Two things are asked regardless of that switch and of **Always**:
 
 - **A tap that pays, buys, deletes or transfers.** The question names the exact button, and the only answers are Ok and No. This is what stands between a page that tries to give Jenny orders and your money.
 - **Passwords are never typed.** Jenny stops and asks you to enter them.
+
+### Apps that give no names
+
+Some apps draw their whole screen themselves and tell a screen reader nothing: every button is there, none has a name. For those Jenny takes a picture of the screen and taps the point she sees.
+
+A point has no name, so she cannot know whether it is a "Delete". Where the app does name what is under the point, the tap is like any other. Where it does not, **each such tap asks you first** (Ok or No), even in an app on **Always** — unless you chose **Doesn't ask**. A reminder never taps a point with no name.
 
 ## While she works
 
@@ -87,5 +95,6 @@ A reminder has no one to ask. It may use only the apps you marked **Always** (or
 ## Limits
 
 - One screen: while Jenny uses the phone, it is busy. She works where you can see her.
-- Some apps expose little to accessibility (games, custom-drawn screens). Jenny sees what a screen reader would.
+- Apps that give no names (games, custom-drawn screens) are used through a picture, which needs a model that can see images; with one that cannot, Jenny says the app cannot be read.
+- Android hides a few of its own dialogs from every app that is not a disability tool — permission requests, the "Install this app?" confirmation. Jenny cannot read or answer those: she stops and tells you.
 - The pill sits over the top of the app; it moves out of the way of Jenny's own taps.

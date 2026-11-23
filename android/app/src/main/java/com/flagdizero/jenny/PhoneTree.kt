@@ -83,6 +83,7 @@ object PhoneTree {
             put("text", text)
             put("truncated", truncated)
             put("refs", elements.size)
+            put("unnamed", elements.values.count { it.name.isEmpty() && !it.password })
             put("index", JSONObject().apply {
                 for (e in elements.values) {
                     put(e.ref, JSONArray().put(e.role).put(if (e.password) "" else e.name))
@@ -176,6 +177,44 @@ object PhoneTree {
         } ?: return false
         val pkg = window.root?.packageName?.toString() ?: return false
         return isSecure(svc, window, pkg)
+    }
+
+    /**
+     * Il nome di quello che sta nel punto (x, y) dello schermo: il tasto più
+     * piccolo che lo contiene, chiamato come lo chiamerebbe [snapshot]. Vuoto
+     * se lì non c'è niente con un nome. Serve al consenso, che di un tocco a
+     * coordinate deve sapere — quando si può sapere — se cade su «Elimina».
+     * Non fa una lettura nuova: i ref del modello restano validi.
+     */
+    fun nameAt(svc: AccessibilityService, x: Int, y: Int): String {
+        val own = svc.packageName
+        var best: AccessibilityNodeInfo? = null
+        var bestArea = Long.MAX_VALUE
+        var visited = 0
+        val box = Rect()
+        for (window in svc.windows.filter { keep(it, own) }) {
+            val stack = ArrayDeque<AccessibilityNodeInfo>().apply { window.root?.let { add(it) } }
+            while (stack.isNotEmpty() && visited < MAX_NODES) {
+                val node = stack.removeLast()
+                visited++
+                if (!node.isVisibleToUser) continue
+                node.getBoundsInScreen(box)
+                if (!box.contains(x, y)) continue
+                val area = box.width().toLong() * box.height()
+                // Un elenco che scorre contiene il punto ma non è quello che un
+                // tocco preme: conta solo ciò che un tocco aziona.
+                val pressable = node.isEnabled &&
+                    (node.isClickable || node.isLongClickable || node.isEditable || node.isCheckable)
+                if (pressable && area <= bestArea) {
+                    best = node
+                    bestArea = area
+                }
+                for (i in 0 until node.childCount) node.getChild(i)?.let { stack.add(it) }
+            }
+        }
+        val node = best ?: return ""
+        if (node.isPassword) return ""
+        return ownName(node).ifEmpty { gather(node).joinToString(" · ") }.take(NAME_CHARS)
     }
 
     /** Le finestre che contano per chi usa il telefono. */

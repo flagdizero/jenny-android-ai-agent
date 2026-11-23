@@ -5,18 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
-import android.graphics.Color
-import android.graphics.PixelFormat
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Base64
 import android.util.Log
-import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
-import android.view.WindowManager
-import android.widget.TextView
 import org.json.JSONArray
 
 /**
@@ -28,7 +21,9 @@ import org.json.JSONArray
  * ```
  *
  * Comandi (`--es cmd`): `snapshot [--es arg <filtro>]`, `do --es b64 <passi JSON in
- * base64>`, `press --es arg <etichetta di un tasto della pillola>`, `state`, `wake`, `launch --es arg <pacchetto>`, `pill --es arg app|a11y|off`.
+ * base64>`, `press --es arg <etichetta di un tasto della pillola>`, `drive [--es arg off]`,
+ * `ask` (una domanda di prova sulla pillola), `shot` (la foto dello schermo, nella
+ * cache dell'app), `name --es arg <x,y>` (cosa c'è sotto un punto dello schermo), `state`.
  * Gli esiti vanno nel log sotto `PhoneDebug`.
  *
  * Nelle build non debuggabili non fa niente; il manifest lo protegge con `DUMP`,
@@ -45,21 +40,6 @@ class DebugPhoneReceiver : BroadcastReceiver() {
             ?.let { String(Base64.decode(it, Base64.DEFAULT)) }
             ?: intent.getStringExtra("arg").orEmpty()
         val app = context.applicationContext
-        if (cmd == "pill") {
-            pill(app, arg)
-            return
-        }
-        if (cmd == "wake") {
-            wake(app)
-            return
-        }
-        if (cmd == "launch") {
-            val launch = app.packageManager.getLaunchIntentForPackage(arg)
-                ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            val ok = launch != null && Intents.tryStart(app, launch, TAG, arg)
-            Log.i(TAG, "launch $arg ok=$ok")
-            return
-        }
         val svc = HandsService.instance
         if (svc == null) {
             Log.i(TAG, "$cmd: hands service is off")
@@ -69,6 +49,23 @@ class DebugPhoneReceiver : BroadcastReceiver() {
             // La pillola di guida senza un turno: per provare pausa e tocchi.
             val shown = if (arg == "off") PhonePill.done(null) else PhonePill.driving("0".repeat(32), "debug")
             Log.i(TAG, "drive $arg: $shown")
+            return
+        }
+        if (cmd == "ask") {
+            // Una domanda senza un turno: per provare che una pausa non la copre.
+            // Pillola e notifica, come fa il consenso: per provare anche che
+            // con la pillola a schermo la notifica arriva in silenzio.
+            val cid = "0".repeat(32)
+            val shown = if (arg == "off") {
+                NotifierBridge(app).clearPeerNotice("confirm", cid)
+                PhonePill.askDone()
+            } else {
+                val quiet = PhonePill.canShow(app)
+                NotifierBridge(app).postPhoneAsk(cid, "debug question", "«debug»", true)
+                Log.i(TAG, "ask: notification posted, quiet=$quiet")
+                PhonePill.ask(cid, "debug question", "«debug»", true)
+            }
+            Log.i(TAG, "ask $arg: $shown")
             return
         }
         if (cmd == "press") {
@@ -100,6 +97,15 @@ class DebugPhoneReceiver : BroadcastReceiver() {
                     val results = PhoneActions.run(svc, JSONArray(arg))
                     for (i in 0 until results.length()) Log.i(TAG, "step $i: ${results.getJSONObject(i)}")
                 }
+                "name" -> {
+                    // Che cosa c'è sotto un punto dello schermo, come lo vede il consenso.
+                    val (x, y) = arg.split(",").map { it.trim().toInt() }
+                    Log.i(TAG, "name at ($x, $y): \"${PhoneTree.nameAt(svc, x, y)}\"")
+                }
+                "shot" -> {
+                    val path = java.io.File(svc.cacheDir, "debug-shot.jpg").path
+                    Log.i(TAG, "shot: ${PhoneShot.take(svc, path, 1024)} at $path")
+                }
                 else -> Log.i(TAG, "unknown cmd $cmd")
             }
         } catch (e: Throwable) {
@@ -118,70 +124,7 @@ class DebugPhoneReceiver : BroadcastReceiver() {
         )
     }
 
-    @Suppress("DEPRECATION")
-    private fun wake(app: Context) {
-        val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
-        val lock = pm.newWakeLock(
-            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
-            "jenny:phone-spike",
-        )
-        lock.acquire(10_000)
-        state(app)
-    }
-
-    /** Una pillola di prova: finestra piccola, non a schermo intero, che sente
-     *  i tocchi fuori da sé. `app` = overlay dell'app, `a11y` = overlay del
-     *  servizio di accessibilità. */
-    private fun pill(app: Context, kind: String) {
-        pillView?.let { (wm, view) ->
-            runCatching { wm.removeView(view) }
-            pillView = null
-        }
-        if (kind == "off") {
-            Log.i(TAG, "pill off")
-            return
-        }
-        val host: Context = if (kind == "a11y") HandsService.instance ?: return else app
-        val wm = host.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val view = TextView(host).apply {
-            text = "Jenny · Ferma"
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.argb(230, 30, 30, 30))
-            setPadding(40, 24, 40, 24)
-            setOnClickListener { Log.i(TAG, "pill: tapped") }
-            setOnTouchListener { _: View, e: MotionEvent ->
-                if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) {
-                    val since = SystemClock.elapsedRealtime() - PhoneActions.injectedAt
-                    Log.i(TAG, "pill: outside touch, ${since}ms after the last injected gesture")
-                }
-                false
-            }
-        }
-        val type = if (kind == "a11y") {
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-        } else {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        }
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 160
-        }
-        val ok = runCatching { wm.addView(view, params) }
-            .onFailure { Log.w(TAG, "pill $kind failed", it) }.isSuccess
-        if (ok) pillView = wm to view
-        Log.i(TAG, "pill $kind shown=$ok")
-    }
-
     private companion object {
         const val TAG = "PhoneDebug"
-        var pillView: Pair<WindowManager, View>? = null
     }
 }

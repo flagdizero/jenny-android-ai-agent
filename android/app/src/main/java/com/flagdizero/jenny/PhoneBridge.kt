@@ -127,6 +127,22 @@ class PhoneBridge(context: Context) {
         return PhoneTree.snapshot(svc, filter, maxChars).json()
     }
 
+    /** La foto dello schermo in *path* ([PhoneShot.take]), in JSON; `null` se
+     *  non si è potuta fare. */
+    fun screenshot(path: String, maxSide: Int): String? {
+        val svc = HandsService.instance ?: return null
+        return PhoneShot.take(svc, path, maxSide)?.toString()
+    }
+
+    /** Il nome di quello che sta nel punto (x, y) dell'ultima foto; vuoto se
+     *  non ha un nome, `null` se non c'è una foto o il servizio è spento. */
+    fun nameAt(x: Double, y: Double): String? {
+        val svc = HandsService.instance ?: return null
+        if (!PhoneShot.ready) return null
+        val (sx, sy) = PhoneShot.toScreen(x, y)
+        return PhoneTree.nameAt(svc, sx.toInt(), sy.toInt())
+    }
+
     /** Esegue *stepsJson* (un array di passi) e torna gli esiti in JSON; `null`
      *  a servizio spento. */
     fun act(stepsJson: String): String? {
