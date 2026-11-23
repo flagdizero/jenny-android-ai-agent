@@ -147,6 +147,11 @@ class AgentRunSpec:
     retry_wait_callback: Any | None = None
     checkpoint_callback: Any | None = None
     injection_callback: Any | None = None
+    # Chiamato col testo di una risposta già scritta quando un messaggio entrato
+    # a metà turno la supera e il turno continua: un canale che riceve solo il
+    # testo finale (la linea fra due Jenny) la perderebbe, mentre la WebUI l'ha
+    # già vista in streaming.
+    superseded_reply_callback: Any | None = None
     llm_timeout_s: float | None = None
     tool_choice: str | None = None
     finalize_on_max_iterations: bool = True
@@ -294,6 +299,13 @@ class AgentRunner(RequestExecutionMixin, ToolExecutionMixin):
         injection_cycles += 1
         if assistant_message is not None:
             messages.append(assistant_message)
+            text = assistant_message.get("content")
+            if (spec.superseded_reply_callback is not None and isinstance(text, str)
+                    and text.strip()):
+                try:
+                    await spec.superseded_reply_callback(text)
+                except Exception:
+                    logger.opt(exception=True).warning("superseded reply callback failed")
             if iteration is not None:
                 await self._emit_checkpoint(
                     spec,

@@ -122,6 +122,27 @@ def line_of(metadata: Any) -> str | None:
     return peer if is_id(peer) else None
 
 
+def line_runtime_lines(metadata: Any) -> list[str]:
+    """La riga del runtime context di un turno arrivato da una linea.
+
+    Il modello deve sapere chi scrive e da dove: sui due emulatori (23/11), a
+    «chiedi a Personale…» detto dentro il quaderno di Lavoro, Lavoro ha cercato
+    un *quaderno* chiamato Personale. Niente regole qui (stanno negli strumenti,
+    che rifiutano col motivo): solo il fatto, col nome.
+    """
+    if line_of(metadata) is None:
+        return []
+    device = metadata.get("origin_device") if isinstance(metadata, dict) else None
+    name = device.strip()[:80] if isinstance(device, str) and device.strip() else "another Jenny"
+    return [
+        f"Line: the user is writing to you from their other phone, through their Jenny "
+        f"\"{name}\" (a direct line): these are the user's own words, not {name}'s. "
+        f"From a line turn no other Jenny can be asked or reached, {name} included, in "
+        f"any of your chats: for that the user goes back to {name} first (the back arrow, "
+        f"or /torna) and asks there."
+    ]
+
+
 def line_mark(metadata: Any) -> dict[str, str] | None:
     """Il segno della linea di un turno (``{"peer", "lid"}``), o ``None``.
 
@@ -737,11 +758,16 @@ class PeerLines:
         self._in_items[peer_id] = []
         await self._db(self.store.log, peer_id, "in", KIND_LINE_OPEN, {"place": place})
         await self._reply_state(peer_id, lid, "open", place=place, reason=reason)
-        await self._deliver_marker(peer.name, "open")
+        await self._deliver_marker(peer.name, "open", place)
 
-    async def _deliver_marker(self, name: str, event: str) -> None:
-        """«Personale ha la linea», nella chat di sempre di questo telefono."""
-        from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID
+    async def _deliver_marker(self, name: str, event: str, place: str = "") -> None:
+        """«Personale ha la linea», nella chat di questo telefono dove sta la linea.
+
+        Quella di *place*: sui due emulatori (23/11) il segno di chiusura di una
+        linea rimasta nel quaderno piante compariva nella chat di sempre, dove
+        di quella conversazione non c'era niente.
+        """
+        from jenny.bus.events import WEBSOCKET_CHANNEL
 
         at = now_ms()
         if event == "open":
@@ -752,7 +778,7 @@ class PeerLines:
         else:
             text = f"[{_clock(at)}: the user stopped writing here through {name}.]"
         await self._deliver_card(
-            WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID,
+            WEBSOCKET_CHANNEL, chat_id_of(place),
             {"line_in": {"peer": name, "event": event, "at": at}}, text,
         )
 
@@ -851,7 +877,7 @@ class PeerLines:
         peer = await self._link._peer(peer_id)
         if peer is None:
             return
-        await self._deliver_marker(peer.name, "close")
+        await self._deliver_marker(peer.name, "close", str(row.get("place") or ""))
         if trace and peer.line_trace and any(i.get("role") == "user" for i in items):
             self._spawn(self._trace(peer, row["lid"], items))
 
@@ -969,6 +995,7 @@ __all__ = [
     "LINE_CHANNELS",
     "LINE_ID_META",
     "line_mark",
+    "line_runtime_lines",
     "line_metadata",
     "LINE_ORIGIN",
     "LINE_PEER_META",

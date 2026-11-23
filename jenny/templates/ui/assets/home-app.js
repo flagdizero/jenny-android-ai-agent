@@ -3156,6 +3156,13 @@ class HomeApp {
       this.send.setAttribute('aria-label', i18n.t(this._running ? 'home.stop' : 'home.send'));
     }
     if (this.attach) this.attach.setAttribute('aria-label', i18n.t('home.attach'));
+    /* Due etichette scritte in italiano nel markup: la casa non ha la passata
+       `data-i18n-aria` dell'officina, e in inglese restavano «Nuovo quaderno»
+       e «Pulisci» (visto su jenny_square, 23/11). */
+    document.getElementById('home-notebooks-new')
+      ?.setAttribute('aria-label', i18n.t('home.who.newNotebook'));
+    document.getElementById('launcher-search-clear')
+      ?.setAttribute('aria-label', i18n.t('launcher.clearSearch'));
     this._applyBackLabel();
     this._labelBoardTools();
     this.over?.host?.setAttribute('aria-label', i18n.t('home.over.label'));

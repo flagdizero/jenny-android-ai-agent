@@ -586,3 +586,51 @@ async def test_a_helper_launched_from_a_line_turn_takes_the_mark():
     finally:
         reset_request_context(token)
     assert line_mark({LINE_PEER_META: "a" * 32}) is None
+
+
+async def test_the_markers_go_to_the_chat_where_the_line_is(two):
+    side_a, side_b = await _linked(two, places=["Piante"])
+    await _open(side_a, side_b, "Piante")
+    await side_a.lines.close(WS, CHAT)
+    await wait_until(lambda: len([
+        c for c in side_b.cards if "line_in" in (c.metadata.get(OUTBOUND_META_AGENT_UI) or {})
+    ]) == 2)
+    markers = [
+        (c.chat_id, (c.metadata.get(OUTBOUND_META_AGENT_UI) or {})["line_in"]["event"])
+        for c in side_b.cards
+        if "line_in" in (c.metadata.get(OUTBOUND_META_AGENT_UI) or {})
+    ]
+    assert markers == [("project:Piante", "open"), ("project:Piante", "close")]
+
+
+def test_a_line_turn_tells_the_model_who_is_writing():
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_runtime_lines
+
+    meta = {LINE_PEER_META: "a" * 32, LINE_ID_META: "b" * 32, "origin_device": "Personale"}
+    [line] = line_runtime_lines(meta)
+    assert '"Personale"' in line and "other phone" in line
+    assert line_runtime_lines({"origin_device": "Personale"}) == []
+
+
+async def test_a_superseded_reply_of_a_line_turn_reaches_the_other_jenny(tmp_path):
+    from types import SimpleNamespace
+
+    from jenny.agent.loop import AgentLoop
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_of
+
+    sent: list[Any] = []
+
+    async def on_outbound(msg: Any) -> None:
+        sent.append(msg)
+
+    loop = SimpleNamespace(peer_questions=SimpleNamespace(lines=SimpleNamespace(
+        on_outbound=on_outbound)))
+    meta = {LINE_PEER_META: "a" * 32, LINE_ID_META: "b" * 32}
+    callback = AgentLoop._line_reply_callback(loop, WS, CHAT, meta)  # type: ignore[arg-type]
+    assert callback is not None
+    await callback("Cartiera Bianchi")
+    assert [(m.chat_id, m.content, line_of(m.metadata)) for m in sent] == [
+        (CHAT, "Cartiera Bianchi", "a" * 32),
+    ]
+    # Fuori da una linea non c'è niente da mandare.
+    assert AgentLoop._line_reply_callback(loop, WS, CHAT, {}) is None  # type: ignore[arg-type]
