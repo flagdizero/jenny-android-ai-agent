@@ -63,8 +63,7 @@ object PhonePill {
     /** Un tocco entro questo tempo da un gesto iniettato è di Jenny. */
     private const val OWN_TOUCH_MS = 600L
 
-    /** Un cambio di app entro questo tempo da un'azione di Jenny è suo: aprire
-     *  un'app o premere Home ci mette fino a un paio di secondi. */
+    /** La home che arriva entro questo tempo dal passo `home` di Jenny è sua. */
     private const val OWN_SWITCH_MS = 3_000L
 
     /** Quanto resta a schermo l'esito: il tempo di leggere tre o quattro
@@ -311,8 +310,10 @@ object PhonePill {
         if (!jenny && (pkg == svc.packageName || pkg != homePackage(svc))) return
         main.post {
             if (driving == null || question != null || PhoneActions.paused) return@post
-            val since = SystemClock.elapsedRealtime() - PhoneActions.injectedAt
-            // Un «home» chiesto da Jenny porta qui la home entro un attimo.
+            // L'unico passo con cui Jenny porta lei la home è `home`. Una
+            // finestra dopo ogni passo era troppo larga: un Home premuto meno
+            // di 3 s dopo un tocco di Jenny passava per suo (Titan, 23/11/2026).
+            val since = SystemClock.elapsedRealtime() - PhoneActions.ownHomeAt
             if (since < OWN_SWITCH_MS) return@post
             PhoneActions.pause()
             Log.i(TAG, "The user went to $pkg: paused")

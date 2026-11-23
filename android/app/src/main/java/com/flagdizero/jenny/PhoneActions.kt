@@ -69,6 +69,12 @@ object PhoneActions {
     var injectedAt = 0L
         private set
 
+    /** Quando Jenny ha chiesto lei la home (il passo `home`): [PhonePill]
+     *  non scambia per un gesto dell'utente la home che arriva subito dopo. */
+    @Volatile
+    var ownHomeAt = 0L
+        private set
+
     /** Quando è cominciata l'azione in corso: [settle] aspetta un evento da lì. */
     @Volatile
     private var actionStart = 0L
@@ -166,7 +172,10 @@ object PhoneActions {
         "scroll" -> scroll(svc, step)
         "swipe" -> if (step.has("x")) swipeAt(svc, step) else swipe(svc, step.optString("direction", "up"))
         "back" -> global(svc, AccessibilityService.GLOBAL_ACTION_BACK)
-        "home" -> global(svc, AccessibilityService.GLOBAL_ACTION_HOME)
+        "home" -> {
+            ownHomeAt = SystemClock.elapsedRealtime()
+            global(svc, AccessibilityService.GLOBAL_ACTION_HOME)
+        }
         "recents" -> global(svc, AccessibilityService.GLOBAL_ACTION_RECENTS)
         "notifications" -> global(svc, AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
         "wait" -> {

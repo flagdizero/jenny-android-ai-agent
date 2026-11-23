@@ -302,7 +302,10 @@ def test_going_home_during_a_drive_pauses_it() -> None:
     pill = read_source("PhonePill")
     changed = pill[pill.index("fun foregroundChanged("):pill.index("private fun homePackage(")]
     assert "MainActivity::class.java.name" in changed and "PhoneActions.pause()" in changed
-    assert "OWN_SWITCH_MS" in changed
+    # Suo è solo il passo `home`, non un passo qualsiasi degli ultimi secondi.
+    assert "PhoneActions.ownHomeAt" in changed and "PhoneActions.injectedAt" not in changed
+    actions = read_source("PhoneActions")
+    assert "ownHomeAt = SystemClock.elapsedRealtime()" in actions
 
 
 def test_the_driving_notification_is_always_quiet() -> None:
