@@ -43,6 +43,7 @@
     <string name="phone_stop_label">Ferma</string>
     <string name="phone_continue_label">Continua</string>
     <string name="phone_paused">In pausa: hai toccato lo schermo</string>
+    <string name="phone_paused_left">In pausa: hai lasciato l\'app</string>
 
     <string name="hands_service_label">Jenny — usa il telefono</string>
     <string name="hands_service_summary">Jenny apre le app, tocca e scrive al posto tuo, quando glielo chiedi</string>

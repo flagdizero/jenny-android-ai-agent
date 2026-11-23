@@ -534,3 +534,29 @@ async def test_a_link_that_is_not_a_web_page_has_no_always(phone, turn) -> None:
 ])
 def test_what_a_link_counts_as(url: str, target: str) -> None:
     assert consent._link_target(url) == target
+
+
+# ── La domanda dice dove sta quello di cui chiede (la pillola non lo copre) ──
+
+async def test_a_costly_ref_tells_where_it_is(phone, turn) -> None:
+    settings, asks = phone
+    settings._mode = "free"
+    turn()
+    got: list[str] = []
+    asks.posters.append(lambda ask: got.append(ask.where))
+    _answer(asks, "ok", [])
+    await consent.before_tool("phone_do", {"goal": "pagare", "steps": [
+        {"action": "tap", "ref": "1:e2"}]})
+    assert got == ["ref:1:e2"]
+
+
+async def test_a_point_with_no_name_tells_its_point(phone, turn, monkeypatch) -> None:
+    settings, asks = phone
+    settings._trusted.add("com.whatsapp")
+    _names(monkeypatch, "")
+    turn()
+    got: list[str] = []
+    asks.posters.append(lambda ask: got.append(ask.where))
+    _answer(asks, "ok", [])
+    await consent.before_tool("phone_do", POINT)
+    assert got == ["pt:300,420"]

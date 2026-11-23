@@ -113,6 +113,9 @@ class Ask:
     chat_id: str
     metadata: dict[str, Any]
     future: asyncio.Future[str] = field(repr=False)
+    # Dove sta sullo schermo quello di cui si chiede: ``ref:3:e12`` o
+    # ``pt:x,y`` (un punto della foto). Serve alla pillola per non coprirlo.
+    where: str = ""
 
     def public(self) -> dict[str, Any]:
         """La domanda come la vede un'interfaccia: niente che non serva a
@@ -155,7 +158,7 @@ class PhoneAsks:
 
     async def ask(
         self, *, kind: str, target: str, app: str, goal: str, what: str, origin: str,
-        options: tuple[str, ...], ctx: RequestContext | None,
+        options: tuple[str, ...], ctx: RequestContext | None, where: str = "",
     ) -> str:
         """Chiede e aspetta. Torna una delle *options*, oppure ``"timeout"``."""
         loop = asyncio.get_running_loop()
@@ -165,6 +168,7 @@ class PhoneAsks:
             at_ms=_now_ms(), session_key=(ctx.session_key or "") if ctx else "",
             channel=ctx.channel if ctx else "", chat_id=ctx.chat_id if ctx else "",
             metadata=dict(ctx.metadata) if ctx else {}, future=loop.create_future(),
+            where=where,
         )
         self._pending[ask.cid] = ask
         self._each(self.posters, ask)
@@ -418,28 +422,32 @@ async def _label(target: str) -> str:
     return await runtime.app_label(target)
 
 
-def _costly_taps(steps: list[dict[str, Any]]) -> list[str]:
-    """I nomi dei tasti che costano fra quelli che i passi toccano."""
-    names: list[str] = []
+def _costly_taps(steps: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """I tasti che costano fra quelli che i passi toccano: nome e dove sta."""
+    names: list[tuple[str, str]] = []
     for step in steps:
         if step.get("action") not in ("tap", "long_press"):
             continue
-        entry = runtime.ref_name(str(step.get("ref") or ""))
+        ref = str(step.get("ref") or "")
+        entry = runtime.ref_name(ref)
         if entry and COSTLY_RE.search(entry[1]):
-            names.append(entry[1])
+            names.append((entry[1], f"ref:{ref}"))
     return names
 
 
-async def _point_taps(steps: list[dict[str, Any]]) -> tuple[list[str], bool]:
+async def _point_taps(steps: list[dict[str, Any]]) -> tuple[list[tuple[str, str]], str]:
     """I tocchi a coordinate: i nomi che costano fra quelli su cui cadono, e se
     almeno uno cade dove non c'è un nome.
 
     Un punto non dice che cosa tocca. Dove l'app ha un albero lo si chiede a
     lei (``name_at``), e il tocco vale come quello di un ``ref``; dove non ce
     l'ha — un'app che disegna tutto da sola — nessuno può sapere se lì c'è
-    «Elimina», e lo decide l'utente."""
-    costly: list[str] = []
-    unnamed = False
+    «Elimina», e lo decide l'utente.
+
+    Torna i tocchi che costano (nome, dove) e il primo punto senza nome
+    (``pt:x,y``, vuoto se non ce n'è)."""
+    costly: list[tuple[str, str]] = []
+    unnamed = ""
     for step in steps:
         if step.get("action") not in ("tap", "long_press") or step.get("ref"):
             continue
@@ -449,10 +457,11 @@ async def _point_taps(steps: list[dict[str, Any]]) -> tuple[list[str], bool]:
             name = await runtime.name_at(float(step["x"]), float(step["y"]))
         except (TypeError, ValueError):
             name = None
+        where = f"pt:{step['x']},{step['y']}"
         if not name:
-            unnamed = True
+            unnamed = unnamed or where
         elif COSTLY_RE.search(name):
-            costly.append(name)
+            costly.append((name, where))
     return costly, unnamed
 
 
@@ -542,8 +551,8 @@ async def before_tool(name: str, params: Any) -> str | None:
         # c'è un nome che dica che il tocco costa: vale la sua scelta.
         from jenny.runtime.user_text import say
 
-        whats.append(say("phone.blind_what"))
-    for what in whats:
+        whats.append((say("phone.blind_what"), unnamed_point))
+    for what, where in whats:
         app = last_app or await _label(await _touched_app() or "")
         if unattended:
             return (
@@ -553,7 +562,7 @@ async def before_tool(name: str, params: Any) -> str | None:
             )
         choice = await pending.ask(
             kind="costly", target="", app=app, goal=goal, what=what, origin=origin,
-            options=("ok", "no"), ctx=ctx,
+            options=("ok", "no"), ctx=ctx, where=where,
         )
         if choice != "ok":
             return (

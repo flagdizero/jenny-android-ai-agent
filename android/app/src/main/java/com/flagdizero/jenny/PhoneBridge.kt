@@ -169,8 +169,8 @@ class PhoneBridge(context: Context) {
     }
 
     /** La domanda *cid* sulla pillola ([PhonePill.ask]). */
-    fun pillAsk(cid: String, title: String, body: String, always: Boolean): Boolean =
-        PhonePill.ask(cid, title, body, always)
+    fun pillAsk(cid: String, title: String, body: String, always: Boolean, where: String): Boolean =
+        PhonePill.ask(cid, title, body, always, where)
 
     /** La domanda ha avuto risposta: la pillola torna alla guida o sparisce. */
     fun pillAskDone(): Boolean = PhonePill.askDone()

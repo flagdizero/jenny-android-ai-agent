@@ -1106,7 +1106,7 @@ class GatewayContainer:
                 title = say("phone.ask_title", name=name, app=ask.app)
             spawn(phone_runtime.pill_ask(
                 ask.cid, title, f"«{ask.goal}»" if ask.goal else "",
-                always="always" in ask.options,
+                always="always" in ask.options, where=ask.where,
             ))
 
         telegram_messages: dict[str, int] = {}

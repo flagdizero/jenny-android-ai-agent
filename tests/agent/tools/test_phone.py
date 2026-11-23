@@ -312,3 +312,26 @@ def test_the_driving_notification_is_always_quiet() -> None:
     src = read_source("NotifierBridge")
     driving = src[src.index("fun postPhoneDriving"):src.index("fun postPeerDone")]
     assert "quiet = true" in driving
+
+
+def test_the_question_pill_moves_away_from_what_it_asks_about() -> None:
+    """In alto copriva la riga da eliminare mentre chiedeva se eliminarla."""
+    src = read_source("PhonePill")
+    draw = src[src.index("private fun draw()"):src.index("private fun send(")]
+    assert "atBottom = low" in draw
+    assert "where.startsWith(\"ref:\")" in src and "where.startsWith(\"pt:\")" in src
+    bridge = read_source("PhoneBridge")
+    assert "PhonePill.ask(cid, title, body, always, where)" in bridge
+
+
+def test_a_pause_from_home_says_so() -> None:
+    src = read_source("PhonePill")
+    assert "R.string.phone_paused_left" in src
+    for lang in ("values", "values-it"):
+        assert 'name="phone_paused_left"' in _xml(f"res/{lang}/strings.xml")
+
+
+def test_a_field_that_does_not_take_the_text_says_so() -> None:
+    src = read_source("PhoneActions")
+    typed = src[src.index("private fun type("):src.index("private fun scroll(")]
+    assert "target.refresh()" in typed and "scroll its wheel or tap its digits" in typed
