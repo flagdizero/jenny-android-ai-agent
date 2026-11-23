@@ -33,6 +33,8 @@ The question appears where you are: on a small pill above whatever is on screen,
 
 While the pill is on screen the notification with the same question arrives silently: it is in the shade, not on top of the app. A question stays on the pill until you answer it — touching the screen does not hide it.
 
+**Always** is offered for an app or a web site. A window of Android itself — the "Open with" chooser, the installer — and a link that is not a web page ask every time: there is no app there to trust once and for all.
+
 **Doesn't ask** skips the question for every app. Two things are asked regardless of that switch and of **Always**:
 
 - **A tap that pays, buys, deletes or transfers.** The question names the exact button, and the only answers are Ok and No. This is what stands between a page that tries to give Jenny orders and your money.
@@ -97,4 +99,4 @@ A reminder has no one to ask. It may use only the apps you marked **Always** (or
 - One screen: while Jenny uses the phone, it is busy. She works where you can see her.
 - Apps that give no names (games, custom-drawn screens) are used through a picture, which needs a model that can see images; with one that cannot, Jenny says the app cannot be read.
 - Android hides a few of its own dialogs from every app that is not a disability tool — permission requests, the "Install this app?" confirmation. Jenny cannot read or answer those: she stops and tells you.
-- The pill sits over the top of the app; it moves out of the way of Jenny's own taps.
+- The pill sits over the top of the app; it moves out of the way of Jenny's own taps. The floating mascot hides while Jenny works and comes back when she is done.

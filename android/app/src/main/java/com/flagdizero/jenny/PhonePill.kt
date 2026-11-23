@@ -114,7 +114,10 @@ object PhonePill {
 
     /** Jenny sta lavorando: *text* dice a cosa, e «Ferma» manda `stop` con *id*. */
     fun driving(id: String, text: String): Boolean = onMain {
-        if (driving != id) PhoneActions.begin()
+        if (driving != id) {
+            PhoneActions.begin()
+            FloatingOverlayController.hideForDriving(true)
+        }
         driving = id
         drivingText = text
         draw()
@@ -134,6 +137,7 @@ object PhonePill {
     fun done(text: String?): Boolean = onMain {
         driving = null
         question = null
+        FloatingOverlayController.hideForDriving(false)
         val svc = HandsService.instance
         if (text.isNullOrBlank() || svc == null) {
             remove()
@@ -154,15 +158,19 @@ object PhonePill {
         main.post {
             driving = null
             question = null
+            FloatingOverlayController.hideForDriving(false)
             remove()
         }
     }
 
     /** Nasconde la pillola per il tempo di una foto ([PhoneShot]): resta dov'è,
-     *  solo non si vede. Aspetta un fotogramma, così la foto la trova già via. */
+     *  solo non si vede. Con lei la mascotte, se non è già nascosta dalla
+     *  guida: una foto fatta prima del primo passo la troverebbe sopra l'app.
+     *  Aspetta un fotogramma, così la foto le trova già via. */
     fun hidden(hide: Boolean) {
         onMain {
             view?.alpha = if (hide) 0f else 1f
+            if (driving == null) FloatingOverlayController.hideForDriving(hide)
             true
         }
         if (hide) Thread.sleep(80)

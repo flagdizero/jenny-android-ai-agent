@@ -273,3 +273,14 @@ def test_the_debug_receiver_has_no_feasibility_leftovers() -> None:
     src = read_source("DebugPhoneReceiver")
     for gone in ('"pill"', '"wake"', '"launch"'):
         assert gone not in src
+
+
+def test_the_mascot_hides_while_jenny_drives_and_in_a_screenshot() -> None:
+    """Sta sopra l'app: finiva nella foto e copriva i tasti (Titan, 23/11/2026)."""
+    pill = read_source("PhonePill")
+    driving = pill[pill.index("fun driving("):pill.index("fun canShow(")]
+    assert "FloatingOverlayController.hideForDriving(true)" in driving
+    done = pill[pill.index("fun done("):pill.index("fun detach()")]
+    assert "FloatingOverlayController.hideForDriving(false)" in done
+    hidden = pill[pill.index("fun hidden("):pill.index("fun dodge(")]
+    assert "FloatingOverlayController.hideForDriving(hide)" in hidden

@@ -481,3 +481,56 @@ async def test_a_swipe_between_two_points_asks_nothing_more(phone, turn, monkeyp
         {"action": "swipe", "x": 300, "y": 800, "x2": 300, "y2": 200}]}
     assert await consent.before_tool("phone_do", swipe) is None
     assert seen == []
+
+
+# ── «Sempre» vale per un'app o un sito, non per una finestra di sistema ──────
+
+async def test_a_system_window_is_asked_every_time_with_no_always(phone, turn, monkeypatch) -> None:
+    settings, asks = phone
+
+    async def foreground() -> str:
+        return "android"
+
+    monkeypatch.setattr(consent.runtime, "foreground", foreground)
+    turn()
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+    assert await consent.before_tool("phone_do", TAP) is None
+    assert seen[0]["options"] == ["ok", "no"]
+
+
+async def test_an_old_always_for_a_system_window_no_longer_counts(phone, turn, monkeypatch) -> None:
+    settings, asks = phone
+    settings._trusted.add("android")
+
+    async def foreground() -> str:
+        return "android"
+
+    monkeypatch.setattr(consent.runtime, "foreground", foreground)
+    turn()
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+    assert await consent.before_tool("phone_do", TAP) is None
+    assert len(seen) == 1
+
+
+async def test_a_link_that_is_not_a_web_page_has_no_always(phone, turn) -> None:
+    settings, asks = phone
+    turn()
+    seen: list[dict[str, Any]] = []
+    _answer(asks, "ok", seen)
+    link = {"goal": "aprire la scheda", "steps": [
+        {"action": "open_link", "url": "market://details?id=com.whatsapp"}]}
+    assert await consent.before_tool("phone_do", link) is None
+    assert seen[0]["app"] == "a market link"
+    assert seen[0]["options"] == ["ok", "no"]
+
+
+@pytest.mark.parametrize(("url", "target"), [
+    ("https://play.google.com/store/apps", "link:play.google.com"),
+    ("maps.google.com/x", "link:maps.google.com"),
+    ("tel:123456", "link:tel:"),
+    ("geo:41.9,12.5", "link:geo:"),
+])
+def test_what_a_link_counts_as(url: str, target: str) -> None:
+    assert consent._link_target(url) == target

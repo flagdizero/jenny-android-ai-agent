@@ -1448,6 +1448,20 @@ object FloatingOverlayController {
     }
 
     /**
+     * Nasconde la mascotte parcheggiata mentre Jenny usa il telefono, e la
+     * rimette dopo. Sta sopra l'app: finisce nella foto dello schermo e si
+     * prende i tocchi destinati a quello che copre. Sul Titan, il 23/11/2026,
+     * copriva la freccia «vai in fondo» di Telegram X e il modello provava a
+     * trascinarla via. Non smonta niente: le finestre restano, non si vedono e
+     * non ricevono tocchi. Sul main thread.
+     */
+    fun hideForDriving(hidden: Boolean) {
+        val visibility = if (hidden) View.GONE else View.VISIBLE
+        mascotWin?.visibility = visibility
+        grip?.visibility = visibility
+    }
+
+    /**
      * Ritorno a parcheggiata: via il fuoco, via lo scrim, via il fumetto.
      *
      * Quello che **non** si butta è il testo già scritto nel campo. Una frase a
