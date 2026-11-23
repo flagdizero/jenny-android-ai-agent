@@ -1721,7 +1721,9 @@
         "undo_still_working": "{name} is still working on it: ask to undo when it's done.",
         "undo_not_found": "{name} found nothing to undo.",
         "undo_failed": "{name} couldn't undo it.",
-        "refused_act": "{name} doesn't take requests to act from this phone. It's turned on from {name}'s phone: Workshop → Other Jennys."
+        "refused_act": "{name} doesn't take requests to act from this phone. It's turned on from {name}'s phone: Workshop → Other Jennys.",
+        "refused_computer": "{name} refused the question.",
+        "refused_act_computer": "{name} only reads: requests to act are turned on on the Mac, with opencode-jenny act free."
       },
       "didAt": "{name} did it · {time}",
       "workingAt": "{name} is working on it · {time}",
