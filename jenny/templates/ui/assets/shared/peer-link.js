@@ -4,8 +4,9 @@
  * sistema lo legge e Android lo apre in Jenny (`MainActivity.capturePairLink`),
  * che lo tiene finché la pagina non lo chiede con `JennyNative.takePairLink()`.
  * La casa lo chiede al boot e quando Android la avvisa (`window.jennyPeer`), e
- * porta in officina; l'officina apre il modulo già compilato. Abbinare resta un
- * tocco dell'utente: il link da solo non fa niente.
+ * apre la stanza «Altre Jenny» col modulo già compilato; l'officina, se è lei
+ * davanti, apre il suo. Abbinare resta un tocco dell'utente: il link da solo
+ * non fa niente.
  *
  * Fra le due pagine il link viaggia in `sessionStorage`, non nell'URL: il
  * codice è un segreto di dieci minuti e non deve finire in una riga di log.

@@ -20,7 +20,7 @@ There are two ways to reach the other one. You can have your Jenny **ask** her s
 Linking is done once, and needs both phones in your hands. The steps below use the workshop panel. The same thing is in the house, under **Settings → Other Jennys → Link another Jenny**: show the QR or type the other one's code, then name her and choose the two permissions that matter most.
 
 1. On the first phone, open the workshop: **Hands → Other Jennys**. Turn on **Link with other Jennys**, then tap **Show the QR**.
-2. On the second phone, scan the QR with the camera. Android opens Jenny with the form already filled in. Give the other Jenny a name ("Work", "Personal") and tap **Link**. If linking is off on this phone, the form says so, and **Link** turns it on.
+2. On the second phone, scan the QR with the camera. Android opens Jenny with the form already filled in: in **Settings → Other Jennys** of the house, or in the workshop panel if that is what is open. Tap **Link**, then give the other Jenny a name ("Work", "Personal"). If linking is off on this phone, **Link** turns it on.
 3. Back on the first phone, Jenny asks what to call the one that just linked. Until you answer, she goes by her Tailscale name.
 
 Without a camera, use **Or type on the other Jenny** instead: on the second phone, tap **I have the other's code** and type the address (the Tailscale name, or the `100.x.y.z` address) and the code shown under the QR.

@@ -513,3 +513,147 @@ async def test_after_a_restart_the_unsent_messages_are_back_in_the_thread(two):
     ]
     # La seconda lettura non lo raddoppia.
     assert len((await lines.status(WS, CHAT))["items"]) == 1
+
+
+async def test_a_notebook_is_found_whatever_the_case(two):
+    # «passami Lavoro sul quaderno fornitori», col quaderno che si chiama
+    # «Fornitori»: sui due emulatori la linea si apriva sulla chat di sempre.
+    side_a, side_b = await _linked(two, places=["Fornitori"])
+    token = bind_request_context(_ctx())
+    try:
+        said = await _bound(PeerLineTool(), side_a.lines).execute(peer="", notebook="fornitori")
+    finally:
+        reset_request_context(token)
+    assert "no notebook" not in said and "/torna" in said
+    assert (await side_a.lines.status(WS, CHAT))["place"] == "Fornitori"
+    # Lo stesso a parole, dentro la linea.
+    await side_b.lines.move_here(side_a.jenny.id, "")
+    assert await side_b.lines.move_here(side_a.jenny.id, "FORNITORI") is None
+    row = await side_b.lines._db(side_b.lines.store.line, "in", side_a.jenny.id)
+    assert row["place"] == "Fornitori"
+
+
+def test_a_helper_spec_keeps_the_line_across_a_restart():
+    from jenny.agent.subagent import SubagentSpec
+
+    mark = {"peer": "a" * 32, "lid": "b" * 32}
+    spec = SubagentSpec(task="leggi i sensori", label="sensori", peer_line=dict(mark))
+    assert SubagentSpec.from_dict(spec.to_dict()).peer_line == mark
+    assert SubagentSpec.from_dict({**spec.to_dict(), "peer_line": {"peer": "x"}}).peer_line is None
+    assert SubagentSpec.from_dict({**spec.to_dict(), "peer_line": None}).peer_line is None
+
+
+async def test_the_result_of_a_helper_launched_from_a_line_goes_back_on_it(tmp_path):
+    # Sui due emulatori (23/11): «quali piante annaffio?» arrivato dalla linea,
+    # Jenny lancia un aiutante e risponde «un attimo»; il risultato vero, in un
+    # turno d'annuncio, restava su questo telefono e all'altra non arrivava.
+    from unittest.mock import MagicMock
+
+    from jenny.agent.subagent import SubagentManager, SubagentSpec
+    from jenny.bus.queue import MessageBus
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_of
+
+    bus = MessageBus()
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    mgr = SubagentManager(provider=provider, workspace=tmp_path, bus=bus,
+                          max_tool_result_chars=10_000)
+    spec = SubagentSpec(task="leggi i sensori", label="sensori",
+                        peer_line={"peer": "a" * 32, "lid": "b" * 32})
+    mgr._spec_for_task = lambda task_id: spec  # type: ignore[method-assign]
+    origin = {"channel": "websocket", "chat_id": "default", "session_key": "unified:default"}
+    await mgr._announce_result("sub-1", "sensori", "leggi i sensori", "20%", origin, "ok")
+    msg = await bus.consume_inbound()
+    assert line_of(msg.metadata) == "a" * 32
+    assert msg.metadata[LINE_PEER_META] == "a" * 32 and msg.metadata[LINE_ID_META] == "b" * 32
+
+
+async def test_a_helper_launched_from_a_line_turn_takes_the_mark():
+    from jenny.agent.tools.context import (
+        RequestContext,
+        bind_request_context,
+        reset_request_context,
+    )
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_mark
+
+    ctx = RequestContext(channel=WS, chat_id=CHAT, session_key="unified:default",
+                         metadata={LINE_PEER_META: "a" * 32, LINE_ID_META: "b" * 32})
+    token = bind_request_context(ctx)
+    try:
+        from jenny.agent.tools.context import current_request_context
+
+        assert line_mark(current_request_context().metadata) == {"peer": "a" * 32, "lid": "b" * 32}
+    finally:
+        reset_request_context(token)
+    assert line_mark({LINE_PEER_META: "a" * 32}) is None
+
+
+async def test_the_markers_go_to_the_chat_where_the_line_is(two):
+    side_a, side_b = await _linked(two, places=["Piante"])
+    await _open(side_a, side_b, "Piante")
+    await side_a.lines.close(WS, CHAT)
+    await wait_until(lambda: len([
+        c for c in side_b.cards if "line_in" in (c.metadata.get(OUTBOUND_META_AGENT_UI) or {})
+    ]) == 2)
+    markers = [
+        (c.chat_id, (c.metadata.get(OUTBOUND_META_AGENT_UI) or {})["line_in"]["event"])
+        for c in side_b.cards
+        if "line_in" in (c.metadata.get(OUTBOUND_META_AGENT_UI) or {})
+    ]
+    assert markers == [("project:Piante", "open"), ("project:Piante", "close")]
+
+
+def test_a_line_turn_tells_the_model_who_is_writing():
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_runtime_lines
+
+    meta = {LINE_PEER_META: "a" * 32, LINE_ID_META: "b" * 32, "origin_device": "Personale"}
+    [line] = line_runtime_lines(meta)
+    assert '"Personale"' in line and "other phone" in line
+    assert line_runtime_lines({"origin_device": "Personale"}) == []
+
+
+async def test_a_superseded_reply_of_a_line_turn_reaches_the_other_jenny(tmp_path):
+    from types import SimpleNamespace
+
+    from jenny.agent.loop import AgentLoop
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_of
+
+    sent: list[Any] = []
+
+    async def on_outbound(msg: Any) -> None:
+        sent.append(msg)
+
+    loop = SimpleNamespace(peer_questions=SimpleNamespace(lines=SimpleNamespace(
+        on_outbound=on_outbound)))
+    meta = {LINE_PEER_META: "a" * 32, LINE_ID_META: "b" * 32}
+    callback = AgentLoop._line_reply_callback(loop, WS, CHAT, meta)  # type: ignore[arg-type]
+    assert callback is not None
+    await callback("Cartiera Bianchi")
+    assert [(m.chat_id, m.content, line_of(m.metadata)) for m in sent] == [
+        (CHAT, "Cartiera Bianchi", "a" * 32),
+    ]
+    # Fuori da una linea non c'è niente da mandare.
+    assert AgentLoop._line_reply_callback(loop, WS, CHAT, {}) is None  # type: ignore[arg-type]
+
+
+async def test_a_change_of_linked_jennys_tells_the_house(two):
+    # Sui due emulatori (23/11): scollegata dall'altro telefono, in casa il
+    # tasto ⇄ e la riga «Altre Jenny» restavano col nome di prima.
+    side_a, _side_b = await _linked(two)
+    await side_a.lines.peers_changed()
+    assert side_a.frames[-1] == {"channel": WS, "chat_id": CHAT, "kind": "peers"}
+
+
+async def test_a_line_idle_for_too_long_says_so(two):
+    from jenny.peers.line import IDLE_CLOSE_MS
+
+    side_a, side_b = await _linked(two)
+    await _open(side_a, side_b)
+    lines_b = side_b.lines
+    await lines_b._db(lines_b.store.line_update, "in", side_a.jenny.id,
+                      last_ms=1)
+    assert IDLE_CLOSE_MS > 0
+    await side_a.lines.route(WS, CHAT, "ci sei ancora?")
+    await wait_until(lambda: "closed" in side_a.kinds())
+    closed = next(f for f in side_a.frames if f["kind"] == "closed")
+    assert closed["reason"] == "idle"

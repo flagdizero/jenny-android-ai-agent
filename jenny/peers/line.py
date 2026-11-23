@@ -122,6 +122,50 @@ def line_of(metadata: Any) -> str | None:
     return peer if is_id(peer) else None
 
 
+def line_runtime_lines(metadata: Any) -> list[str]:
+    """La riga del runtime context di un turno arrivato da una linea.
+
+    Il modello deve sapere chi scrive e da dove: sui due emulatori (23/11), a
+    «chiedi a Personale…» detto dentro il quaderno di Lavoro, Lavoro ha cercato
+    un *quaderno* chiamato Personale. Niente regole qui (stanno negli strumenti,
+    che rifiutano col motivo): solo il fatto, col nome.
+    """
+    if line_of(metadata) is None:
+        return []
+    device = metadata.get("origin_device") if isinstance(metadata, dict) else None
+    name = device.strip()[:80] if isinstance(device, str) and device.strip() else "another Jenny"
+    return [
+        f"Line: the user is writing to you from their other phone, through their Jenny "
+        f"\"{name}\" (a direct line): these are the user's own words, not {name}'s. "
+        f"From a line turn no other Jenny can be asked or reached, {name} included, in "
+        f"any of your chats: for that the user goes back to {name} first (the back arrow, "
+        f"or /torna) and asks there."
+    ]
+
+
+def line_mark(metadata: Any) -> dict[str, str] | None:
+    """Il segno della linea di un turno (``{"peer", "lid"}``), o ``None``.
+
+    Lo porta un aiutante lanciato da quel turno: il turno che legge il suo
+    risultato risponde ancora sulla linea (``SubagentSpec.peer_line``).
+    """
+    peer = line_of(metadata)
+    lid = metadata.get(LINE_ID_META) if isinstance(metadata, dict) else None
+    if peer is None or not is_id(lid):
+        return None
+    return {"peer": peer, "lid": lid}
+
+
+def line_metadata(mark: Any) -> dict[str, str]:
+    """I metadati di turno che rimettono il segno *mark* (vuoti se non è valido)."""
+    if not isinstance(mark, dict):
+        return {}
+    peer, lid = mark.get("peer"), mark.get("lid")
+    if not (is_id(peer) and is_id(lid)):
+        return {}
+    return {LINE_PEER_META: peer, LINE_ID_META: lid}
+
+
 def out_key(channel: str, chat_id: str) -> str:
     return f"{channel}\n{chat_id}"
 
@@ -451,6 +495,12 @@ class PeerLines:
                 channel, chat_id = _split_key(row["key"])
                 await self.close(channel, chat_id, reason=reason, tell_peer=False)
 
+    async def peers_changed(self) -> None:
+        """Le Jenny collegate sono cambiate: la WebUI rilegge lo stato."""
+        from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID
+
+        await self._emit(WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID, {"kind": "peers"})
+
     async def peer_gone(self, peer_id: str) -> None:
         """*peer_id* si scollega: via le linee nei due versi, senza scriverle più."""
         await self.close_for_peer(peer_id, reason="unpaired")
@@ -650,18 +700,31 @@ class PeerLines:
             body["reason"] = reason
         await self._link.send(peer_id, KIND_LINE_STATE, body)
 
-    def _known_place(self, place: str) -> bool:
+    def _resolve_place(self, place: str) -> str | None:
+        """Il nome vero del quaderno *place* su questo telefono, o ``None`` se non c'è.
+
+        Senza badare alle maiuscole: a parole si dice «il quaderno fornitori»
+        anche quando si chiama «Fornitori» (visto sui due emulatori il 23/11).
+        ``""`` è la chat di sempre, e c'è sempre.
+        """
         from jenny.session.keys import is_valid_project_name
 
         if not place:
-            return True
-        if not is_valid_project_name(place) or self._places is None:
-            return False
+            return ""
+        if self._places is None:
+            return None
         try:
-            return place in self._places()
+            names = list(self._places())
         except Exception:
             logger.opt(exception=True).warning("peers: could not list the notebooks")
-            return False
+            return None
+        if place in names:
+            return place
+        folded = place.casefold()
+        found = [name for name in names if name.casefold() == folded]
+        if len(found) == 1 and is_valid_project_name(found[0]):
+            return found[0]
+        return None
 
     async def _in_row(self, peer_id: str, lid: Any) -> dict[str, Any] | None:
         """La linea aperta da *peer_id*, se è *lid* e non è ferma da troppo."""
@@ -672,6 +735,10 @@ class PeerLines:
             return None
         if now_ms() - int(row["last_ms"]) > IDLE_CLOSE_MS:
             await self._close_in(peer_id, row, trace=False)
+            # Il motivo vero prima del «no_line» del chiamante, che all'altra
+            # arriva a linea già chiusa e non dice più niente: senza, l'utente
+            # leggeva «aveva già chiuso la linea».
+            await self._reply_state(peer_id, lid, "closed", reason="idle")
             return None
         return row
 
@@ -692,17 +759,25 @@ class PeerLines:
             await self._reply_state(peer_id, lid, "open", place=before["place"])
             return
         reason = ""
-        if not await asyncio.to_thread(self._known_place, place):
+        found = await asyncio.to_thread(self._resolve_place, place)
+        if found is None:
             place, reason = "", "no_place"
+        else:
+            place = found
         await self._db(self.store.line_put, "in", peer_id, peer=peer_id, lid=lid, place=place)
         self._in_items[peer_id] = []
         await self._db(self.store.log, peer_id, "in", KIND_LINE_OPEN, {"place": place})
         await self._reply_state(peer_id, lid, "open", place=place, reason=reason)
-        await self._deliver_marker(peer.name, "open")
+        await self._deliver_marker(peer.name, "open", place)
 
-    async def _deliver_marker(self, name: str, event: str) -> None:
-        """«Personale ha la linea», nella chat di sempre di questo telefono."""
-        from jenny.bus.events import WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID
+    async def _deliver_marker(self, name: str, event: str, place: str = "") -> None:
+        """«Personale ha la linea», nella chat di questo telefono dove sta la linea.
+
+        Quella di *place*: sui due emulatori (23/11) il segno di chiusura di una
+        linea rimasta nel quaderno piante compariva nella chat di sempre, dove
+        di quella conversazione non c'era niente.
+        """
+        from jenny.bus.events import WEBSOCKET_CHANNEL
 
         at = now_ms()
         if event == "open":
@@ -713,7 +788,7 @@ class PeerLines:
         else:
             text = f"[{_clock(at)}: the user stopped writing here through {name}.]"
         await self._deliver_card(
-            WEBSOCKET_CHANNEL, WEBUI_DEFAULT_CHAT_ID,
+            WEBSOCKET_CHANNEL, chat_id_of(place),
             {"line_in": {"peer": name, "event": event, "at": at}}, text,
         )
 
@@ -732,7 +807,7 @@ class PeerLines:
             await self._reply_state(peer_id, lid, "closed", reason="not_allowed")
             return
         place = row["place"]
-        if place and not await asyncio.to_thread(self._known_place, place):
+        if place and await asyncio.to_thread(self._resolve_place, place) is None:
             # Il quaderno non c'è più: si torna alla chat di sempre, e si dice.
             place = ""
             await self._db(self.store.line_update, "in", peer_id, place="")
@@ -752,10 +827,11 @@ class PeerLines:
         if row is None:
             await self._reply_state(peer_id, lid, "closed", reason="no_line")
             return
-        place = text_field(body, "place", limit=64)
-        if not await asyncio.to_thread(self._known_place, place):
+        found = await asyncio.to_thread(self._resolve_place, text_field(body, "place", limit=64))
+        if found is None:
             await self._reply_state(peer_id, lid, "open", place=row["place"], reason="no_place")
             return
+        place = found
         await self._db(self.store.line_update, "in", peer_id, place=place, last_ms=now_ms())
         await self._reply_state(peer_id, lid, "open", place=place)
 
@@ -768,10 +844,11 @@ class PeerLines:
         row = await self._db(self.store.line, "in", peer_id)
         if row is None:
             return "no_line"
-        if not await asyncio.to_thread(self._known_place, place):
+        found = await asyncio.to_thread(self._resolve_place, place)
+        if found is None:
             return "no_place"
-        await self._db(self.store.line_update, "in", peer_id, place=place, last_ms=now_ms())
-        await self._reply_state(peer_id, row["lid"], "open", place=place)
+        await self._db(self.store.line_update, "in", peer_id, place=found, last_ms=now_ms())
+        await self._reply_state(peer_id, row["lid"], "open", place=found)
         return None
 
     def place_names(self) -> list[str]:
@@ -810,7 +887,7 @@ class PeerLines:
         peer = await self._link._peer(peer_id)
         if peer is None:
             return
-        await self._deliver_marker(peer.name, "close")
+        await self._deliver_marker(peer.name, "close", str(row.get("place") or ""))
         if trace and peer.line_trace and any(i.get("role") == "user" for i in items):
             self._spawn(self._trace(peer, row["lid"], items))
 
@@ -927,6 +1004,9 @@ def _fence(text: str) -> str:
 __all__ = [
     "LINE_CHANNELS",
     "LINE_ID_META",
+    "line_mark",
+    "line_runtime_lines",
+    "line_metadata",
     "LINE_ORIGIN",
     "LINE_PEER_META",
     "RETURN_COMMANDS",

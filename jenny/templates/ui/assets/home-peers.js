@@ -118,9 +118,12 @@ export class HomePeers {
 
   /* ── Ciclo di vita ───────────────────────────────────────────────────── */
 
-  async open({ add = false } = {}) {
+  /** *link*: il link d'abbinamento di un QR (`shared/peer-link.js`), che apre
+   *  il modulo già compilato. Collegare resta il tocco su «Collega». */
+  async open({ add = false, link = null } = {}) {
     this._open = true;
-    this.view = add ? 'add' : 'list';
+    this._link = link;
+    this.view = link ? 'join' : (add ? 'add' : 'list');
     this.render();
     await this.refresh();
     this._schedule();
@@ -128,6 +131,7 @@ export class HomePeers {
 
   close() {
     this._open = false;
+    this._link = null;
     clearTimeout(this._timer);
     /* Un codice lasciato aperto si chiude con la stanza. */
     if (this._pair) {
@@ -155,8 +159,17 @@ export class HomePeers {
     }
   }
 
-  /** Lo stato, senza disegnare: per la riga delle Impostazioni all'avvio. */
+  /** Lo stato, senza disegnare: per la riga delle Impostazioni all'avvio.
+   *
+   *  A stanza aperta lo stato è suo: col QR a schermo è dal confronto fra
+   *  prima e dopo che si riconosce la Jenny appena collegata. Rileggerlo qui
+   *  (l'avviso `peers` del gateway arriva proprio a collegamento fatto) faceva
+   *  credere il QR scaduto, e il passo del nome non arrivava. */
   async peek() {
+    if (this._open) {
+      if (!this._busy && this.view !== 'name' && this.view !== 'join') await this.refresh();
+      return this.status;
+    }
     try {
       this.status = await rpc.peer('status');
       this.onStatus(this.status);
@@ -348,6 +361,7 @@ export class HomePeers {
     card.append(
       choice('ti-qrcode', t('showQr'), t('showQrSub'), () => this._startQr()),
       choice('ti-keyboard', t('haveCode'), t('haveCodeSub'), () => {
+        this._link = null;
         this.view = 'join';
         this.render();
       }),
@@ -428,12 +442,19 @@ export class HomePeers {
   }
 
   _join() {
+    /* Dal QR (`open({ link })`): indirizzo e codice già scritti. Fino al 23/11
+       il QR portava sempre in officina, che non ha il terzo passo: la linea
+       restava spenta anche per chi l'avrebbe accesa. */
+    const link = this._link || null;
+    const shown = link ? (link.host || link.ip) : '';
     const card = el('div', 'home-card home-peers-form');
     card.append(
       this._field('home-peers-host', t('address'), {
-        placeholder: t('addressPlaceholder'), hint: t('addressHint'),
+        value: shown, placeholder: t('addressPlaceholder'), hint: t('addressHint'),
       }),
-      this._field('home-peers-code', t('code'), { placeholder: 'K7Q4-MZP2' }),
+      this._field('home-peers-code', t('code'), {
+        value: link ? link.code : '', placeholder: 'K7Q4-MZP2',
+      }),
     );
     const go = button('home-peers-big', t('link'), async () => {
       const address = card.querySelector('#home-peers-host').value.trim();
@@ -446,12 +467,18 @@ export class HomePeers {
       const before = this.status;
       const status = await this._run(async () => {
         if (before && !before.enabled) await rpc.peer('set', { enabled: true });
-        return rpc.peer('pair.join', {
+        /* L'indirizzo del QR com'era: col nome tiene anche l'IP e la porta. */
+        const same = link && address === shown;
+        return rpc.peer('pair.join', same ? {
+          host: link.host, ip: link.ip, ...(link.port ? { port: link.port } : {}),
+          code, name: t('defaultName'),
+        } : {
           host: isIp ? '' : address, ip: isIp ? address : '', code, name: t('defaultName'),
         });
       });
       const fresh = status && freshPeer(before, status);
       if (fresh) {
+        this._link = null;
         this._named = fresh;
         this.view = 'name';
         this.render();

@@ -1177,3 +1177,43 @@ async def test_injection_cycle_cap_on_error_path():
     assert result.had_injections is True
     # Should cap: _MAX_INJECTION_CYCLES drained rounds + 1 final round that breaks
     assert call_count["n"] == _MAX_INJECTION_CYCLES + 1
+
+
+@pytest.mark.asyncio
+async def test_a_final_answer_superseded_by_an_injection_is_handed_over():
+    """La risposta superata da un messaggio a metà turno arriva al gancio, e solo lei.
+
+    Sui due emulatori (23/11/2026) due messaggi di fila dalla linea fra Jenny
+    diventavano un turno solo, e la risposta al primo all'altra non arrivava.
+    """
+    from jenny.agent.runner import AgentRunner
+    from jenny.bus.events import InboundMessage
+
+    provider = MagicMock()
+    calls = {"n": 0}
+
+    async def chat_with_retry(*, messages, **kwargs):
+        calls["n"] += 1
+        text = "Cartiera Bianchi" if calls["n"] == 1 else "il giovedì"
+        return LLMResponse(content=text, tool_calls=[], usage={})
+
+    provider.chat_with_retry = chat_with_retry
+    tools = MagicMock()
+    tools.get_definitions.return_value = []
+    queue: asyncio.Queue = asyncio.Queue()
+    await queue.put(InboundMessage(channel="websocket", sender_id="u", chat_id="c",
+                                   content="secondo: e le scatole?"))
+    handed: list[str] = []
+
+    async def superseded(text: str) -> None:
+        handed.append(text)
+
+    result = await AgentRunner(provider).run(make_spec(
+        initial_messages=[{"role": "user", "content": "primo: la cartiera?"}],
+        tools=tools,
+        max_iterations=5,
+        injection_callback=_make_injection_callback(queue),
+        superseded_reply_callback=superseded,
+    ))
+    assert result.final_content == "il giovedì"
+    assert handed == ["Cartiera Bianchi"]

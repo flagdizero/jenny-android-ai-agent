@@ -83,6 +83,7 @@ from jenny.config.schema import AgentDefaults
 from jenny.cron.session_turns import (
     cron_history_overrides,
 )
+from jenny.peers.line import line_runtime_lines
 from jenny.providers.base import LLMProvider, LLMRuntime
 from jenny.runtime.context import get_android_context
 from jenny.runtime.location import location_runtime_line
@@ -627,6 +628,31 @@ class AgentLoop(
 
         logger.info("Registered {} tools: {}", len(registered), registered)
 
+    def _line_reply_callback(
+        self, channel: str, chat_id: str, metadata: dict[str, Any] | None,
+    ) -> Callable[[str], Awaitable[None]] | None:
+        """In un turno arrivato da una linea: la risposta che un messaggio a metà
+        turno ha superato va comunque all'altra Jenny.
+
+        Sui due emulatori (23/11) due messaggi di fila dalla linea diventavano un
+        turno solo, e la risposta al primo — vista qui in streaming — all'altra
+        non arrivava mai: sulla linea passa solo il testo finale.
+        """
+        from jenny.peers.line import line_mark, line_metadata
+
+        mark = line_mark(metadata)
+        lines = getattr(getattr(self, "peer_questions", None), "lines", None)
+        if mark is None or lines is None:
+            return None
+
+        async def _send(text: str) -> None:
+            await lines.on_outbound(OutboundMessage(
+                channel=channel, chat_id=chat_id, content=text,
+                metadata=line_metadata(mark),
+            ))
+
+        return _send
+
     def attach_peer_questions(self, questions: Any) -> None:
         """Lega il servizio delle domande fra Jenny (``jenny.peers.questions``).
 
@@ -967,6 +993,7 @@ class AgentLoop(
             current_runtime_lines=[
                 *self._location_runtime_lines(msg.channel, chat_id),
                 *screen_runtime_lines(msg.metadata),
+                *line_runtime_lines(msg.metadata),
                 *self._plan_runtime_lines(msg, session, session.key),
             ],
         )
@@ -1772,6 +1799,7 @@ class AgentLoop(
                 retry_wait_callback=on_retry_wait,
                 checkpoint_callback=_checkpoint,
                 injection_callback=_drain_pending,
+                superseded_reply_callback=self._line_reply_callback(channel, chat_id, metadata),
                 # Il passo di un piano può superare JENNY_LLM_TIMEOUT_S; lo stallo resta
                 # coperto da JENNY_STREAM_IDLE_TIMEOUT_S nei provider in streaming.
                 llm_timeout_s=plan_wall_llm_timeout_s(
@@ -2616,6 +2644,12 @@ class AgentLoop(
             outbound_metadata["origin_message_id"] = origin_message_id
         if turn_id := msg.metadata.get(WEBUI_TURN_METADATA_KEY):
             outbound_metadata[WEBUI_TURN_METADATA_KEY] = turn_id
+        # Il rientro di un aiutante lanciato da un turno della linea: la
+        # risposta torna all'altra Jenny (``PeerLines.on_outbound``). Senza,
+        # sui due emulatori (23/11) restava su questo telefono.
+        from jenny.peers.line import line_mark, line_metadata
+
+        outbound_metadata.update(line_metadata(line_mark(msg.metadata)))
         return TurnOutcome.delivered(
             OutboundMessage(
                 channel=channel,
