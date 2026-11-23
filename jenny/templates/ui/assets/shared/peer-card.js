@@ -15,12 +15,20 @@
 import { button, el, icon } from './dom.js';
 import { i18n } from './i18n.js';
 import { rpc } from './rpc-client.js';
-import { showToast } from './utils.js';
+import { copyToClipboard, showToast } from './utils.js';
 
 const STATUSES = new Set([
   'ok', 'refused', 'too_many', 'unavailable', 'failed', 'expired',
   'undone', 'undo_refused', 'undo_still_working', 'undo_not_found', 'undo_failed',
 ]);
+/* Una domanda che non ha avuto risposta si disegna come una pillola di una riga
+   («Mac · sola lettura · come si sblocca ▾») che si apre al tocco: il perché lo
+   dice Jenny a parole nella stessa risposta (`peer_ask` aspetta un «no»
+   immediato), e la scheda non deve sembrare una risposta (prova sul Titan,
+   23/11/2026: un rifiuto grigio passato per una risposta). Gialla se si
+   sblocca o passa, rossa se è andata male. */
+const PILL_STATUSES = new Set(['refused', 'too_many', 'unavailable', 'failed', 'expired']);
+const PILL_WARN = new Set(['refused', 'too_many']);
 const DONE_ICONS = { file: 'ti-file', job: 'ti-clock', egress: 'ti-world' };
 const ID_RE = /^[0-9a-f]{32}$/;
 /* Le richieste già annullate, e i tasti «Chiedi di annullare» disegnati per
@@ -162,11 +170,75 @@ function lineCardNode(card) {
   return node;
 }
 
+/** La chiave del motivo: un computer (opencode) rifiuta per altre ragioni di un
+ *  telefono, quindi niente «si accende nell'Officina», che lì non c'è. */
+function statusKey(card, status) {
+  const computer = card.kind === 'opencode';
+  if (status === 'refused') return (card.mode === 'act' ? 'refused_act' : 'refused') + (computer ? '_computer' : '');
+  if (status === 'unavailable' && computer) return 'unavailable_computer';
+  return status;
+}
+
+/** Il comando da lanciare, da copiare con un tocco. Testo e basta: arriva dall'altra parte. */
+function commandNode(command) {
+  const btn = button('home-peer-cmd', null, async () => {
+    const ok = await copyToClipboard(command);
+    showToast(i18n.t(ok ? 'copied' : 'copyFailed'), ok ? undefined : 'error');
+  });
+  btn.setAttribute('aria-label', i18n.t('copy'));
+  btn.appendChild(el('code', null, command));
+  btn.appendChild(icon('ti-copy'));
+  return btn;
+}
+
+/** La pillola di una domanda finita senza risposta, con il motivo dentro. */
+function pillNode(card, status) {
+  const key = statusKey(card, status);
+  const act = card.mode === 'act';
+  const node = el('div', `home-peer-card is-${status}${act ? ' is-act' : ''} is-pill`);
+  const tone = PILL_WARN.has(status) ? 'is-warn' : 'is-error';
+  const box = el('div', 'home-peer-pill-open');
+  box.hidden = true;
+  const chevron = icon('ti-chevron-down');
+  const pill = button(`home-peer-pill ${tone}`, null, () => {
+    box.hidden = !box.hidden;
+    pill.setAttribute('aria-expanded', String(!box.hidden));
+    chevron.classList.toggle('ti-chevron-down', box.hidden);
+    chevron.classList.toggle('ti-chevron-up', !box.hidden);
+  });
+  pill.setAttribute('aria-expanded', 'false');
+  pill.appendChild(icon(status === 'refused' ? 'ti-lock' : 'ti-alert-triangle'));
+  const label = el('span', 'home-peer-pill-label');
+  label.append(el('b', null, card.peer), document.createTextNode(` · ${i18n.t(`home.peer.pill.${key}`)}`));
+  pill.appendChild(label);
+  const more = el('span', 'home-peer-pill-more', i18n.t(status === 'refused' ? 'home.peer.pill.how' : 'home.peer.pill.why'));
+  more.appendChild(chevron);
+  pill.appendChild(more);
+  node.appendChild(pill);
+
+  box.appendChild(el('div', 'home-peer-status', i18n.t(`home.peer.status.${key}`, { name: card.peer })));
+  if (key === 'refused_act_computer') {
+    const unlock = typeof card.unlock === 'string' ? card.unlock : '';
+    box.appendChild(el('div', 'home-peer-status', i18n.t(unlock ? 'home.peer.unlockRun' : 'home.peer.unlockThere')));
+    if (unlock) box.appendChild(commandNode(unlock));
+  }
+  // Il motivo con le parole dell'altra (un errore del suo modello): testo, mai markup.
+  if (status === 'failed' && typeof card.text === 'string' && card.text.trim()) {
+    box.appendChild(el('div', 'home-peer-reason', card.text.trim()));
+  }
+  if (typeof card.question === 'string' && card.question) {
+    box.appendChild(el('div', 'home-peer-question', `«${card.question}»`));
+  }
+  node.appendChild(box);
+  return node;
+}
+
 /** Il nodo della scheda, o `null` se *card* non è una risposta di un'altra Jenny. */
 export function peerCardNode(card) {
   if (!card || typeof card !== 'object' || typeof card.peer !== 'string') return null;
   if (card.line) return lineCardNode(card);
   const status = STATUSES.has(card.status) ? card.status : 'failed';
+  if (PILL_STATUSES.has(status)) return pillNode(card, status);
   const act = card.mode === 'act';
   const node = el('div', `home-peer-card is-${status}${act ? ' is-act' : ''}`);
 
@@ -192,14 +264,8 @@ export function peerCardNode(card) {
       node.appendChild(el('div', 'home-peer-missing', i18n.t('home.peer.kept', { count: Number(u.kept) })));
     }
   } else {
-    // Un computer (opencode sul Mac) rifiuta per altre ragioni di un telefono:
-    // niente «si accende nell'Officina», che lì non c'è.
-    const computer = card.kind === 'opencode';
-    let key = status;
-    if (status === 'refused') {
-      key = (act ? 'refused_act' : 'refused') + (computer ? '_computer' : '');
-    }
-    node.appendChild(el('div', 'home-peer-status', i18n.t(`home.peer.status.${key}`, { name: card.peer })));
+    // Gli esiti di un «Chiedi di annullare» (`undo_*`): restano una riga di testo.
+    node.appendChild(el('div', 'home-peer-status', i18n.t(`home.peer.status.${status}`, { name: card.peer })));
   }
   if (act && status === 'ok') {
     const list = doneNode(card.done);

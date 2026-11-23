@@ -162,11 +162,71 @@ class PeerAskTool(Tool):
                 f"{verb} {who}. The answer will reach the user's chat by itself, as its own "
                 "card, when it arrives. Don't message the user about having asked."
             )
+        # Un «no» arriva subito: lo si aspetta un attimo, così Jenny lo dice ora
+        # invece di «aspetto la risposta» con il rifiuto già lì sopra.
+        early = await self._questions.early_answer(asked["qid"], asked.get("outbox_id", ""))
+        if early is not None:
+            return _early_text(early, who=who, name=name, kind=kind, mode=mode)
         return (
             f"{verb} {who}. The answer will appear in this chat as its own card when it "
             f"arrives: in seconds if {name} is reachable, otherwise when that {device} is "
             "back online. Tell the user you asked; don't repeat or guess the answer."
         )
+
+
+def _early_text(early: dict[str, Any], *, who: str, name: str, kind: str, mode: str) -> str:
+    """Cosa dire al modello di una risposta arrivata subito: lo stato, in parole del codice.
+
+    Il testo dell'altra non entra qui: lo mostra la scheda, e un testo arrivato
+    da un altro dispositivo non diventa un'istruzione nel turno.
+    """
+    status = early.get("status")
+    computer = kind == "opencode"
+    if status == "ok":
+        if early.get("working"):
+            return (
+                f"{who} accepted and is working on it: the card just above in this chat says "
+                "so, and another card comes when it's done. Tell the user, briefly."
+            )
+        return (
+            f"{who} already answered: the answer is the card just above in this chat. "
+            "Don't repeat or guess it; at most say it answered."
+        )
+    tail = (
+        " The card just above in this chat shows it too. Tell the user now, in your words, "
+        "that it didn't happen and why; don't say you're waiting for an answer."
+    )
+    if status == "refused":
+        if computer and mode == "act":
+            unlock = early.get("unlock") or ""
+            how = (
+                f" To let it act, the user runs this on that computer: `{unlock}`."
+                if unlock else " The user turns that on on that computer."
+            )
+            return (
+                f"{who} refused: it is set to read only, so it runs no commands and changes "
+                f"no files.{how}{tail}"
+            )
+        if computer:
+            return f"{who} refused the question.{tail}"
+        if mode == "act":
+            return (
+                f"{who} refused: requests to act from this phone are off there. The user turns "
+                f"them on on {name}'s phone: Workshop → Other Jennys.{tail}"
+            )
+        return (
+            f"{who} refused: questions from this phone are off there. The user turns them on "
+            f"on {name}'s phone: Workshop → Other Jennys.{tail}"
+        )
+    if status == "too_many":
+        return (
+            f"{who} got too many questions in the last hour and didn't take this one: "
+            f"try again later.{tail}"
+        )
+    if status == "unavailable":
+        what = "opencode isn't ready there" if computer else "it has no model to answer with yet"
+        return f"{who} couldn't take it: {what}.{tail}"
+    return f"{who} couldn't answer.{tail}"
 
 
 @tool_parameters(

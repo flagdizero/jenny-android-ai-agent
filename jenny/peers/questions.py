@@ -56,6 +56,14 @@ EXPIRE_EVERY_S = 600.0
 HISTORY_KEEP = 6
 
 STATUSES = ("ok", "refused", "too_many", "unavailable", "failed", "expired")
+# Un «no» arriva subito: l'altra non lancia nemmeno il modello. ``peer_ask``
+# aspetta che la domanda sia consegnata (al più :data:`EARLY_DELIVER_S`, poi è
+# spenta o lontana) e ancora :data:`EARLY_GRACE_S` per un rifiuto, così Jenny lo
+# dice nella stessa risposta invece di «aspetto» (prova sul Titan, 23/11/2026).
+EARLY_DELIVER_S = 2.5
+EARLY_GRACE_S = 1.5
+# Il comando che l'altra manda per sbloccarla (``unlock``): una riga, corta.
+MAX_UNLOCK_CHARS = 200
 
 # ``read``: guarda e risponde (questo modulo); ``act``: fa (``jenny.peers.acting``).
 MODES = ("read", "act")
@@ -126,6 +134,22 @@ def _done_items(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _unlock_field(body: dict[str, Any]) -> str:
+    """Il comando per sbloccare l'altra (``unlock``): una riga stampabile, o ``""``.
+
+    Arriva dall'altra parte, quindi non si fida: niente a capo né caratteri di
+    controllo (la scheda lo mostra come testo da copiare), e corto.
+    """
+    raw = body.get("unlock")
+    if not isinstance(raw, str):
+        return ""
+    line = raw.strip()
+    # Un a capo non si ricuce in una riga: il comando sarebbe un altro.
+    if not line or len(line) > MAX_UNLOCK_CHARS or not line.isprintable() or "`" in line:
+        return ""
+    return line
+
+
 def _fence(text: str) -> str:
     """La domanda non può chiudere da sé il recinto in cui il prompt la mette."""
     return text.replace("END QUESTION", "END-QUESTION").replace("BEGIN QUESTION", "BEGIN-QUESTION")
@@ -157,6 +181,8 @@ class PeerQuestions:
         # Le linee passate (``jenny.peers.line.PeerLines``), legate allo stesso modo:
         # gli strumenti ``peer_line`` e ``line_move`` le raggiungono da qui.
         self.lines: Any = None
+        # Chi ha appena chiesto e aspetta un «no» immediato (:meth:`early_answer`).
+        self._early: dict[str, asyncio.Future[dict[str, Any]]] = {}
         link.register(KIND_ASK, self._on_ask)
         link.register(KIND_ANSWER, self._on_answer)
 
@@ -234,9 +260,18 @@ class PeerQuestions:
         await asyncio.to_thread(
             self.store.add_question, peer.id, "out", qid, text, state="queued", mode=mode
         )
-        outbox_id = await self._link.send(
-            peer.id, KIND_ASK, {"qid": qid, "text": text, "mode": mode}
-        )
+        # E chi la aspetta, prima dell'invio: un rifiuto può arrivare in un attimo.
+        # Chi chiede senza poi aspettare lascia la sua voce: se ne tengono poche.
+        self._early[qid] = asyncio.get_running_loop().create_future()
+        while len(self._early) > 64:
+            self._early.pop(next(iter(self._early)))
+        try:
+            outbox_id = await self._link.send(
+                peer.id, KIND_ASK, {"qid": qid, "text": text, "mode": mode}
+            )
+        except BaseException:
+            self._early.pop(qid, None)
+            raise
         await asyncio.to_thread(self.store.set_outbox, peer.id, "out", qid, outbox_id)
         await asyncio.to_thread(
             self.store.log, peer.id, "out", KIND_ASK,
@@ -245,8 +280,32 @@ class PeerQuestions:
         state = await asyncio.to_thread(self.store.state, peer.id)
         return {
             "qid": qid, "peer": peer.name, "kind": peer_kind(peer.kind),
-            "last_seen_ms": state["last_seen_ms"],
+            "last_seen_ms": state["last_seen_ms"], "outbox_id": outbox_id,
         }
+
+    async def early_answer(
+        self, qid: str, outbox_id: str, *,
+        deliver_s: float = EARLY_DELIVER_S, grace_s: float = EARLY_GRACE_S,
+    ) -> dict[str, Any] | None:
+        """La risposta a *qid* se arriva subito, cioè quasi sempre un «no».
+
+        Aspetta che la domanda sia consegnata (al più *deliver_s*: un'altra
+        spenta non fa aspettare di più) e poi ancora *grace_s*. ``None`` se in
+        quel tempo non è arrivato niente: la risposta verrà come scheda.
+        """
+        fut = self._early.get(qid)
+        if fut is None:
+            return None
+        try:
+            if not fut.done():
+                delivered = await self._link.wait_delivered(outbox_id, deliver_s)
+                if not delivered and not fut.done():
+                    return None
+                if not fut.done():
+                    await asyncio.wait({fut}, timeout=grace_s)
+            return fut.result() if fut.done() else None
+        finally:
+            self._early.pop(qid, None)
 
     async def _on_answer(self, peer_id: str, body: dict[str, Any]) -> None:
         qid = body.get("qid")
@@ -275,6 +334,12 @@ class PeerQuestions:
             else:
                 media.append(self._workspace / got["path"])
         state = ("working" if working else "answered") if status == "ok" else status
+        # Come sbloccarla, se l'altra lo dice (oggi il plugin di opencode, quando
+        # è in sola lettura): una riga sola, la mostra la scheda.
+        unlock = _unlock_field(body) if status == "refused" else ""
+        early = self._early.get(qid)
+        if early is not None and not early.done():
+            early.set_result({"status": status, "unlock": unlock, "working": working})
         # Prima la scheda, poi lo stato. La domanda segnata «risposta» è ciò che
         # fa scartare un secondo arrivo come doppione: scritta prima, una scheda
         # che non riusciva a partire non sarebbe più comparsa, nemmeno al
@@ -293,6 +358,7 @@ class PeerQuestions:
             done=done,
             working=working,
             kind=peer.kind if peer is not None else KIND_JENNY,
+            unlock=unlock,
         )
         await asyncio.to_thread(
             self.store.set_question, peer_id, "out", qid, state=state, answer=text,
@@ -309,7 +375,7 @@ class PeerQuestions:
         self, *, name: str, question: str, status: str, text: str,
         media: list[Path], missing: list[str], mode: str = "read", qid: str = "",
         peer_id: str = "", done: list[dict[str, Any]] | None = None, working: bool = False,
-        undo: dict[str, int] | None = None, kind: str = KIND_JENNY,
+        undo: dict[str, int] | None = None, kind: str = KIND_JENNY, unlock: str = "",
     ) -> None:
         """La risposta nella chat personale: una scheda, la stessa dal vivo e riletta."""
         from jenny.bus.events import (
@@ -336,6 +402,8 @@ class PeerQuestions:
             # Dall'altra parte c'è un computer: la scheda non gli fa dire cose da
             # telefono («si accende nell'Officina di …»).
             card["kind"] = KIND_OPENCODE
+        if unlock:
+            card["unlock"] = unlock
         if mode == "act":
             # Una richiesta di fare: l'elenco di cosa ha toccato (dal codice
             # dell'altra), se ci sta ancora lavorando, e chi e quale per il

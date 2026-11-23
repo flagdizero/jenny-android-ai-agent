@@ -1724,8 +1724,24 @@
         "undo_failed": "{name} couldn't undo it.",
         "refused_act": "{name} doesn't take requests to act from this phone. It's turned on from {name}'s phone: Workshop → Other Jennys.",
         "refused_computer": "{name} refused the question.",
-        "refused_act_computer": "{name} only reads: requests to act are turned on on the Mac, with opencode-jenny act free."
+        "refused_act_computer": "{name} is read only: it answers questions, but runs no commands and changes no files.",
+        "unavailable_computer": "{name}: opencode isn't ready on that computer."
       },
+      "pill": {
+        "refused": "questions off",
+        "refused_act": "requests to act off",
+        "refused_computer": "refused",
+        "refused_act_computer": "read only",
+        "too_many": "too many questions",
+        "unavailable": "no model",
+        "unavailable_computer": "opencode not ready",
+        "failed": "didn't answer",
+        "expired": "unreachable",
+        "how": "how to unlock",
+        "why": "why"
+      },
+      "unlockRun": "To let it act, run this on that computer:",
+      "unlockThere": "Requests to act are turned on on that computer, with opencode-jenny act free.",
       "didAt": "{name} did it · {time}",
       "workingAt": "{name} is working on it · {time}",
       "denied": "not allowed",

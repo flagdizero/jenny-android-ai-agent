@@ -66,6 +66,9 @@ IDLE_CHECK_S = 300.0
 # motivo per far aspettare l'utente.
 UNPAIR_NOTIFY_S = 8.0
 NAME_MAX = 40
+# Quanti ``ack`` recenti si ricordano per :meth:`PeerLink.wait_delivered`: chi
+# aspetta chiede subito dopo l'invio, quindi bastano gli ultimi.
+ACKED_KEEP = 256
 # Il ``nack`` di un gestore caduto: «non adesso», da riprovare. Ogni altro
 # motivo (``unsupported``, ``bad``) è definitivo e toglie il messaggio dalla coda.
 NACK_RETRY = "failed"
@@ -194,6 +197,36 @@ class PeerLink:
         # Un messaggio che l'altra ha rifiutato per sempre (``nack`` che non è
         # «riprova»): chi l'aveva mandato può volerlo sapere (tipo, motivo).
         self.on_nack: Callable[[str, str, str], Awaitable[None]] | None = None
+        # I messaggi appena consegnati (``ack``) e chi aspetta di saperlo
+        # (:meth:`wait_delivered`): ``peer_ask`` aspetta la consegna per capire se
+        # un «no» immediato sta per arrivare. Pochi e recenti: si tengono gli ultimi.
+        self._acked: dict[str, None] = {}
+        self._ack_waiters: dict[str, asyncio.Future[None]] = {}
+
+    def _note_acked(self, msg_id: str) -> None:
+        self._acked[msg_id] = None
+        while len(self._acked) > ACKED_KEEP:
+            self._acked.pop(next(iter(self._acked)))
+        waiter = self._ack_waiters.pop(msg_id, None)
+        if waiter is not None and not waiter.done():
+            waiter.set_result(None)
+
+    async def wait_delivered(self, msg_id: str, timeout: float) -> bool:
+        """Se il messaggio *msg_id* arriva all'altra (``ack``) entro *timeout* secondi."""
+        if msg_id in self._acked:
+            return True
+        waiter = self._ack_waiters.get(msg_id)
+        if waiter is None:
+            waiter = asyncio.get_running_loop().create_future()
+            self._ack_waiters[msg_id] = waiter
+        try:
+            await asyncio.wait_for(asyncio.shield(waiter), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
+        finally:
+            if self._ack_waiters.get(msg_id) is waiter and not waiter.done():
+                self._ack_waiters.pop(msg_id, None)
 
     # -- Config ---------------------------------------------------------------
 
@@ -877,6 +910,8 @@ class PeerLink:
                                     {"kind": row["kind"], "reason": reason},
                                 )
                             await asyncio.to_thread(self.store.remove, row["id"])
+                            if verdict == "ack":
+                                self._note_acked(row["id"])
                             if verdict == "nack" and self.on_nack is not None:
                                 try:
                                     await self.on_nack(peer_id, row["kind"], reason)

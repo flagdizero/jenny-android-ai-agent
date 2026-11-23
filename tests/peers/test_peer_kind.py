@@ -75,14 +75,20 @@ async def test_a_kind_from_a_newer_version_does_not_break_the_config(tmp_path):
 class _Questions:
     """Il servizio delle domande, ridotto a ciò che ``peer_ask`` gli chiede."""
 
-    def __init__(self, kind: str, *, which: bool = False) -> None:
+    def __init__(
+        self, kind: str, *, which: bool = False, early: dict[str, Any] | None = None,
+    ) -> None:
         self.kind = kind
         self.which = which
+        self.early = early
 
     async def ask(self, peer: str, question: str, mode: str) -> dict[str, Any]:
         if self.which:
             raise PeerError("which_peer")
-        return {"peer": "Mac", "kind": self.kind}
+        return {"peer": "Mac", "kind": self.kind, "qid": "q" * 32, "outbox_id": "1"}
+
+    async def early_answer(self, qid: Any, outbox_id: Any) -> dict[str, Any] | None:
+        return self.early
 
     async def peers(self) -> list[Any]:
         return [
@@ -117,6 +123,38 @@ async def test_which_one_lists_each_peer_with_what_it_is():
     out = await _tool(_Questions(KIND_JENNY, which=True)).execute(question="Status?")
 
     assert out == f"Say which one to ask: Lavoro, Mac ({OPENCODE_WHAT})."
+
+
+async def test_a_read_only_mac_says_no_at_once_with_the_command():
+    """Il «no» del Mac in sola lettura torna nel risultato: Jenny lo dice ora."""
+    cmd = "node ~/opencode-jenny/bin/opencode-jenny.mjs act free"
+    early = {"status": "refused", "unlock": cmd, "working": False}
+    out = await _tool(_Questions(KIND_OPENCODE, early=early)).execute(
+        peer="Mac", question="Run the build", mode="act",
+    )
+
+    assert "refused" in out and "read only" in out
+    assert f"`{cmd}`" in out
+    assert "don't say you're waiting" in out
+    assert "The answer will appear" not in out
+
+
+async def test_a_phone_that_refuses_to_act_says_where_it_turns_on():
+    early = {"status": "refused", "unlock": "", "working": False}
+    out = await _tool(_Questions(KIND_JENNY, early=early)).execute(
+        peer="Lavoro", question="Segna la consegna", mode="act",
+    )
+
+    assert "requests to act from this phone are off" in out
+    assert "Workshop → Other Jennys" in out
+
+
+async def test_an_answer_already_back_is_not_repeated():
+    out = await _tool(_Questions(KIND_JENNY, early={"status": "ok", "working": False})).execute(
+        peer="Lavoro", question="Quando arriva?",
+    )
+
+    assert "already answered" in out and "Don't repeat" in out
 
 
 def test_the_description_does_not_depend_on_who_is_linked():

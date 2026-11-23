@@ -1951,6 +1951,43 @@ button.home-wakes-act:active { background: var(--active); }
   background: none; color: var(--text-muted); font: inherit; font-size: 13px;
 }
 .home-peer-undo:disabled { opacity: .5; }
+/* Una domanda senza risposta (`is-pill`): una pillola di una riga che si apre al
+   tocco. Gialla se si sblocca o passa (`is-warn`), rossa se è andata male. */
+.home-peer-card.is-pill { gap: 8px; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.home-peer-pill {
+  display: inline-flex; align-items: center; gap: 7px; width: fit-content; max-width: 100%;
+  min-height: 36px; padding: 5px 12px 5px 10px; border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--warning) 55%, transparent);
+  background: color-mix(in oklab, var(--warning) 8%, transparent);
+  color: var(--text); font: inherit; font-size: 13px; text-align: left;
+}
+.home-peer-pill.is-error {
+  border-color: color-mix(in oklab, var(--error) 55%, transparent);
+  background: color-mix(in oklab, var(--error) 8%, transparent);
+}
+.home-peer-pill > .ti { font-size: 16px; color: var(--warning); flex: none; }
+.home-peer-pill.is-error > .ti { color: var(--error); }
+.home-peer-pill-label { min-width: 0; overflow-wrap: anywhere; }
+.home-peer-pill-label b { font-weight: 600; }
+.home-peer-pill-more { display: inline-flex; align-items: center; gap: 2px; color: var(--text-muted); white-space: nowrap; }
+.home-peer-pill-more .ti { font-size: 15px; }
+.home-peer-pill-open {
+  display: grid; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
+}
+.home-peer-pill-open[hidden] { display: none; }
+.home-peer-pill-open .home-peer-status { color: var(--text); }
+.home-peer-reason { font-size: 13px; color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.home-peer-cmd {
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px 10px;
+  border: 0; border-radius: 10px; background: var(--overlay-strong); color: var(--text);
+  font: inherit; text-align: left;
+}
+.home-peer-cmd code {
+  flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.45;
+  overflow-wrap: anywhere; background: none; padding: 0;
+}
+.home-peer-cmd .ti { font-size: 17px; color: var(--text-muted); flex: none; margin-top: 1px; }
+.home-peer-cmd:active { background: var(--active); }
 
 .home-block {
   font-size: 14.5px;

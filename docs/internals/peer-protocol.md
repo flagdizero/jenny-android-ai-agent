@@ -135,6 +135,8 @@ An unknown `mode` counts as `read`. The receiver answers with an `answer` for th
 - `mode`, `working` and `done` appear only in answers to `mode: "act"`:
   - `working`: helpers are still at it, and a second answer will follow;
   - `done`: a list, written by code, of what was touched: `{"kind": "file" | "job" | "egress", "label": <text>, "undoable": bool, "allowed"?: bool}`, at most 40 items.
+- `unlock` is optional, only with `refused`: the command that turns on what was refused, as the user would type it on that side (the `opencode-jenny` plugin sends `… act free` when it is read only). One printable line, at most 200 characters, no backquotes; anything else is ignored. Jenny shows it on the refusal, ready to copy.
+- A refusal is sent at once, without running a turn: the asking side waits for the `ack` of its `ask` (at most 2.5 seconds) and then 1.5 seconds more, so its own reply can already say no. Anything slower arrives as a card on its own.
 
 ### `file_part`
 

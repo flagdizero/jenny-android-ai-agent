@@ -207,7 +207,10 @@ class _Questions:
 
     async def ask(self, peer: str, question: str, mode: str) -> dict[str, str]:
         self.asked.append((peer, question, mode))
-        return {"peer": "Lavoro"}
+        return {"peer": "Lavoro", "qid": "q" * 32, "outbox_id": "1"}
+
+    async def early_answer(self, qid: Any, outbox_id: Any) -> None:
+        return None
 
 
 def _view_for(key: str) -> set[str]:

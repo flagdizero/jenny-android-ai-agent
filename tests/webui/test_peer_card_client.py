@@ -28,6 +28,8 @@ def _render(card: object, click: str | None = None, before: str | None = None) -
         "const calls = [];\n"
         "const rpc = { peer: async (m, p) => { calls.push([m, p]); return {}; } };\n"
         "const showToast = () => {};\n"
+        "const copied = [];\n"
+        "const copyToClipboard = async (t) => { copied.push(t); return true; };\n"
         + _consts() + "\n"
         + function(DOM, "el") + "\n"
         + function(DOM, "icon") + "\n"
@@ -37,12 +39,15 @@ def _render(card: object, click: str | None = None, before: str | None = None) -
         + function(CARD, "doneNode") + "\n"
         + function(CARD, "undoButton") + "\n"
         + function(CARD, "markUndone") + "\n"
+        + function(CARD, "statusKey") + "\n"
+        + function(CARD, "commandNode") + "\n"
+        + function(CARD, "pillNode") + "\n"
         + function(CARD, "peerCardNode") + "\n"
         + (before or "")
         + f"const node = peerCardNode({json.dumps(card)});\n"
         + (click or "")
         + "console.log(JSON.stringify(node ? { cls: node.className, html: node.innerHTML, "
-        "text: node.textContent, calls } : null));\n"
+        "text: node.textContent, calls, copied } : null));\n"
     )
     return json.loads(run_js(script))
 
@@ -73,14 +78,16 @@ def test_an_answer_is_quoted_as_text_not_markup() -> None:
 @requires_jsdom
 def test_a_refusal_says_where_to_turn_it_on() -> None:
     out = _render({"peer": "Lavoro", "status": "refused", "question": "Agenda?", "text": ""})
-    assert out["cls"] == "home-peer-card is-refused"
+    assert out["cls"] == "home-peer-card is-refused is-pill"
+    assert 'home.peer.pill.refused' in out["text"] and "home.peer.pill.how" in out["text"]
     assert 'home.peer.status.refused {"name":"Lavoro"}' in out["text"]
 
 
 @requires_node
 @requires_jsdom
 def test_an_unknown_status_reads_as_failed_and_junk_is_no_card() -> None:
-    assert _render({"peer": "Lavoro", "status": "weird"})["cls"] == "home-peer-card is-failed"
+    weird = _render({"peer": "Lavoro", "status": "weird"})
+    assert weird["cls"] == "home-peer-card is-failed is-pill"
     assert _render(None) is None
     assert _render({"status": "ok"}) is None
 
@@ -212,3 +219,45 @@ def test_a_computer_refusing_does_not_send_the_user_to_a_phone() -> None:
     assert 'home.peer.status.refused_act_computer {"name":"Mac"}' in act["text"]
     read = _render({"peer": "Mac", "kind": "opencode", "status": "refused", "question": "x"})
     assert 'home.peer.status.refused_computer {"name":"Mac"}' in read["text"]
+
+
+@requires_node
+@requires_jsdom
+def test_a_read_only_computer_shows_the_command_ready_to_copy() -> None:
+    cmd = "node ~/opencode-jenny/bin/opencode-jenny.mjs act free"
+    out = _render(
+        {"peer": "HPS", "kind": "opencode", "status": "refused", "mode": "act",
+         "question": "Run the build", "unlock": cmd},
+        click="node.querySelector('.home-peer-pill').click();\n"
+              "node.querySelector('.home-peer-cmd').click();\n"
+              "await new Promise((r) => setTimeout(r, 0));\n",
+    )
+    assert out["cls"] == "home-peer-card is-refused is-act is-pill"
+    assert "home.peer.pill.refused_act_computer" in out["text"]
+    assert 'home.peer.status.refused_act_computer {"name":"HPS"}' in out["text"]
+    assert "home.peer.unlockRun" in out["text"]
+    assert f"<code>{cmd}</code>" in out["html"]
+    assert 'aria-expanded="true"' in out["html"]
+    assert out["copied"] == [cmd]
+
+
+@requires_node
+@requires_jsdom
+def test_without_a_command_the_pill_says_where_and_starts_closed() -> None:
+    out = _render({"peer": "Mac", "kind": "opencode", "status": "refused", "mode": "act",
+                   "question": "x"})
+    assert "home.peer.unlockThere" in out["text"]
+    assert "home-peer-cmd" not in out["html"]
+    assert 'aria-expanded="false"' in out["html"] and "hidden" in out["html"]
+
+
+@requires_node
+@requires_jsdom
+def test_a_failure_is_red_and_its_reason_stays_text() -> None:
+    out = _render({"peer": "HPS", "kind": "opencode", "status": "failed", "question": "CI?",
+                   "text": "402 <b>no credit</b>"})
+    assert "home-peer-pill is-error" in out["html"]
+    assert "home.peer.pill.why" in out["text"]
+    assert "&lt;b&gt;no credit&lt;/b&gt;" in out["html"]
+    unavailable = _render({"peer": "HPS", "kind": "opencode", "status": "unavailable"})
+    assert "home.peer.status.unavailable_computer" in unavailable["text"]

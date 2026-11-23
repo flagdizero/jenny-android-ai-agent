@@ -1724,8 +1724,24 @@
         "undo_failed": "{name} non è riuscita ad annullare.",
         "refused_act": "{name} non accetta richieste di fare da questo telefono. Si accende sul telefono di {name}: Officina → Altre Jenny.",
         "refused_computer": "{name} ha rifiutato la domanda.",
-        "refused_act_computer": "{name} legge soltanto: le richieste di fare si accendono sul Mac, con opencode-jenny act free."
+        "refused_act_computer": "{name} è in sola lettura: risponde alle domande, ma non lancia comandi e non cambia file.",
+        "unavailable_computer": "{name}: opencode non è pronto su quel computer."
       },
+      "pill": {
+        "refused": "domande spente",
+        "refused_act": "richieste di fare spente",
+        "refused_computer": "ha rifiutato",
+        "refused_act_computer": "sola lettura",
+        "too_many": "troppe domande",
+        "unavailable": "senza modello",
+        "unavailable_computer": "opencode non pronto",
+        "failed": "non ha risposto",
+        "expired": "non raggiungibile",
+        "how": "come si sblocca",
+        "why": "perché"
+      },
+      "unlockRun": "Per accendere le richieste di fare, lancia questo su quel computer:",
+      "unlockThere": "Le richieste di fare si accendono su quel computer, con opencode-jenny act free.",
       "didAt": "{name} ha fatto · {time}",
       "workingAt": "{name} ci sta lavorando · {time}",
       "denied": "non consentito",

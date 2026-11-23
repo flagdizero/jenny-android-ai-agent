@@ -281,3 +281,78 @@ async def test_peer_attach_refuses_what_must_not_leave(tmp_path):
         assert "hasn't allowed" in await tool.execute(path="ok.pdf")
     finally:
         PEER_TURN.reset(token)
+
+
+# --- Un «no» immediato si dice subito ------------------------------------------
+
+
+async def test_an_immediate_refusal_reaches_whoever_asked(two):
+    """Il rifiuto arriva subito: ``peer_ask`` lo riceve, e la scheda c'è comunque."""
+    a, b = two
+    await pair(a, b)
+    _set_peer(b, can_ask=False)
+    qa, delivered = _questions(a)
+    _questions(b, FakeAgent())
+
+    asked = await qa.ask("", "Cosa c'è in agenda domani?")
+    early = await qa.early_answer(asked["qid"], asked["outbox_id"], deliver_s=10, grace_s=10)
+    assert early == {"status": "refused", "unlock": "", "working": False}
+    await wait_until(lambda: delivered, timeout=10)
+    assert _card(delivered[0])["status"] == "refused"
+
+
+async def test_a_real_answer_is_not_waited_for(two):
+    """Una risposta vera vuole un turno: oltre l'attesa breve, arriva come scheda."""
+    a, b = two
+    await pair(a, b)
+    qa, delivered = _questions(a)
+    agent = FakeAgent()
+    gate = asyncio.Event()
+    answer = agent.process_direct_outcome
+
+    async def slow(prompt: str, **kwargs: Any):
+        await gate.wait()
+        return await answer(prompt, **kwargs)
+
+    agent.process_direct_outcome = slow  # type: ignore[method-assign]
+    _questions(b, agent)
+
+    asked = await qa.ask("", "Quando arriva Studio Bianchi?")
+    early = await qa.early_answer(asked["qid"], asked["outbox_id"], deliver_s=10, grace_s=0.2)
+    assert early is None
+    gate.set()
+    await wait_until(lambda: delivered, timeout=10)
+    assert _card(delivered[0])["status"] == "ok"
+
+
+async def test_an_unreachable_jenny_does_not_hold_the_reply(two):
+    """Spenta: la consegna non arriva, e si smette di aspettare dopo *deliver_s*."""
+    a, b = two
+    await pair(a, b)
+    await b.close()
+    qa, _ = _questions(a)
+
+    asked = await qa.ask("", "Ci sei?")
+    started = asyncio.get_running_loop().time()
+    assert await qa.early_answer(asked["qid"], asked["outbox_id"], deliver_s=0.5, grace_s=5) is None
+    assert asyncio.get_running_loop().time() - started < 3
+
+
+async def test_the_unlock_command_goes_on_the_card_only_if_it_is_one_line(two):
+    a, b = two
+    await pair(a, b)
+    qa, delivered = _questions(a)
+    peer_id = a.peers()[0].id
+    cmd = "node ~/opencode-jenny/bin/opencode-jenny.mjs act free"
+    for unlock, expected in (
+        (cmd, cmd),
+        ("rm -rf ~\nreboot", None),
+        ("`id`", None),
+        ("x" * 300, None),
+        (42, None),
+    ):
+        asked = await qa.ask("", "Fai il build", "act")
+        await qa._on_answer(peer_id, {
+            "qid": asked["qid"], "status": "refused", "text": "", "files": [], "unlock": unlock,
+        })
+        assert _card(delivered[-1]).get("unlock") == expected, unlock
