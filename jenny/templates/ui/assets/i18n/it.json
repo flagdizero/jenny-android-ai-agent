@@ -1722,7 +1722,9 @@
         "undo_still_working": "{name} ci sta ancora lavorando: chiedi di annullare quando ha finito.",
         "undo_not_found": "{name} non ha trovato niente da annullare.",
         "undo_failed": "{name} non è riuscita ad annullare.",
-        "refused_act": "{name} non accetta richieste di fare da questo telefono. Si accende sul telefono di {name}: Officina → Altre Jenny."
+        "refused_act": "{name} non accetta richieste di fare da questo telefono. Si accende sul telefono di {name}: Officina → Altre Jenny.",
+        "refused_computer": "{name} ha rifiutato la domanda.",
+        "refused_act_computer": "{name} legge soltanto: le richieste di fare si accendono sul Mac, con opencode-jenny act free."
       },
       "didAt": "{name} ha fatto · {time}",
       "workingAt": "{name} ci sta lavorando · {time}",

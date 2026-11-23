@@ -200,3 +200,15 @@ def test_a_refused_request_and_an_undo_say_so() -> None:
     assert undone["cls"] == "home-peer-card is-undone is-act"
     assert '"files":2' in undone["text"] and '"jobs":1' in undone["text"]
     assert 'home.peer.kept {"count":1}' in undone["text"]
+
+
+@requires_node
+@requires_jsdom
+def test_a_computer_refusing_does_not_send_the_user_to_a_phone() -> None:
+    # Il Mac (opencode) rifiuta perché lì non è acceso: la scheda non dice
+    # «si accende nell'Officina di …», che su un computer non c'è.
+    act = _render({"peer": "Mac", "kind": "opencode", "status": "refused", "mode": "act",
+                   "question": "x"})
+    assert 'home.peer.status.refused_act_computer {"name":"Mac"}' in act["text"]
+    read = _render({"peer": "Mac", "kind": "opencode", "status": "refused", "question": "x"})
+    assert 'home.peer.status.refused_computer {"name":"Mac"}' in read["text"]

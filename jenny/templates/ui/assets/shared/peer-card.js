@@ -192,7 +192,13 @@ export function peerCardNode(card) {
       node.appendChild(el('div', 'home-peer-missing', i18n.t('home.peer.kept', { count: Number(u.kept) })));
     }
   } else {
-    const key = act && status === 'refused' ? 'refused_act' : status;
+    // Un computer (opencode sul Mac) rifiuta per altre ragioni di un telefono:
+    // niente «si accende nell'Officina», che lì non c'è.
+    const computer = card.kind === 'opencode';
+    let key = status;
+    if (status === 'refused') {
+      key = (act ? 'refused_act' : 'refused') + (computer ? '_computer' : '');
+    }
     node.appendChild(el('div', 'home-peer-status', i18n.t(`home.peer.status.${key}`, { name: card.peer })));
   }
   if (act && status === 'ok') {

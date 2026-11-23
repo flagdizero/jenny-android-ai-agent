@@ -170,3 +170,45 @@ async def test_a_question_from_an_opencode_peer_is_refused_without_a_turn(two):
     assert turns == []
     states = [r["state"] for r in b.link.store.recent_acts(b.peers()[0].id)]
     assert states == ["refused"]
+
+
+async def test_the_card_of_an_answer_from_a_computer_says_it_is_one(two):
+    # La scheda porta il tipo: un rifiuto del Mac non manda l'utente
+    # nell'Officina di un telefono che non c'è (``shared/peer-card.js``).
+    a, b = two
+    await pair(a, b)
+    cfg = load_config(a.config_path)
+    cfg.peers.peers[0].kind = KIND_OPENCODE
+    save_config(cfg, a.config_path)
+    delivered: list[Any] = []
+
+    async def deliver(msg: Any) -> None:
+        delivered.append(msg)
+
+    async def nowhere(msg: Any) -> None:
+        return None
+
+    asking = PeerQuestions(a.link, a.workspace, get_agent=lambda: None, deliver=deliver)
+    PeerQuestions(b.link, b.workspace, get_agent=lambda: None, deliver=nowhere)
+    await asking.ask("", "lancia pmset -g batt", "act")
+    await wait_until(lambda: delivered, timeout=10)
+    card = delivered[0].metadata["_agent_ui"]["peer_answer"]
+    assert (card["status"], card["mode"], card["kind"]) == ("refused", "act", KIND_OPENCODE)
+
+
+async def test_the_card_of_an_answer_from_a_jenny_has_no_kind(two):
+    a, b = two
+    await pair(a, b)
+    delivered: list[Any] = []
+
+    async def deliver(msg: Any) -> None:
+        delivered.append(msg)
+
+    async def nowhere(msg: Any) -> None:
+        return None
+
+    asking = PeerQuestions(a.link, a.workspace, get_agent=lambda: None, deliver=deliver)
+    PeerQuestions(b.link, b.workspace, get_agent=lambda: None, deliver=nowhere)
+    await asking.ask("", "scrivi una nota", "act")
+    await wait_until(lambda: delivered, timeout=10)
+    assert "kind" not in delivered[0].metadata["_agent_ui"]["peer_answer"]
