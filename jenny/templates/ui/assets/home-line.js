@@ -21,7 +21,8 @@
  *  e Jenny non si mette a pensare a un turno che non c'e'.
  *
  *  La linea e' della chat di sempre: nella chat di un quaderno il tasto c'e',
- *  ma la testa, il colore e il filo no.
+ *  ma la testa, il colore e il filo no. Per questo aprirla dal foglio porta
+ *  nella chat di sempre (`open`).
  */
 
 import { rpc } from './shared/rpc-client.js';
@@ -422,12 +423,17 @@ export class HomeLine {
     return true;
   }
 
+  /** Apre la linea verso *peerId* e porta nella chat di sempre, che e' quella
+   *  passata: aperta dalla chat di un quaderno, la linea partiva ma a schermo
+   *  restava il quaderno, senza testa ne' filo (collaudo del 23/11/2026). Ci
+   *  si sposta solo a linea aperta: un rifiuto lascia dove eri. */
   async open(peerId, place = '') {
     closeActionSheet(this.sheet);
     try {
       const status = await rpc.peer('line.open', { id: peerId, place });
       this.status = status;
       this._setLine(status.line || null, { redraw: !this.line });
+      if (this.line && !this.isPersonal()) this.openHome(null);
     } catch (e) {
       showToast(i18n.tOr(`home.line.errors.${e?.message}`, t('errors.generic')), 'error');
     }
