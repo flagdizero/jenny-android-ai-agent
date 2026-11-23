@@ -513,3 +513,76 @@ async def test_after_a_restart_the_unsent_messages_are_back_in_the_thread(two):
     ]
     # La seconda lettura non lo raddoppia.
     assert len((await lines.status(WS, CHAT))["items"]) == 1
+
+
+async def test_a_notebook_is_found_whatever_the_case(two):
+    # «passami Lavoro sul quaderno fornitori», col quaderno che si chiama
+    # «Fornitori»: sui due emulatori la linea si apriva sulla chat di sempre.
+    side_a, side_b = await _linked(two, places=["Fornitori"])
+    token = bind_request_context(_ctx())
+    try:
+        said = await _bound(PeerLineTool(), side_a.lines).execute(peer="", notebook="fornitori")
+    finally:
+        reset_request_context(token)
+    assert "no notebook" not in said and "/torna" in said
+    assert (await side_a.lines.status(WS, CHAT))["place"] == "Fornitori"
+    # Lo stesso a parole, dentro la linea.
+    await side_b.lines.move_here(side_a.jenny.id, "")
+    assert await side_b.lines.move_here(side_a.jenny.id, "FORNITORI") is None
+    row = await side_b.lines._db(side_b.lines.store.line, "in", side_a.jenny.id)
+    assert row["place"] == "Fornitori"
+
+
+def test_a_helper_spec_keeps_the_line_across_a_restart():
+    from jenny.agent.subagent import SubagentSpec
+
+    mark = {"peer": "a" * 32, "lid": "b" * 32}
+    spec = SubagentSpec(task="leggi i sensori", label="sensori", peer_line=dict(mark))
+    assert SubagentSpec.from_dict(spec.to_dict()).peer_line == mark
+    assert SubagentSpec.from_dict({**spec.to_dict(), "peer_line": {"peer": "x"}}).peer_line is None
+    assert SubagentSpec.from_dict({**spec.to_dict(), "peer_line": None}).peer_line is None
+
+
+async def test_the_result_of_a_helper_launched_from_a_line_goes_back_on_it(tmp_path):
+    # Sui due emulatori (23/11): «quali piante annaffio?» arrivato dalla linea,
+    # Jenny lancia un aiutante e risponde «un attimo»; il risultato vero, in un
+    # turno d'annuncio, restava su questo telefono e all'altra non arrivava.
+    from unittest.mock import MagicMock
+
+    from jenny.agent.subagent import SubagentManager, SubagentSpec
+    from jenny.bus.queue import MessageBus
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_of
+
+    bus = MessageBus()
+    provider = MagicMock()
+    provider.get_default_model.return_value = "test-model"
+    mgr = SubagentManager(provider=provider, workspace=tmp_path, bus=bus,
+                          max_tool_result_chars=10_000)
+    spec = SubagentSpec(task="leggi i sensori", label="sensori",
+                        peer_line={"peer": "a" * 32, "lid": "b" * 32})
+    mgr._spec_for_task = lambda task_id: spec  # type: ignore[method-assign]
+    origin = {"channel": "websocket", "chat_id": "default", "session_key": "unified:default"}
+    await mgr._announce_result("sub-1", "sensori", "leggi i sensori", "20%", origin, "ok")
+    msg = await bus.consume_inbound()
+    assert line_of(msg.metadata) == "a" * 32
+    assert msg.metadata[LINE_PEER_META] == "a" * 32 and msg.metadata[LINE_ID_META] == "b" * 32
+
+
+async def test_a_helper_launched_from_a_line_turn_takes_the_mark():
+    from jenny.agent.tools.context import (
+        RequestContext,
+        bind_request_context,
+        reset_request_context,
+    )
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_mark
+
+    ctx = RequestContext(channel=WS, chat_id=CHAT, session_key="unified:default",
+                         metadata={LINE_PEER_META: "a" * 32, LINE_ID_META: "b" * 32})
+    token = bind_request_context(ctx)
+    try:
+        from jenny.agent.tools.context import current_request_context
+
+        assert line_mark(current_request_context().metadata) == {"peer": "a" * 32, "lid": "b" * 32}
+    finally:
+        reset_request_context(token)
+    assert line_mark({LINE_PEER_META: "a" * 32}) is None

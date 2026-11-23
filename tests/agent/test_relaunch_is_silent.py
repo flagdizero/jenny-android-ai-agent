@@ -82,3 +82,20 @@ async def test_a_success_is_always_told(tmp_path: Path) -> None:
     _script(loop, _relaunching())
     outcome = await loop._process_system_message(_announce("ok"))
     assert outcome.disposition is TurnDisposition.DELIVERED
+
+
+@pytest.mark.asyncio
+async def test_the_answer_to_a_helper_from_a_line_keeps_the_line(tmp_path: Path) -> None:
+    # Sui due emulatori (23/11/2026): il rientro di un aiutante lanciato da un
+    # turno della linea rispondeva solo su questo telefono, perché la risposta
+    # del turno di sistema nasceva senza il segno della linea.
+    from jenny.peers.line import LINE_ID_META, LINE_PEER_META, line_of
+
+    loop, _bus = _loop(tmp_path)
+    _script(loop, [LLMResponse(content="Acerello va annaffiato.", tool_calls=[])])
+    msg = _announce("ok")
+    msg.metadata.update({LINE_PEER_META: "a" * 32, LINE_ID_META: "b" * 32})
+    outcome = await loop._process_system_message(msg)
+    assert outcome.disposition is TurnDisposition.DELIVERED
+    assert line_of(outcome.message.metadata) == "a" * 32
+    assert outcome.message.metadata[LINE_ID_META] == "b" * 32

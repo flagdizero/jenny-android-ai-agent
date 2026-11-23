@@ -2616,6 +2616,12 @@ class AgentLoop(
             outbound_metadata["origin_message_id"] = origin_message_id
         if turn_id := msg.metadata.get(WEBUI_TURN_METADATA_KEY):
             outbound_metadata[WEBUI_TURN_METADATA_KEY] = turn_id
+        # Il rientro di un aiutante lanciato da un turno della linea: la
+        # risposta torna all'altra Jenny (``PeerLines.on_outbound``). Senza,
+        # sui due emulatori (23/11) restava su questo telefono.
+        from jenny.peers.line import line_mark, line_metadata
+
+        outbound_metadata.update(line_metadata(line_mark(msg.metadata)))
         return TurnOutcome.delivered(
             OutboundMessage(
                 channel=channel,

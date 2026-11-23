@@ -331,7 +331,7 @@ class PeerLineTool(Tool):
         if outcome == "open":
             asked = str(notebook or "").strip()
             now = await lines.status(ctx.channel, ctx.chat_id) or {}
-            if asked and now.get("place") != asked:
+            if asked and str(now.get("place") or "").casefold() != asked.casefold():
                 return (
                     f"The line is passed to {name}, but on her main chat: she has no "
                     f"notebook called '{asked}'. The user's next messages in this chat go to "

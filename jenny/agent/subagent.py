@@ -1003,6 +1003,14 @@ class SubagentManager(
         peer_act = current_act()
         if peer_act is not None:
             spec = replace(spec, peer_act=peer_act)
+        # Il turno che lancia arriva da una linea: il risultato torna a lei.
+        from jenny.agent.tools.context import current_request_context
+        from jenny.peers.line import line_mark
+
+        ctx = current_request_context()
+        peer_line = line_mark(ctx.metadata) if ctx is not None else None
+        if peer_line is not None:
+            spec = replace(spec, peer_line=peer_line)
         plan_id, plan_step = _plan_metadata()
         if plan_id or plan_step:
             spec = replace(spec, plan_id=plan_id, plan_step=plan_step)

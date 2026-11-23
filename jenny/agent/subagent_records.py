@@ -264,6 +264,13 @@ def _peer_act_from(raw: Any) -> dict[str, str] | None:
     return act_of({PEER_ACT_META: raw})
 
 
+def _peer_line_from(raw: Any) -> dict[str, str] | None:
+    """La linea salvata in una spec, validata."""
+    from jenny.peers.line import line_mark, line_metadata
+
+    return line_mark(line_metadata(raw))
+
+
 def _coerce_str(value: Any, default: str = "") -> str:
     return value if isinstance(value, str) else default
 
@@ -340,6 +347,10 @@ class SubagentSpec:
     # un rilancio, una ripresa o un recupero al boot restano lavoro di quella
     # richiesta: stesso cancello sulle uscite, stesso annulla.
     peer_act: dict[str, str] | None = None
+    # La linea da cui è stato lanciato (``jenny.peers.line``: ``{"peer", "lid"}``),
+    # ``None`` fuori da una linea: il turno che legge il risultato risponde
+    # ancora all'altra Jenny, e non a questo telefono soltanto.
+    peer_line: dict[str, str] | None = None
 
     def __post_init__(self) -> None:
         # Il tipo si valida qui, alla costruzione della spec, e non piu in la:
@@ -395,6 +406,7 @@ class SubagentSpec:
             "plan_step": self.plan_step,
             "steps": self.steps,
             "peer_act": dict(self.peer_act) if self.peer_act else None,
+            "peer_line": dict(self.peer_line) if self.peer_line else None,
         }
 
     @classmethod
@@ -442,6 +454,8 @@ class SubagentSpec:
             ),
             # Dal 19/11/2026: un record precedente non la ha, e non lavora per nessuno.
             peer_act=_peer_act_from(raw.get("peer_act")),
+            # Dal 23/11/2026: un record precedente non la ha.
+            peer_line=_peer_line_from(raw.get("peer_line")),
         )
 
 

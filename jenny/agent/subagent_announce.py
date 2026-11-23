@@ -191,6 +191,13 @@ class AnnounceMixin:
             from jenny.peers.gate import PEER_ACT_META
 
             metadata[PEER_ACT_META] = dict(spec_for_plan.peer_act)
+        # Lanciato da un turno della linea: il turno che legge il risultato
+        # risponde all'altra Jenny (``PeerLines.on_outbound``), e resta a un
+        # salto solo come quello che l'ha lanciato.
+        if spec_for_plan is not None and spec_for_plan.peer_line:
+            from jenny.peers.line import line_metadata
+
+            metadata.update(line_metadata(spec_for_plan.peer_line))
         if origin_message_id:
             metadata["origin_message_id"] = origin_message_id
         if taint:
