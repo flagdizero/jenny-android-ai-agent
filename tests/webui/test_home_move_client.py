@@ -589,6 +589,47 @@ def test_retune_to_the_conversation_it_has_does_nothing() -> None:
     )
 
 
+def test_the_notebook_chat_never_becomes_the_photo_of_the_chat_page() -> None:
+    """Il giro vero, dall'inizio alla fine: apri un quaderno (``retune``),
+    Jenny porta su la sua chat sopra la bacheca (``lift``), la chiudi
+    (``lower``), torni alla pagina chat (``arrives``).
+
+    ``lift`` rifotografava sulla pagina chat la conversazione che la chat
+    aveva in quel momento — il quaderno — al posto della foto della personale.
+    Tornando, per tutta la lettura della personale si vedeva la chat del
+    quaderno (Titan, 24/11/2026)."""
+    _run(
+        "let done = t.retune(p0, 'B'); reads[0].finish(); await done;\n"
+        "await t.lift(over, 'B');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2'], 'salendo');\n"
+        "t.lower(p0);\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2'], 'riabbassata');\n"
+        "done = t.arrives(p0, 'A');\n"
+        "assert.deepEqual(messagesOf(snapshotOf(p0)), ['A1', 'A2'], 'all arrivo');\n"
+        "reads.at(-1).finish(); await done;\n"
+        "assert.equal(snapshotOf(p0), null);\n"
+        "assert.deepEqual(messagesOf(chat), ['A1', 'A2']);\n"
+    )
+
+
+def test_a_photo_already_there_goes_back_to_the_bottom_on_arrival() -> None:
+    """Una foto messa mentre la pista era nascosta (la bacheca a schermo) ha lo
+    scroll a zero, e in Chromium ci resta anche quando la pista ricompare:
+    entrava coi messaggi piu' vecchi dei suoi venti. All'arrivo torna in fondo.
+
+    Il finto non ha un ``display: none``: lo scroll azzerato lo si scrive a
+    mano, come lo lascia il browser."""
+    _run(
+        "let done = t.retune(p0, 'B'); reads[0].finish(); await done;\n"
+        "const photo = snapshotOf(p0).querySelector('.home-thread');\n"
+        "photo.scrollTop = 0;\n"
+        "done = t.arrives(p0, 'A');\n"
+        "assert.equal(snapshotOf(p0).querySelector('.home-thread'), photo, 'e la stessa foto');\n"
+        "assert.equal(photo.scrollTop, photo.scrollHeight, 'la foto entra dall alto');\n"
+        "reads.at(-1).finish(); await done;\n"
+    )
+
+
 def test_the_startup_read_is_followed_so_an_unread_chat_is_not_photographed() -> None:
     """All'avvio la casa legge il filo da se', non dal trasloco.
 

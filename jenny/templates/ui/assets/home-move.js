@@ -48,6 +48,20 @@ function removeSnapshot(panel) {
   for (const f of children(panel).filter(isSnapshot)) f.remove();
 }
 
+/** Porta in fondo il filo di una foto.
+ *
+ *  Un clone parte dall'alto, e la chat sta in fondo: senza, la pagina
+ *  entrerebbe coi messaggi di una settimana fa. **Funziona solo se la foto si
+ *  vede**: dentro un antenato `display: none` — la pista, mentre sei sulla
+ *  bacheca di un quaderno — l'altezza e' zero, lo scroll resta a zero, e resta
+ *  li' anche quando la pista ricompare (misurato in Chromium, 24/11/2026). Per
+ *  questo la si richiama anche all'arrivo, quando la pagina torna a schermo.
+ */
+function toBottom(snapshot) {
+  const thread = snapshot?.querySelector?.('.home-thread');
+  if (thread) thread.scrollTop = thread.scrollHeight;
+}
+
 export class ChatMove {
   /** @param chat          l'involucro della chat vera (`#home-chat`)
    *  @param cambia        `(key) => Promise`: cambia conversazione e rilegge
@@ -104,8 +118,10 @@ export class ChatMove {
 
     /* 2. La chat entra **sotto** la foto della pagina d'arrivo. Se la pagina
           una foto non ce l'ha — appena disegnata — gliene si da' una adesso,
-          o si vedrebbe la lettura. */
+          o si vedrebbe la lettura. Una foto che c'era gia' torna in fondo
+          adesso: messa mentre la pagina era nascosta, aveva lo scroll a zero. */
     if (change && !snapshotIn(panel)) this._putSnapshot(panel, key);
+    else toBottom(snapshotIn(panel));
     panel.insertBefore(this.chat, snapshotIn(panel));
 
     /* Stessa conversazione in due pagine (la pagina chat e quella del quaderno):
@@ -183,6 +199,13 @@ export class ChatMove {
    *  conversazione e' gia' quella — il caso comune: sopra la bacheca la chat
    *  ha gia' la chiave del quaderno, sopra le App quella personale — non si
    *  rilegge niente e nel velo non c'e' foto.
+   *
+   *  **Una foto che la pagina ha gia' resta.** E' la foto della *sua*
+   *  conversazione, messa da `retune` o da `lower` mentre la chat dietro era
+   *  di un quaderno. Rifotografare qui la conversazione che la chat ha adesso
+   *  — il quaderno — lasciava sulla pagina chat la chat del quaderno: tornando
+   *  alla personale la si vedeva per un attimo, finche' la lettura non la
+   *  toglieva (Titan, 24/11/2026).
    */
   lift(host, key) {
     if (!this.chat || !host || !key) return Promise.resolve();
@@ -192,7 +215,7 @@ export class ChatMove {
     const left = this._currentKey?.();
     if (from && from !== host) {
       if (this._reliable) this._negatives.set(left, this._negative());
-      this._putSnapshot(from, left);
+      if (!snapshotIn(from)) this._putSnapshot(from, left);
     }
     if (left === key) {
       removeSnapshot(host);
@@ -318,9 +341,6 @@ export class ChatMove {
     const negative = this._negatives.get(key);
     const snapshot = negative ? negative.cloneNode(true) : this._skeleton();
     panel.appendChild(snapshot);
-    /* Un clone parte dall'alto, e la chat sta in fondo: senza, la pagina
-       entrerebbe coi messaggi di una settimana fa. */
-    const thread = snapshot.querySelector('.home-thread');
-    if (thread) thread.scrollTop = thread.scrollHeight;
+    toBottom(snapshot);
   }
 }
