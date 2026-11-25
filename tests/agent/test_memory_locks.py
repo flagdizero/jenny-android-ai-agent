@@ -330,6 +330,25 @@ class TestReconcile:
         assert reassert(ws) == 0
         assert "- Moved to Lodi" in _user(ws)
 
+    async def test_it_follows_a_change_jenny_made_in_chat(self, ws):
+        """Gli strumenti di file della chat archiviano col successore: il lucchetto lo segue."""
+        from jenny.agent.tools.context import ToolContext
+        from jenny.agent.tools.filesystem import EditFileTool, ReadFileTool
+        from jenny.config.schema import ToolsConfig
+
+        states = FileStates()
+        ctx = ToolContext(config=ToolsConfig(), workspace=str(ws), file_states=states)
+        await ReadFileTool.create(ctx).execute(path="USER.md")
+        out = await EditFileTool.create(ctx).execute(
+            path="USER.md", old_text=LOCKED, new_text="- Lives in Lodi with Oreste",
+        )
+        assert "Error" not in out, out
+        assert reconcile(ws) == 1
+        [row] = MemoryLocks(ws).rows(SOURCE)
+        assert row.entry_id == entry_id("- Lives in Lodi with Oreste")
+        assert reassert(ws) == 0
+        assert "- Lives in Lodi with Oreste" in _user(ws)
+
     def test_it_follows_the_most_similar_wording(self, ws):
         changed = USER.replace(LOCKED, "- Lives in Lodi with Oreste since 2025")
         (ws / "USER.md").write_text(changed, encoding="utf-8")

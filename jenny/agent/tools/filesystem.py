@@ -198,9 +198,10 @@ class _FsTool(Tool):
         self._write_size_guard = write_size_guard
         # Gancio di degradazione, montato accanto al guard e per il motivo
         # opposto: il guard decide se una scrittura può avvenire, questo salva
-        # ciò che quella scrittura sta per portare via. Assente di default —
-        # riguarda i due file di memoria e li conosce solo chi lo costruisce
-        # (``memory_entries.make_entry_archiver``).
+        # ciò che quella scrittura sta per portare via. Riguarda i due file di
+        # memoria e li conosce solo chi lo costruisce
+        # (``memory_entries.make_entry_archiver``): Dream, e dal 25/11/2026
+        # anche ``create()`` per gli strumenti di Jenny in chat.
         self._entry_archiver = entry_archiver
 
     @staticmethod
@@ -255,12 +256,22 @@ class _FsTool(Tool):
             source_root = get_package_source_root()
             if source_root is not None:
                 extra_read.append(source_root)
+        # Jenny in chat riscrive ``USER.md`` e ``memory/MEMORY.md`` con questi
+        # strumenti: le voci che escono vanno in ``memory/archive/`` come quando
+        # le toglie Dream, con il successore se c'è. Senza lucchetti né
+        # ``forgotten``: non le ha tolte l'utente, e un cambio fatto in chat non
+        # si disfa — il lucchetto lo segue ``memory_locks.reconcile`` a inizio
+        # ciclo. Su un workspace che non ha i due file (quello di un aiutante in
+        # un quaderno) il gancio non trova niente da fare.
+        from jenny.agent.tools.memory_entries import make_entry_archiver
+
         return cls(
             workspace=Path(ctx.workspace),
             allowed_dir=allowed_dir,
             extra_read_allowed_dirs=extra_read,
             file_states=ctx.file_states,
             restrict_to_workspace=ctx.config.restrict_to_workspace,
+            entry_archiver=make_entry_archiver(Path(ctx.workspace)),
         )
 
     @property
