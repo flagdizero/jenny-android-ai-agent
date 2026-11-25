@@ -497,6 +497,24 @@
       "summaryOnMany": "on · {count} connected",
       "failed": "Didn't work: {error}"
     },
+    "homeNet": {
+      "title": "Home network",
+      "hint": "{name}'s tools can't reach the addresses of your network, for safety. Here you open one at a time: the NAS, Home Assistant, another computer.",
+      "empty": "No addresses: Jenny reaches nothing at home.",
+      "range": "a whole range, written by hand",
+      "remove": "Remove {name}",
+      "name": "Name",
+      "namePlaceholder": "NAS",
+      "address": "Address",
+      "add": "Add",
+      "added": "Added.",
+      "removed": "Removed.",
+      "error": {
+        "not_an_address": "It needs an IP address, like 192.168.1.20: not a name, not a range.",
+        "not_home": "That address isn't another device at home.",
+        "too_many": "There are already too many."
+      }
+    },
     "peers": {
       "title": "Other Jennys",
       "rowName": "Linked Jennys",

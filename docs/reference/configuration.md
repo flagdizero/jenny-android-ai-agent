@@ -323,7 +323,8 @@ The canonical home for the two policy switches.
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `security.restrictToWorkspace` | bool | **`true`** | Keeps workspace-aware tools inside the workspace (plus `skills/`, the media directory, and the read-only package source). This is an application-level, fail-closed policy boundary, not an OS sandbox. |
-| `security.ssrfWhitelist` | string[] | `[]` | CIDR ranges exempted from the SSRF guard, e.g. `["100.64.0.0/10"]` for Tailscale. Keep entries as narrow as possible (`192.168.1.50/32`). |
+| `security.ssrfWhitelist` | string[] | `[]` | CIDR ranges exempted from the SSRF guard, e.g. `["100.64.0.0/10"]` for Tailscale. Keep entries as narrow as possible (`192.168.1.50/32`). The workshop's **Hands → Home network** adds single addresses here. |
+| `security.ssrfNames` | object | `{}` | A display name per entry of `ssrfWhitelist` (`{"192.168.1.50/32": "NAS"}`), shown in **Home network**. Display only. |
 
 Two things people get wrong here:
 

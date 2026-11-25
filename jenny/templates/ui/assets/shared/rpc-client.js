@@ -106,6 +106,12 @@ export const rpc = {
     return send(`cron.${method}`, params);
   },
 
+  /** La «Rete di casa» dell'officina (`network.add`, `network.remove`):
+   *  `jenny/webui/network_commands.py`. */
+  network(method, params = {}) {
+    return send(`network.${method}`, params);
+  },
+
   /** «Cosa ricorda di te» (`memory.list`, `.correct`, `.remove`, `.restore`):
    *  `jenny/webui/memory_commands.py`. */
   memory(method, params = {}) {
