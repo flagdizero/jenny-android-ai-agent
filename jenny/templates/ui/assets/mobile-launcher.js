@@ -872,6 +872,9 @@ export class LauncherController {
    *  mentre si cerca, perché lì la risposta è la griglia stessa.
    */
   _renderTop(query) {
+    /* La tessera «Chiedi a Jenny un'app» della casa: solo a ricerca vuota. */
+    const ask = document.getElementById('home-ask-app');
+    if (ask) ask.hidden = Boolean(query.trim());
     if (!this.topEl) return;
     const top = query.trim() ? [] : rankEntries(this._entries, '', this._usage, i18n.locale)
       .filter((entry) => this._usage.get(entry.key).count > 0)
