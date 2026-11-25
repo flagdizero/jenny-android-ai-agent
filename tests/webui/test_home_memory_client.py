@@ -65,7 +65,9 @@ assert.equal(app._backTarget(), 'settings');
 assert.deepEqual(sentences('user'), ['Name: Alex Doe', 'Lives in Lodi']);
 assert.deepEqual(sentences('memory'), ['The garden uses the Tuesday market list']);
 const locked = room().querySelector('.home-memory-row[data-id="b2"] .home-memory-locked');
-assert.ok(locked, 'la voce corretta non ha il lucchetto');
+assert.ok(locked, 'la voce corretta non dice che l\u2019hai sistemata tu');
+assert.ok(locked.querySelector('.ti-pencil-check') && !locked.querySelector('.ti-lock'),
+  'una voce sistemata da te ha ancora il lucchetto');
 assert.ok(room().querySelector('.home-memory-row[data-id="b2"] .home-memory-lost'), 'il dettaglio perso non si vede');
 const recent = room().querySelector('.home-memory-section.is-recent');
 assert.ok(recent.querySelector('.is-wrong'), 'la voce non vera non e\\u2019 barrata');
@@ -111,9 +113,74 @@ def test_put_back_a_lost_detail_goes_after_its_entry() -> None:
 const app = await boot();
 app.openMemory();
 await until(() => sentences('user').length);
-room().querySelector('.home-memory-row[data-id="b2"] .home-memory-putback').click();
+const row = () => room().querySelector('.home-memory-row[data-id="b2"]');
+// Chiusa: una riga sola, senza parole sciolte e senza «Rimetti».
+assert.equal(row().querySelector('.home-memory-putback'), null, 'il dettaglio perso e\u2019 gia\u2019 aperto');
+assert.ok(!row().textContent.includes('Oreste'), 'la riga chiusa mostra parole sciolte');
+row().querySelector('.home-memory-lost-head').click();
+await until(() => row().querySelector('.home-memory-old'), { msg: 'la versione di prima non si apre' });
+// Aperta: la frase vecchia intera, col dettaglio perso evidenziato.
+assert.equal(row().querySelector('.home-memory-old-text').textContent, 'Lives in Cremona with Oreste');
+assert.deepEqual([...row().querySelectorAll('mark')].map((m) => m.textContent), ['Oreste']);
+row().querySelector('.home-memory-putback').click();
 await until(() => calls.some(([m]) => m === 'restore'));
 assert.deepEqual(calls.find(([m]) => m === 'restore')[1], { id: 'c3', after: 'b2' });
+// Il ridisegno dopo «Rimetti» la lascia aperta.
+await until(() => row()?.querySelector('.home-memory-old'), { msg: 'il ridisegno l\u2019ha richiusa' });
+""")
+
+
+def test_undo_puts_it_back_as_it_was() -> None:
+    # «Annulla» su una voce che non era sistemata da te non la rende tale; su
+    # una che lo era, si'. Prima ogni voce rimessa prendeva il lucchetto.
+    run_home(_HEAD + """
+const app = await boot();
+app.openMemory();
+await until(() => sentences('user').length);
+mem.user[1].lost = [];
+room().querySelector('.home-memory-row[data-id="a1"] .home-memory-remove').click();
+await until(() => document.querySelector('.mobile-toast-action'));
+document.querySelector('.mobile-toast-action').click();
+await until(() => calls.some(([m]) => m === 'restore'));
+assert.deepEqual(calls.find(([m]) => m === 'restore')[1], { id: 'a1', lock: false });
+calls.length = 0;
+mem.user.unshift({ id: 'a1', text: 'Name: Alex Doe', heading: 'Basics', locked: false, lost: [] });
+await app.memoryRoom.refresh();
+await app.memoryRoom._remove('user', mem.user.find((x) => x.id === 'b2'));
+await until(() => document.querySelector('.mobile-toast-action'));
+[...document.querySelectorAll('.mobile-toast-action')].pop().click();
+await until(() => calls.some(([m]) => m === 'restore'));
+assert.deepEqual(calls.find(([m]) => m === 'restore')[1], { id: 'b2' });
+""")
+
+
+def test_a_gesture_keeps_your_place_in_the_list() -> None:
+    # Una finta impaginazione: ogni riga alta 100, la stanza alta 600. Sei a
+    # meta' della seconda voce; il cestino toglie la prima, sopra di te: la
+    # seconda resta dove la vedevi, invece di saltare.
+    run_home(_HEAD + """
+const app = await boot();
+app.openMemory();
+await until(() => sentences('user').length);
+const body = room();
+let st = 0;
+Object.defineProperty(body, 'scrollTop', { get: () => st, set: (v) => { st = v; }, configurable: true });
+const real = Element.prototype.getBoundingClientRect;
+Element.prototype.getBoundingClientRect = function () {
+  if (this === body) return { top: 0, bottom: 600, height: 600 };
+  const rows = [...body.querySelectorAll('[data-place]')];
+  const i = rows.indexOf(this);
+  if (i < 0) return real.call(this);
+  const top = i * 100 - st;
+  return { top, bottom: top + 100, height: 100 };
+};
+st = 150;
+const seen = () => [...body.querySelectorAll('[data-place]')].find((n) => n.getBoundingClientRect().bottom > 0).dataset.place;
+assert.equal(seen(), 'b2');
+body.querySelector('.home-memory-row[data-id="a1"] .home-memory-remove').click();
+await until(() => !sentences('user').includes('Name: Alex Doe'));
+assert.equal(seen(), 'b2', 'dopo il cestino la stanza mostra un\u2019altra voce');
+assert.equal(st, 50);
 """)
 
 

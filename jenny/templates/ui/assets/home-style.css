@@ -6503,8 +6503,9 @@ dialog.home-photo-viewer[open] { display: flex; }
 /* ── «Cosa ricorda di te» ───────────────────────────────────────────────
    Due gruppi di frasi, «Di te» e «I suoi appunti», e in fondo «Dimenticato di
    recente». Una frase si tocca per correggerla; il cestino a destra la toglie.
-   Il lucchetto dice «corretta da te»; un dettaglio perso sta sotto la frase,
-   con «Rimetti». */
+   La matita dice «sistemata da te»; le versioni di prima che dicevano di piu'
+   stanno sotto la frase, chiuse in una riga, e si aprono sulla frase vecchia
+   intera coi dettagli persi evidenziati e «Rimetti». */
 #home-memory-room .home-you-scroll { gap: 14px; }
 .home-memory-section { display: flex; flex-direction: column; gap: 6px; }
 .home-memory-sec {
@@ -6528,7 +6529,6 @@ div.home-memory-text { cursor: default; }
 .home-memory-why { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 12px; }
 .home-memory-locked .ti { font-size: 13px; color: var(--accent); }
 .home-memory-row.is-wrong .home-memory-sentence { text-decoration: line-through; color: var(--text-muted); }
-.home-memory-row.is-changed .home-memory-sentence,
 .home-memory-row.is-removed .home-memory-sentence { color: var(--text-muted); }
 .home-memory-remove {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
@@ -6536,11 +6536,22 @@ div.home-memory-text { cursor: default; }
   background: transparent; color: var(--text-muted); font-size: 18px; cursor: pointer;
 }
 .home-memory-remove:active { background: var(--hover); }
-.home-memory-lost { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }
-.home-memory-lost-line {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  color: var(--warning); font-size: 12.5px;
+.home-memory-lost { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; }
+.home-memory-lost-head {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px; padding: 0 2px; border: 0; background: transparent;
+  color: var(--warning); font: inherit; font-size: 12.5px; cursor: pointer;
 }
+.home-memory-lost-head .ti { font-size: 14px; }
+.home-memory-lost-head:active { opacity: .7; }
+.home-memory-old {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border-left: 2px solid var(--warning); border-radius: 0 10px 10px 0;
+  background: var(--hover);
+}
+.home-memory-old-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.home-memory-old-text { color: var(--text-muted); font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.home-memory-old-text mark { background: transparent; color: var(--warning); font-weight: 600; }
 .home-memory-putback {
   flex: none; min-height: 34px; padding: 0 12px; border: 1px solid var(--border);
   border-radius: 999px; background: transparent; color: var(--text);
@@ -6554,16 +6565,20 @@ div.home-memory-text { cursor: default; }
   line-height: 1.4; resize: vertical;
 }
 .home-memory-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.home-memory-why-label { flex-basis: 100%; color: var(--text-muted); font-size: 13px; }
 .home-memory-actions button {
-  flex: 1; min-height: 44px; padding: 0 14px; border-radius: 999px; font: inherit;
-  font-size: 14px; cursor: pointer;
+  flex: 1 1 140px; min-height: 56px; padding: 8px 14px; border-radius: 14px; font: inherit;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 2px; text-align: left; cursor: pointer;
 }
+.home-memory-choice-title { font-size: 14px; font-weight: 600; }
+.home-memory-choice-sub { font-size: 12px; line-height: 1.3; opacity: .85; }
 .home-memory-changed { border: 0; background: var(--accent); color: var(--on-accent); }
 .home-memory-wrong { border: 1px solid var(--border); background: transparent; color: var(--text); }
 .home-memory-actions button:active { opacity: .7; }
 
 /* ── «Promemoria» ───────────────────────────────────────────────────────
-   Due gruppi (chiesti da te, messi da Jenny), una riga per promemoria: il
+   I gruppi (chiesti da te, messi da Jenny, uno per quaderno), una riga per promemoria: il
    nome, quando e cosa succede adesso, l'interruttore della pausa e il
    cestino. Una riga spenta (in pausa, o un singolo gia' suonato) si legge piu'
    chiara, ma resta leggibile: e' ancora li', e si puo' riaccendere. */
@@ -6573,6 +6588,16 @@ div.home-memory-text { cursor: default; }
   padding: 0 4px; color: var(--text-muted); font-size: 12px; font-weight: 600;
   letter-spacing: .06em; text-transform: uppercase;
 }
+/* Un quaderno: il suo nome e «Apri», che porta alla sua bacheca. */
+.home-reminders-section.is-notebook .home-reminders-sec {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.home-reminders-open {
+  flex: none; min-height: 32px; padding: 0 12px; border: 1px solid var(--border);
+  border-radius: 999px; background: transparent; color: var(--text); font: inherit;
+  font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; cursor: pointer;
+}
+.home-reminders-open:active { background: var(--hover); }
 .home-reminders-row { cursor: default; gap: 10px; }
 .home-reminders-row > .ti:first-child { color: var(--accent); font-size: 19px; flex: none; }
 .home-reminders-row .home-row-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

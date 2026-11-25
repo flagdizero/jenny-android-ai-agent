@@ -96,17 +96,18 @@ The archive is read into memory once, in the background, when the app starts, an
 
 In the home, **Settings → What she remembers about you** shows the two memory files as sentences: **About you** (`USER.md`) and **Her notes** (`memory/MEMORY.md`). The row says how many things she knows about you.
 
-- **Tap a sentence to correct it.** Write it as it should be, then say why: **It changed** files the old wording in `memory/archive/`, linked to the new one; **It wasn't true** also marks it retracted, so recall by name never brings it back. The corrected entry gets a lock (below).
-- **The trash removes it** at once, with a few seconds of **Undo**. A removed entry is marked `forgotten` and stays out of recall by name.
-- **Details a rewrite lost.** When an older wording of an entry carried a name or a number that no memory file says any more, the entry says so ("A rewrite lost “Oreste”") with **Put back**: the older sentence comes back as its own entry, right under the newer one, so nothing the newer one knows is overwritten.
-- **Recently forgotten** lists what left the files in the last four weeks: removed (with **Put back**), changed, and not true (struck through).
+- **Tap a sentence to correct it.** Write it as it should be, then choose why — the choice is what saves it, and each button says what happens to the old wording. **It changed** (it used to be true) files the old wording in `memory/archive/`, linked to the new one, so she remembers it as the past; **It wasn't true** also marks it retracted, so recall by name never brings it back. The corrected entry is marked **edited by you** (below).
+- **The trash removes it** at once, with a few seconds of **Undo**, which puts it back exactly as it was — marked as edited by you only if it already was. A removed entry is marked `forgotten` and stays out of recall by name.
+- **Earlier versions that said more.** When an older wording of an entry carried a name or a number that no memory file says any more, a closed line under the entry says so (*An earlier version said more*). Open it to read the **whole older sentence**, with the lost details highlighted, and **Put back**: the older sentence comes back as its own entry, right under the newer one, so nothing the newer one knows is overwritten. Articles and short prepositions inside a title (*The*, *La*) are not counted as names.
+- **Recently forgotten** lists what is no longer in the list, from the last four weeks: removed (with **Put back**) and not true (struck through). Older wordings are not repeated here: those that carried a lost detail are under their entry.
 - While Dream is tidying up, the room says so and refreshes by itself; it does not lock you out. If an entry changed in the meantime, your edit is not written over it: the room says so and shows it as it is now.
+- After a correction, a removal or an undo the room keeps your place: the sentence you were looking at stays where it was.
 
 Saving `USER.md` or `memory/MEMORY.md` from the workshop's file editor now goes through the archive too: a reworded line is filed as changed, and a line you deleted by hand counts as removed by you. When Jenny herself rewrites one of the two files during a chat, the lines she drops or rewords go to `memory/archive/` as well, the same way as Dream's: they are not marked as removed by you, so recall by name can still bring them back.
 
 ### Entries you corrected are locked
 
-An entry of `USER.md` or `memory/MEMORY.md` that you corrected yourself gets a lock, and Dream does not reword it. The lock is kept outside the workspace, in the app's own database, so nothing Dream can write reaches it, and the memory files carry no mark of it.
+An entry of `USER.md` or `memory/MEMORY.md` that you corrected yourself gets a lock — shown in the room as **edited by you**, not as a padlock, because it does not freeze the entry: you can still correct or remove it, and Jenny still updates it when you tell her in chat. What it stops is Dream rewording it. **Put back** locks the sentence it brings back too, so the next tidy-up does not drop it again; **Undo** after the trash does not add a lock that was not there. The lock is kept outside the workspace, in the app's own database, so nothing Dream can write reaches it, and the memory files carry no mark of it.
 
 - Dream's entry tool refuses to replace or remove a locked entry, and lists it as `[locked]`.
 - If a whole-file rewrite (the review pass, mostly) drops or rewords it anyway, the app puts your wording back where it was at the end of the pass, and files Dream's wording in `memory/archive/`.

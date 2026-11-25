@@ -163,7 +163,7 @@ def list_memory(workspace: Path, *, today: date | None = None) -> dict[str, Any]
         "ok": True,
         "dreaming": cycle_in_flight(),
         "files": files,
-        "recent": _recent(archived, live_ids, lost_by_entry, today),
+        "recent": _recent(archived, today),
     }
 
 
@@ -180,8 +180,11 @@ def _lost_by_live_entry(
     chains = archive_chains(archived)
     by_chain: dict[int, str] = {}
     for index, chain in enumerate(chains):
-        target = chain.latest.superseded_by
-        if target and target in live_ids:
+        # La voce che punta fuori dall'archivio, non la piu' recente per data:
+        # due riscritture dello stesso giorno escono dall'archivio in un ordine
+        # che non dice quale sia venuta dopo.
+        target = next((v.superseded_by for v in chain.versions if v.superseded_by in live_ids), None)
+        if target:
             by_chain[index] = target
     if not by_chain:
         return {}
@@ -210,13 +213,16 @@ def _lost_by_live_entry(
     return out
 
 
-def _recent(
-    archived: list[ArchivedEntry],
-    live_ids: dict[str, str],
-    lost_by_entry: dict[str, list[dict[str, Any]]],
-    today: date,
-) -> list[dict[str, Any]]:
-    """«Dimenticato di recente»: tolte, cambiate, non vere, e i dettagli persi."""
+def _recent(archived: list[ArchivedEntry], today: date) -> list[dict[str, Any]]:
+    """«Dimenticato di recente»: quel che non e' piu' nella lista.
+
+    Le voci tolte (con «Rimetti») e quelle che non erano vere. Fino al
+    25/11/2026 c'erano anche le «cambiate», cioe' le formulazioni vecchie di
+    voci che ci sono ancora: ripetevano le stesse frasi una seconda volta (la
+    loro storia sta sotto la voce, ``lost``), e dove il legame si era rotto —
+    una riscrittura in chat prima che archiviasse — erano solo doppioni (15
+    righe su 29 su jenny_s22, 26/11/2026).
+    """
     since = today - timedelta(days=RECENT_DAYS)
     rows: list[dict[str, Any]] = []
     files = {rel: key for key, rel in MEMORY_TARGETS.items()}
@@ -236,7 +242,7 @@ def _recent(
         elif entry.forgotten or not entry.superseded_by:
             kind = "removed"
         else:
-            kind = "changed"
+            continue
         row: dict[str, Any] = {
             "kind": kind,
             "id": entry.id,
@@ -244,9 +250,6 @@ def _recent(
             "date": entry.demoted,
             "file": files[entry.source],
         }
-        if kind == "changed":
-            now = entry.superseded_by
-            row["now"] = now if now in live_ids else ""
         rows.append(row)
         if len(rows) >= RECENT_MAX:
             break
@@ -319,8 +322,14 @@ def remove(workspace: Path, file_key: str, wanted: str) -> dict[str, Any]:
     return {"ok": True, "id": old.id}
 
 
-def restore(workspace: Path, wanted: str, *, after: str | None = None) -> dict[str, Any]:
+def restore(
+    workspace: Path, wanted: str, *, after: str | None = None, lock: bool = True,
+) -> dict[str, Any]:
     """Rimette una formulazione archiviata, come voce viva e col lucchetto.
+
+    Senza lucchetto con ``lock=False``: e' l'«Annulla» del cestino su una voce
+    che non l'aveva, che deve tornare com'era e non «sistemata da te» (visto sul
+    Titan il 25/11/2026: ogni voce rimessa con «Annulla» prendeva il lucchetto).
 
     Sotto la sua intestazione, o subito dopo la voce viva *after*: e' «Rimetti»
     accanto a un dettaglio perso, dove la frase vecchia torna **accanto** a
@@ -363,7 +372,7 @@ def restore(workspace: Path, wanted: str, *, after: str | None = None) -> dict[s
             # quella appena scritta, riconosciuta per testo.
             live = next((e for e in parse_entries(current) if plain(e.text) == body), None)
         unarchive(memory_dir, archived.id)
-        if live is not None:
+        if live is not None and lock:
             MemoryLocks(workspace).lock(f.rel, live)
     return {"ok": True, "id": live.id if live else archived.id, "file": key}
 

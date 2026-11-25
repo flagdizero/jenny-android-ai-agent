@@ -10,7 +10,8 @@ e riscrivere un file sono millisecondi di disco che il loop non deve aspettare.
 - ``memory.correct {file, id, text, reason}`` con ``reason`` ``changed`` o
   ``wrong``;
 - ``memory.remove {file, id}``;
-- ``memory.restore {id, after?}``: l'«Annulla» del cestino, e «Rimetti».
+- ``memory.restore {id, after?, lock?}``: l'«Annulla» del cestino (con
+  ``lock`` com'era la voce prima), e «Rimetti» (sistemata da te).
 
 Un id che non c'e' piu' risponde ``conflict``: la voce e' cambiata nel frattempo,
 e la stanza rilegge invece di scriverci sopra.
@@ -79,7 +80,11 @@ async def memory_restore(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     from jenny.agent.memory_service import restore
 
     _require_workspace_flag("allow_write", "forbidden", "workspace writes are disabled")
-    return await _run(restore, _root(ctx), _id(params), after=_id(params, "after", required=False))
+    lock = params.get("lock", True)
+    if not isinstance(lock, bool):
+        raise CommandError("bad_request", "lock must be a boolean")
+    return await _run(restore, _root(ctx), _id(params), after=_id(params, "after", required=False),
+                      lock=lock)
 
 
 MEMORY_COMMANDS = {

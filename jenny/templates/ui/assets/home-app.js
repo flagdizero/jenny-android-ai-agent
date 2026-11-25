@@ -380,6 +380,7 @@ class HomeApp {
        di Impostazioni dice quanti sono accesi. */
     this.remindersRoom = new HomeReminders({
       onChange: () => this.you.sayReminders(this.remindersRoom.value()),
+      onOpenNotebook: (name) => this.openNotebook(name),
     });
     /* «Troppi risvegli»: la pastiglia sopra il campo e il foglio di chi sveglia
        Jenny di piu'. «Tutti i promemoria» apre la stanza qui sopra, e ogni sua

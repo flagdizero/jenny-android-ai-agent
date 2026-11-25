@@ -207,3 +207,48 @@ def test_lost_details_are_one_line_per_old_sentence(ws) -> None:
     assert len(lost) == 1, lost
     assert set(lost[0]["words"]) >= {"Metal", "Gear", "Solid"}
     assert lost[0]["id"] == old
+
+
+def test_undo_with_lock_false_puts_it_back_as_it_was(ws) -> None:
+    """L'«Annulla» del cestino su una voce che non era sistemata dall'utente la
+    rimette senza lucchetto: prima ogni voce rimessa lo prendeva (visto sul
+    Titan il 25/11/2026)."""
+    svc.remove(ws, "user", CREMONA)
+    svc.restore(ws, CREMONA, lock=False)
+
+    assert CREMONA in _live(ws)
+    assert MemoryLocks(ws).locked_ids("USER.md") == set()
+
+
+def test_recent_leaves_out_a_change_whose_new_wording_is_still_there(ws) -> None:
+    """La frase vecchia di una voce che c'e' ancora sta sotto quella voce, non
+    anche in «Dimenticato di recente»; se la voce nuova se ne va, c'e' lei,
+    come tolta, e non anche tutte le sue versioni di prima."""
+    new_id = svc.correct(ws, "user", CREMONA, "Lives in Lodi with Oreste", "changed")["id"]
+    assert svc.list_memory(ws)["recent"] == []
+
+    svc.remove(ws, "user", new_id)
+    rows = svc.list_memory(ws)["recent"]
+    assert [(r["kind"], r["id"]) for r in rows] == [("removed", new_id)]
+
+
+def test_an_article_in_a_title_is_not_a_lost_detail(ws) -> None:
+    """«The» dentro «The Wailing» non e' un nome: la riga di prima diceva
+    «Una riscrittura ha perso: Hwan-hee, Kim, The, Wailing»."""
+    text = _user(ws).replace("- Short answers", "- Loved The Wailing and La Grande Bellezza")
+    (ws / "USER.md").write_text(text, encoding="utf-8")
+    old = entry_id("- Loved The Wailing and La Grande Bellezza")
+    new_id = svc.correct(ws, "user", old, "Likes films", "changed")["id"]
+    listed = {e["id"]: e for f in svc.list_memory(ws)["files"] for e in f["entries"]}
+    words = {w for d in listed[new_id]["lost"] for w in d["words"]}
+    assert {"Wailing", "Grande", "Bellezza"} <= words, words
+    assert not words & {"The", "La"}, words
+
+
+def test_recent_follows_the_chain_to_its_end(ws) -> None:
+    """Riscritta due volte: la prima formulazione punta alla seconda, che e' in
+    archivio anche lei; la catena finisce in una voce viva, e nessuna delle due
+    sta in «Dimenticato di recente»."""
+    mid = svc.correct(ws, "user", CREMONA, "Lives in Lodi with Oreste", "changed")["id"]
+    svc.correct(ws, "user", mid, "Lives in Lodi with Oreste and a cat", "changed")
+    assert svc.list_memory(ws)["recent"] == []

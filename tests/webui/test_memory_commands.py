@@ -43,6 +43,15 @@ async def test_list_correct_remove_restore(ctx) -> None:
     assert back["file"] == "user"
 
 
+async def test_undo_can_put_it_back_without_the_lock(ctx) -> None:
+    from jenny.agent.memory_locks import MemoryLocks
+
+    await dispatch_command(ctx, "memory.remove", {"file": "user", "id": CREMONA})
+    await dispatch_command(ctx, "memory.restore", {"id": CREMONA, "lock": False})
+    root = ctx.get_workspace_root()
+    assert MemoryLocks(root).locked_ids("USER.md") == set()
+
+
 async def test_a_stale_id_is_a_conflict(ctx) -> None:
     with pytest.raises(CommandError) as err:
         await dispatch_command(ctx, "memory.remove", {"file": "user", "id": "deadbeef"})
@@ -56,6 +65,7 @@ async def test_bad_params_are_refused(ctx) -> None:
         ("memory.correct", {"file": "user", "id": CREMONA, "text": "", "reason": "changed"}),
         ("memory.restore", {"id": None}),
         ("memory.restore", {"id": CREMONA, "after": "a/b"}),
+        ("memory.restore", {"id": CREMONA, "lock": "no"}),
     ):
         with pytest.raises(CommandError) as err:
             await dispatch_command(ctx, method, params)
