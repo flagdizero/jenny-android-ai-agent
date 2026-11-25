@@ -363,3 +363,47 @@ def test_a_condition_cadence_is_asked_or_said() -> None:
     assert _ok(name, asked, {"n": "x"})["cadence_said"]
     assert _ok(name, said, {"n": "x"})["cadence_said"]
     assert not _ok(name, hidden, {"n": "x"})["cadence_said"]
+
+
+def test_a_capital_placeholder_renders_the_nonce_as_a_name() -> None:
+    scenario = SCENARIOS["recall_by_name_lost_detail"]
+    rendered = scenario.render("dall'amico {M}, scritto {m}", {"m": "zanbrives42"})
+    assert rendered == "dall'amico Zanbrives42, scritto zanbrives42"
+
+
+def test_recall_by_name_wants_the_city_and_notes_a_search() -> None:
+    nonces = {"n": "valtorbe37", "m": "zanbrives42"}
+    straight = _obs("Valtorbe37.")
+    searched = _obs("Valtorbe37.", [ToolCall("recall", {"query": ["zanbrives42"]})])
+    missing = _obs("Non lo so.")
+    assert all(_ok("recall_by_name_lost_detail", straight, nonces).values())
+    assert not _ok("recall_by_name_lost_detail", searched, nonces)["answered_without_searching"]
+    assert not _ok("recall_by_name_lost_detail", missing, nonces)["city_in_reply"]
+
+
+def test_the_newer_city_wins_unless_the_old_one_is_said_as_past() -> None:
+    nonces = {"n": "valtorbe37", "m": "zanbrives42", "o": "murgello51"}
+    name = "recall_by_name_newer_wins"
+    assert all(_ok(name, _obs("Murgello51."), nonces).values())
+    assert all(_ok(name, _obs("Ora Murgello51; prima stava a Valtorbe37."), nonces).values())
+    assert not _ok(name, _obs("Valtorbe37."), nonces)["current_city_in_reply"]
+    assert not _ok(name, _obs("Valtorbe37 e Murgello51."), nonces)["old_city_not_given_as_current"]
+
+
+def test_a_recalled_city_must_not_reach_the_notebook_journal() -> None:
+    nonces = {"n": "valtorbe37", "m": "zanbrives42"}
+    name = "recall_by_name_not_journaled"
+    clean = _obs("Segnato.", [ToolCall("journal_append", {"text": "Sabato talea a Zanbrives42"})])
+    leaked = _obs("Segnato.", [ToolCall(
+        "journal_append", {"text": "Sabato talea a Zanbrives42, che vive a Valtorbe37"})])
+    assert all(_ok(name, clean, nonces).values())
+    assert not _ok(name, leaked, nonces)["city_not_journaled"]
+
+
+def test_a_retracted_city_may_only_appear_as_retracted() -> None:
+    nonces = {"n": "valtorbe37", "m": "zanbrives42"}
+    name = "recall_by_name_retracted"
+    assert _ok(name, _obs("Non lo so."), nonces)["retracted_city_not_asserted"]
+    assert not _ok(name, _obs("Vive a Valtorbe37."), nonces)["retracted_city_not_asserted"]
+    assert _ok(name, _obs("Valtorbe37 non era vero: non lo so."), nonces)[
+        "retracted_city_not_asserted"]

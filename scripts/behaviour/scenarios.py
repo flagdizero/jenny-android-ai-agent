@@ -1186,8 +1186,109 @@ LATER = [
     ),
 ]
 
+
+# -- il richiamo per nome («fatti fermi», 25/11/2026) ------------------------------
+#
+# Dream accorcia una riga di ``USER.md`` e un dettaglio resta solo in archivio:
+# sul telefono «mesi da <amico> a <città>» era diventato «mesi da <amico>», e
+# l'utente ha dovuto ridire dove abita l'amico. Il richiamo lo fa il codice
+# (``jenny/agent/facts.py``): questi scenari misurano cosa ne fa il modello. Amico
+# e città sono nonce, il nome con la maiuscola (``{M}``) come in un appunto vero.
+
+_FRIEND_PLAN = "# User Profile\n\n- Piano: qualche mese dall'amico {M} o al mare.\n"
+_FRIEND_ARCHIVED = _archive_file(
+    70, "1f1f1f1f", "Piano di vita: qualche mese dall'amico {M}, che vive a {N}, o al mare.")
+_NAMES_NOTE = ("il richiamo lo fa il codice (agent/facts.py, recall_names): si tara con una "
+               "build che non lo accende")
+_PAST_MARK = re.compile(r"prima|una volta|non pi[uù]|era a|stava a|before|used to|previously|"
+                        r"no longer", re.IGNORECASE)
+
+
+def _named_detail(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    searched = obs.called("recall") or obs.called("recall_history") or obs.called("grep")
+    return [
+        Check("city_in_reply", n["n"].lower() in obs.reply.lower(), obs.reply[:160]),
+        # Informativo: con il richiamo nel turno la città c'è senza cercarla.
+        Check("answered_without_searching", not searched,
+              ",".join(c.name for c in obs.tool_calls)),
+    ]
+
+
+def _named_newer_wins(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    reply = obs.reply.lower()
+    old, new = n["n"].lower() in reply, n["o"].lower() in reply
+    return [
+        Check("current_city_in_reply", new, obs.reply[:160]),
+        Check("old_city_not_given_as_current",
+              not old or (new and bool(_PAST_MARK.search(obs.reply))), obs.reply[:160]),
+    ]
+
+
+def _named_not_journaled(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    journal = obs.called("journal_append")
+    return [
+        Check("fact_journaled", any(n["m"].lower() in c.arg_text().lower() for c in journal),
+              str(len(journal))),
+        Check("city_not_journaled",
+              not any(n["n"].lower() in c.arg_text().lower() for c in journal),
+              " | ".join(c.arg_text()[:80] for c in journal)),
+    ]
+
+
+def _named_retracted(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    reply = obs.reply
+    asserted = n["n"].lower() in reply.lower() and not _RETRACTION_MARK.search(reply)
+    return [Check("retracted_city_not_asserted", not asserted, reply[:160])]
+
+
+NAMES = [
+    Scenario(
+        name="recall_by_name_lost_detail",
+        stage=2, area="memory", nonces=("n", "m"),
+        promise="un dettaglio caduto da una riga del profilo torna quando l'utente nomina "
+                "la persona, anche scritta minuscola",
+        files={"USER.md": _FRIEND_PLAN, _FRIEND_ARCHIVED[0]: _FRIEND_ARCHIVED[1]},
+        turns=["Stasera dormo dal mio amico {m}. In che città devo prendere il treno? "
+               "Solo il nome della città."],
+        check=_named_detail, kind="probe", calibration_note=_NAMES_NOTE,
+    ),
+    Scenario(
+        name="recall_by_name_newer_wins",
+        stage=2, area="memory", nonces=("n", "m", "o"),
+        promise="una formulazione archiviata più vecchia non batte quel che il profilo "
+                "dice adesso",
+        files={"USER.md": "# User Profile\n\n- L'amico {M} ora vive a {O}.\n",
+               "memory/archive/2026-10-02-2f2f2f2f.md":
+                   "---\nid: 2f2f2f2f\nsource: USER.md\ndemoted: 2026-10-02\n---\n\n"
+                   "L'amico {M} vive a {N}, vicino alla stazione.\n"},
+        turns=["Dove abita adesso {m}? Solo il nome della città."],
+        check=_named_newer_wins, kind="probe", calibration_note=_NAMES_NOTE,
+    ),
+    Scenario(
+        name="recall_by_name_not_journaled",
+        stage=2, area="memory", nonces=("n", "m"), chat="notebook",
+        promise="in un quaderno, un fatto della persona richiamato per nome non finisce "
+                "nel journal",
+        files={"USER.md": _FRIEND_PLAN, _FRIEND_ARCHIVED[0]: _FRIEND_ARCHIVED[1]},
+        turns=["Sabato spedisco a {m} una talea del fico: segnatelo."],
+        check=_named_not_journaled, kind="probe",
+        calibration_note="l'avviso è una frase del codice (agent/facts.py, NOTEBOOK_NOTE)",
+    ),
+    Scenario(
+        name="recall_by_name_retracted",
+        stage=2, area="memory", nonces=("n", "m"),
+        promise="una formulazione smentita non torna per nome, e non viene affermata",
+        files={"USER.md": "# User Profile\n\n- Amici: {M}.\n",
+               "memory/archive/2026-10-05-3f3f3f3f.md":
+                   "---\nid: 3f3f3f3f\nsource: USER.md\ndemoted: 2026-10-05\n"
+                   "retracted: yes\n---\n\nL'amico {M} vive a {N}.\n"},
+        turns=["In che città vive {m}? Se non lo sai, dimmelo."],
+        check=_named_retracted, kind="probe",
+    ),
+]
+
 SCENARIOS = {s.name: s for s in [*STAGE_1, *LATER, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY,
-                                 *DRAWERS]}
+                                 *DRAWERS, *NAMES]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)

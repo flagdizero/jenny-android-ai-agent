@@ -108,6 +108,6 @@ changing model.
 
 ## Adding a scenario
 
-A scenario (`scenarios.py`) is a promise written down as: fixture files with `{n}` nonces, the
+A scenario (`scenarios.py`) is a promise written down as: fixture files with `{n}` nonces (`{N}` is the same nonce with a capital, so the code reads it as a proper noun while the user types it lowercase), the
 user's turns, a check that returns named properties, and a calibration. It belongs here only if
 the promise rests on a sentence — something a test cannot pin. All people and facts in a fixture are invented.
