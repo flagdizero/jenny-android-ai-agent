@@ -102,7 +102,7 @@ In the home, **Settings → What she remembers about you** shows the two memory 
 - **Recently forgotten** lists what left the files in the last four weeks: removed (with **Put back**), changed, and not true (struck through).
 - While Dream is tidying up, the room says so and refreshes by itself; it does not lock you out. If an entry changed in the meantime, your edit is not written over it: the room says so and shows it as it is now.
 
-Saving `USER.md` or `memory/MEMORY.md` from the workshop's file editor now goes through the archive too: a reworded line is filed as changed, and a line you deleted by hand counts as removed by you.
+Saving `USER.md` or `memory/MEMORY.md` from the workshop's file editor now goes through the archive too: a reworded line is filed as changed, and a line you deleted by hand counts as removed by you. When Jenny herself rewrites one of the two files during a chat, the lines she drops or rewords go to `memory/archive/` as well, the same way as Dream's: they are not marked as removed by you, so recall by name can still bring them back.
 
 ### Entries you corrected are locked
 
