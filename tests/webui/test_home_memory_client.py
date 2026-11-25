@@ -20,7 +20,7 @@ const mem = {
   user: [
     { id: 'a1', text: 'Name: Alex Doe', heading: 'Basics', locked: false, lost: [] },
     { id: 'b2', text: 'Lives in Lodi', heading: 'Basics', locked: true,
-      lost: [{ word: 'Oreste', id: 'c3', text: 'Lives in Cremona with Oreste', date: '2026-11-20' }] },
+      lost: [{ words: ['Oreste'], id: 'c3', text: 'Lives in Cremona with Oreste', date: '2026-11-20' }] },
   ],
   notes: [{ id: 'd4', text: 'The garden uses the Tuesday market list', heading: '', locked: false, lost: [] }],
   recent: [

@@ -1873,7 +1873,7 @@
       "emptyNotes": "No notes for now.",
       "locked": "corrected by you",
       "remove": "Remove",
-      "lost": "A rewrite lost “{word}”.",
+      "lost": "A rewrite lost: {word}.",
       "putBack": "Put back",
       "putBackDetail": "Put back the sentence with {word}",
       "recent": "Recently forgotten",
@@ -1931,7 +1931,8 @@
       "toggle": "On: {name}",
       "remove": "Remove {name}",
       "removed": "Reminder removed: {name}",
-      "howToAdd": "A new reminder is asked for in the chat. Notebook reminders live on their boards."
+      "howToAdd": "A new reminder is asked for in the chat. Notebook reminders live on their boards.",
+      "notebooksElsewhere": "Notebook reminders live on their boards."
     },
     "starts": {
       "title": "Where to start",
@@ -1954,6 +1955,7 @@
     },
     "askApp": {
       "title": "Ask {name} for an app",
+      "quoted": "“{text}”",
       "example": "Make me an app to track how many hours I sleep"
     },
     "peers": {

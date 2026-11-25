@@ -1873,7 +1873,7 @@
       "emptyNotes": "Nessun appunto per ora.",
       "locked": "corretta da te",
       "remove": "Togli",
-      "lost": "Una riscrittura ha perso «{word}».",
+      "lost": "Una riscrittura ha perso: {word}.",
       "putBack": "Rimetti",
       "putBackDetail": "Rimetti la frase con {word}",
       "recent": "Dimenticato di recente",
@@ -1931,7 +1931,8 @@
       "toggle": "Acceso: {name}",
       "remove": "Togli {name}",
       "removed": "Promemoria tolto: {name}",
-      "howToAdd": "Un promemoria nuovo si chiede in chat. Quelli dei quaderni stanno sulle loro bacheche."
+      "howToAdd": "Un promemoria nuovo si chiede in chat. Quelli dei quaderni stanno sulle loro bacheche.",
+      "notebooksElsewhere": "Quelli dei quaderni stanno sulle loro bacheche."
     },
     "starts": {
       "title": "Da dove cominciare",
@@ -1954,6 +1955,7 @@
     },
     "askApp": {
       "title": "Chiedi a {name} un'app",
+      "quoted": "«{text}»",
       "example": "Fammi un'app per segnare quante ore dormo"
     },
     "peers": {
