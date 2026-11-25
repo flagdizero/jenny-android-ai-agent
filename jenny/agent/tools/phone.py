@@ -250,6 +250,15 @@ class PhoneDoTool(_PhoneToolBase):
         "What is done on the phone cannot be undone, so read the screen before acting."
     )
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Quel che si fa in un'altra app non passa dal registro (``jenny.phone``)."""
+        goal = params.get("goal")
+        if isinstance(goal, str) and goal.strip():
+            return {"what": "phone", "label": goal}
+        steps = params.get("steps")
+        apps = [str(s.get("app")) for s in steps or [] if isinstance(s, dict) and s.get("app")]
+        return {"what": "phone", "label": ", ".join(apps) or "phone"}
+
     async def execute(
         self, goal: str = "", steps: list[dict[str, Any]] | None = None, **kwargs: Any,
     ) -> Any:

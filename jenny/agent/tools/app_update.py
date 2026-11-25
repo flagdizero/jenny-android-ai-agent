@@ -135,6 +135,10 @@ class InstallUpdateTool(_AppUpdateTool):
         # sparire il processo sotto i piedi degli altri.
         return True
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Un aggiornamento installato non si toglie da qui."""
+        return {"what": "update", "label": "Jenny"} if params.get("confirm") else None
+
     async def execute(self, confirm: bool = False, **kwargs: Any) -> str:
         from jenny.runtime.update_install import start_install
 

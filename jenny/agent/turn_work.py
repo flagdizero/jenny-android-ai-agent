@@ -215,12 +215,14 @@ def _loads(raw: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
-def _append(ref: TurnRef, column: str, item: Any, *, same: Any = None) -> None:
+def _append(ref: TurnRef, column: str, item: Any, *, same: Any = None,
+            evict: Any = None) -> None:
     """Aggiunge *item* alla lista *column* della riga di *ref*, nata se serve.
 
     Letta e scritta nella stessa transazione: due strumenti dello stesso turno
     che annotano insieme non si cancellano a vicenda. *same* dice se una voce
-    c'è già (di default, l'uguaglianza).
+    c'è già (di default, l'uguaglianza); a lista piena *evict* sceglie quale
+    voce lascia il posto (un indice), o nessuna.
     """
     with _db(ref.root).write() as conn:
         _ensure_row(conn, ref)
@@ -230,7 +232,10 @@ def _append(ref: TurnRef, column: str, item: Any, *, same: Any = None) -> None:
         if any((same or (lambda a, b: a == b))(old, item) for old in items):
             return
         if len(items) >= MAX_ITEMS:
-            return
+            drop = evict(items, item) if evict is not None else None
+            if drop is None:
+                return
+            items.pop(drop)
         items.append(item)
         conn.execute(f"UPDATE turn_work SET {column} = ? WHERE turn = ?",
                      (json.dumps(items, ensure_ascii=False), ref.turn))
@@ -290,6 +295,18 @@ def note_job(job_id: str, label: str) -> None:
         logger.opt(exception=True).warning("Turn {}: job {} not noted", ref.turn, job_id)
 
 
+def _evict_a_search(items: list[Any], item: Mapping[str, Any]) -> int | None:
+    """A note piene, un messaggio o un comando prendono il posto della ricerca più vecchia.
+
+    Un aiutante di ricerca apre decine di pagine: senza, l'elenco si riempiva
+    di ricerche e il messaggio mandato dopo non ci stava più.
+    """
+    if item.get("what") == "web":
+        return None
+    return next((i for i, old in enumerate(items)
+                 if isinstance(old, dict) and old.get("what") == "web"), None)
+
+
 def note(item: Mapping[str, Any]) -> None:
     """Una cosa fatta nel turno in corso che il registro non può annullare."""
     ref = _CURRENT.get()
@@ -303,9 +320,26 @@ def note(item: Mapping[str, Any]) -> None:
         "label": " ".join(label.split())[:120], "undoable": False,
     }
     try:
-        _append(ref, "notes", entry)
+        _append(ref, "notes", entry, evict=_evict_a_search)
     except Exception:  # noqa: BLE001 — quel che è fatto è fatto
         logger.opt(exception=True).warning("Turn {}: a note was not written", ref.turn)
+
+
+def note_tool(tool: Any, params: Any) -> None:
+    """Dopo una chiamata riuscita: quel che lo strumento dichiara fuori dal registro
+    (``Tool.outside_undo``) entra nella riga del turno in corso. Lo chiama il runner."""
+    if _CURRENT.get() is None or tool is None:
+        return
+    declare = getattr(tool, "outside_undo", None)
+    if not callable(declare):
+        return
+    try:
+        item = declare(params if isinstance(params, dict) else {})
+    except Exception:  # noqa: BLE001 — una dichiarazione rotta non ferma il turno
+        logger.opt(exception=True).debug("outside_undo of {} failed", getattr(tool, "name", "?"))
+        return
+    if isinstance(item, Mapping):
+        note(item)
 
 
 # -- l'elenco -------------------------------------------------------------------------
@@ -463,6 +497,7 @@ __all__ = [
     "kept_journal_keys",
     "note",
     "note_job",
+    "note_tool",
     "read_row",
     "reset",
     "sweep",

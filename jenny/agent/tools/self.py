@@ -294,6 +294,13 @@ class MyTool(Tool, ContextAware):
     # Action dispatch
     # ------------------------------------------------------------------
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Un'impostazione cambiata: la configurazione non è nel registro."""
+        if params.get("action") not in ("modify", "set"):
+            return None
+        key = params.get("key")
+        return {"what": "settings", "label": key} if isinstance(key, str) else None
+
     async def execute(
         self,
         action: str,

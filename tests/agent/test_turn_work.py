@@ -343,9 +343,111 @@ def test_notes_are_deduplicated_and_capped(ws: Path) -> None:
         for _ in range(3):
             turn_work.note({"what": "web", "label": "meteo   Bologna"})
         for i in range(turn_work.MAX_ITEMS + 5):
-            turn_work.note({"what": "message", "label": f"msg {i}"})
+            turn_work.note({"what": "web", "label": f"pagina {i}"})
     row = turn_work.read_row(ws, TURN)
     assert row is not None and len(row["notes"]) == turn_work.MAX_ITEMS
     assert row["notes"][0] == {"kind": "egress", "what": "web", "label": "meteo Bologna",
                                "undoable": False}
     assert json.dumps(row["notes"])  # serializzabile così com'è
+
+
+# -- quel che non si annulla (``Tool.outside_undo``) ---------------------------------------
+
+
+@tool_parameters(tool_parameters_schema(content=StringSchema("c"), required=["content"]))
+class _Manda(Tool):
+    """Uno strumento che fa uscire qualcosa: lo dichiara, come ``message``."""
+
+    @property
+    def name(self) -> str:
+        return "manda"
+
+    @property
+    def description(self) -> str:
+        return "send"
+
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        return {"what": "message", "label": params["content"]}
+
+    async def execute(self, content: str = "", **_kw: Any) -> str:
+        return "Error: not delivered" if content == "rifiuta" else "sent"
+
+
+async def _run_manda(content: str):
+    from jenny.agent.runner import AgentRunner, AgentRunSpec
+    from jenny.agent.tools.registry import ToolRegistry
+
+    registry = ToolRegistry()
+    registry.register(_Manda())
+    spec = AgentRunSpec(initial_messages=[], tools=registry, model="m", max_iterations=2,
+                        max_tool_result_chars=8000)
+    return await AgentRunner(provider=None)._run_tool(
+        spec, ToolCallRequest(id="c1", name="manda", arguments={"content": content}),
+        external_lookup_counts={}, workspace_violation_counts={},
+    )
+
+
+async def test_the_runner_notes_what_a_tool_says_it_cannot_undo(ws: Path) -> None:
+    with turn_work.bound(turn_work.ref_for(ws, TURN)):
+        await _run_manda("ciao Anna")
+        await _run_manda("rifiuta")  # non partito: niente da dire
+    await _run_manda("fuori da un turno")
+    row = turn_work.read_row(ws, TURN)
+    assert row is not None
+    assert row["notes"] == [
+        {"kind": "egress", "what": "message", "label": "ciao Anna", "undoable": False}]
+    assert turn_work.turn_items(ws, TURN) == row["notes"]
+    assert [r["turn"] for r in turn_work._db(ws).read("SELECT turn FROM turn_work")] == [TURN]
+
+
+def test_a_full_list_gives_a_search_s_place_to_a_message(ws: Path) -> None:
+    with turn_work.bound(turn_work.ref_for(ws, TURN)):
+        for i in range(turn_work.MAX_ITEMS):
+            turn_work.note({"what": "web", "label": f"ricerca {i}"})
+        turn_work.note({"what": "web", "label": "una di troppo"})
+        turn_work.note({"what": "message", "label": "mandato dopo"})
+    notes = turn_work.read_row(ws, TURN)["notes"]
+    assert len(notes) == turn_work.MAX_ITEMS
+    assert notes[-1]["label"] == "mandato dopo"
+    labels = [n["label"] for n in notes]
+    assert "ricerca 0" not in labels and "una di troppo" not in labels
+
+
+def _declared(cls: type, params: dict[str, Any]) -> dict[str, str] | None:
+    """La dichiarazione di *cls* senza costruirlo: non legge lo stato dello strumento."""
+    return cls.outside_undo(object.__new__(cls), params)
+
+
+def test_the_tools_say_what_leaves_and_reading_is_not_listed() -> None:
+    from jenny.agent.tools.android_web import AndroidWebFetchTool, AndroidWebSearchTool
+    from jenny.agent.tools.app_update import InstallUpdateTool
+    from jenny.agent.tools.message import MessageTool
+    from jenny.agent.tools.peer import PeerAskTool, PeerLineTool
+    from jenny.agent.tools.phone import PhoneDoTool
+    from jenny.agent.tools.self import MyTool
+    from jenny.agent.tools.ssh import SshExecTool, SshJobTool, SshTransferTool
+
+    assert _declared(MessageTool, {"content": "ciao"}) == {"what": "message", "label": "ciao"}
+    assert _declared(AndroidWebSearchTool, {"query": "meteo"}) == {"what": "web",
+                                                                   "label": "meteo"}
+    assert _declared(AndroidWebFetchTool, {"url": "https://x.example"}) == {
+        "what": "web", "label": "https://x.example"}
+    assert _declared(PhoneDoTool, {"steps": [{"action": "open_app", "app": "Orari"}]}) == {
+        "what": "phone", "label": "Orari"}
+    assert _declared(PeerAskTool, {"peer": "Lavoro", "question": "come va?"}) == {
+        "what": "peer", "label": "come va?"}
+    assert _declared(PeerLineTool, {"peer": "Lavoro"}) == {"what": "peer", "label": "Lavoro"}
+    assert _declared(SshExecTool, {"host": "nas", "command": "df -h"}) == {
+        "what": "ssh", "label": "nas: df -h"}
+    assert _declared(SshJobTool, {"host": "nas", "action": "poll", "job_id": "j1"}) is None
+    assert _declared(SshJobTool, {"host": "nas", "action": "start", "command": "make"}) == {
+        "what": "ssh", "label": "nas: start make"}
+    assert _declared(SshTransferTool, {"host": "nas", "direction": "down",
+                                       "remote_path": "/a"}) is None
+    assert _declared(SshTransferTool, {"host": "nas", "direction": "up",
+                                       "remote_path": "/a"}) == {"what": "ssh",
+                                                                 "label": "nas: /a"}
+    assert _declared(MyTool, {"action": "check", "key": "model"}) is None
+    assert _declared(MyTool, {"action": "set", "key": "model_preset"}) == {
+        "what": "settings", "label": "model_preset"}
+    assert _declared(InstallUpdateTool, {"confirm": False}) is None

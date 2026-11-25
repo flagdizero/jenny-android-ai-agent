@@ -115,6 +115,18 @@ class UseAppTool(Tool):
             lines.append(f"\nBefore working with it, read `apps/{app.slug}/AGENT.md`.")
         return "\n".join(lines)
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Un'azione che cambia i dati di un'app: lo stato dell'app non torna indietro
+        (lo cambia anche l'utente da sé, e rimetterlo cancellerebbe i suoi tocchi)."""
+        slug, name = params.get("app"), params.get("action")
+        loaded = self._app(slug) if isinstance(slug, str) else None
+        if loaded is None or loaded.manifest is None or not isinstance(name, str):
+            return None
+        action = next((a for a in loaded.manifest.actions if a.name == name), None)
+        if action is None or not _is_write(action):
+            return None
+        return {"what": "app", "label": f"{loaded.manifest.name}: {name}"}
+
     async def execute(self, app: str = "", action: str | None = None,
                       args: Any = None, **_extra: Any) -> ToolResult:
         loaded = self._app(app)
