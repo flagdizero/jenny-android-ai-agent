@@ -894,6 +894,119 @@ DIARY = [
     ),
 ]
 
+# -- quaderni: si imparano usandoli ------------------------------------------------
+#
+# Dal 25/11/2026 il saluto di un quaderno nuovo nomina due cose da fare lì e dice
+# di chiedere il resto (``agent/notebook_greeting.md``), e alla domanda «cosa
+# posso fare qui?» Jenny risponde da quel quaderno com'è (``agent/project.md``,
+# «When they ask what they can do here»). Argomenti inventati: il repo è pubblico.
+
+_ASK_MORE = re.compile(r"chied\w*|domand\w*", re.IGNORECASE)
+_INTERNALS = re.compile(r"\.md\b|\bwiki/|\bfile\b|\bcartell\w*|\bstrument\w*|\btool\b|"
+                        r"journal_append", re.IGNORECASE)
+# Le cose da fare si dicono con le parole dell'argomento («salvare le ricette e
+# segnare il menu»), non coi nomi delle funzioni: si contano i verbi d'azione
+# distinti. Il primo giro (25/11/2026) contava le funzioni nominate e dava 0/3 a
+# saluti che ne nominavano due — un falso rosso letto nelle risposte.
+_ACTIONS = {
+    "annotare": re.compile(r"\bannot\w*|\bappunt\w*", re.IGNORECASE),
+    "segnare": re.compile(r"\bsegn[aio]\w*", re.IGNORECASE),
+    "scrivere": re.compile(r"\bscriv\w*", re.IGNORECASE),
+    "salvare": re.compile(r"\bsalv[aio]\w*", re.IGNORECASE),
+    "tenere": re.compile(r"\bten(ere|erci|ere|iamo|go|gli|ga|uto)\w*|\btien\w*", re.IGNORECASE),
+    "fissare": re.compile(r"\bfiss[aio]\w*", re.IGNORECASE),
+    "raccogliere": re.compile(r"\braccogl\w*", re.IGNORECASE),
+    "mettere": re.compile(r"\bmett\w*", re.IGNORECASE),
+    "ricordare": re.compile(r"\bricord\w*|\bpromemori\w*", re.IGNORECASE),
+    "bacheca": re.compile(r"\bbachec\w*", re.IGNORECASE),
+    "app": re.compile(r"\bapp\b|\bapplicazion\w*", re.IGNORECASE),
+    "lista": re.compile(r"\blist[ae]\b", re.IGNORECASE),
+    "piano": re.compile(r"\bpian[oi]\b|\bplan\b|\ba passi\b", re.IGNORECASE),
+}
+_PLAN_KEY = _ACTIONS["piano"]
+# «puoi salvare le ricette e organizzare i piatti»: due infiniti legati da «e» nella
+# frase che dice cosa si può fare. Regge un verbo che l'elenco sopra non ha (il
+# secondo giro del 25/11/2026 aveva «organizzare»).
+_INF = r"\w+(?:are|ere|ire)(?:ci|ne|la|le|li|lo)?"
+_TWO_INFINITIVES = re.compile(rf"\b(?:puoi|potrai|potete|si pu[oò])\s+(?:\w+\s+){{0,2}}?{_INF}\b"
+                              rf"[^.?!]*?\be\s+(?:\w+\s+)?{_INF}\b", re.IGNORECASE)
+_BULLET = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+\S", re.MULTILINE)
+_WRITES = ("write_file", "edit_file", "apply_patch", "journal_append", "spawn", "plan_propose",
+           "cron", "app")
+
+
+def _actions(text: str) -> list[str]:
+    return sorted(k for k, rx in _ACTIONS.items() if rx.search(text))
+
+
+def _greets_with_two_things(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    greeting = str(obs.extra.get("greeting") or "")
+    things = _actions(greeting)
+    two = len(things) >= 2 or bool(_TWO_INFINITIVES.search(greeting))
+    return [
+        Check("names_two_things", two, f"{','.join(things)} | {greeting[:300]}"),
+        Check("says_to_ask_more", bool(_ASK_MORE.search(greeting)), greeting[-160:]),
+        Check("no_internals", not _INTERNALS.search(greeting), greeting[:300]),
+    ]
+
+
+def _answers_from_the_notebook(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    reply = obs.reply
+    things = _actions(reply)
+    bullets = len(_BULLET.findall(reply))
+    wrote = [c.name for name in _WRITES for c in obs.last_turn_called(name)]
+    return [
+        Check("several_things", bullets >= 3 or len(things) >= 3,
+              f"{bullets} bullets, {','.join(things)} | {reply[:200]}"),
+        Check("names_the_plan_key", bool(_PLAN_KEY.search(reply)), reply[-200:]),
+        Check("no_internals", not _INTERNALS.search(reply), reply[:200]),
+        Check("writes_nothing", not wrote, ",".join(wrote)),
+    ]
+
+
+NOTEBOOK_LEARNING = [
+    Scenario(
+        name="notebook_greeting_offers_two_things",
+        stage=4, area="notebook", chat="notebook", capture_greeting=True,
+        promise="il saluto di un quaderno nuovo nomina due cose da fare lì e dice di chiedere il resto",
+        notebook_seed="Le ricette di casa e cosa cucino nel fine settimana.",
+        turns=[],
+        check=_greets_with_two_things,
+        # Taratura per inversione: il saluto di prima del 25/11/2026, che chiudeva
+        # con una domanda e vietava di dire come funziona un quaderno.
+        calibration=[
+            Edit("agent/notebook_greeting.md",
+                 "- name two things they can do here, picked for this notebook's topic, a few "
+                 "words each: for example\n  writing down what they learn so it becomes pages, "
+                 "keeping what matters on its board, a reminder,\n  a small app for it;\n"
+                 "- end by saying they can ask you what else this notebook can do.\n",
+                 "- end with a short question that invites them to start.\n"),
+            Edit("agent/notebook_greeting.md",
+                 "- Say what they can do, not how it works inside: never name files, folders or "
+                 "tools.\n",
+                 "- Do not mention files, folders, tools, boards or how notebooks work.\n"),
+        ],
+    ),
+    Scenario(
+        name="notebook_what_can_i_do",
+        stage=4, area="notebook", chat="notebook", capture_greeting=True,
+        promise="«cosa posso fare qui?» in un quaderno: risponde da quel quaderno, Piano compreso, "
+                "senza scrivere niente",
+        notebook_seed="La bici: uscite, manutenzione e pezzi da cambiare.",
+        turns=["Cosa posso fare qui?"],
+        check=_answers_from_the_notebook,
+        calibration=[Edit(
+            "agent/project.md",
+            "Answer from this notebook as it is now, not a general list: its pages, its board (or "
+            "why it has\nnone), its reminders, its apps, and the **Plan** button for long jobs. "
+            "Three or four things, each\nwith an example from its topic, in plain words, never "
+            "naming files or tools.\n",
+            "Answer in one short sentence that they can just tell you what they need, and name "
+            "nothing else.\n",
+        )],
+    ),
+]
+
 # -- stadio 4, tappe 3 e 4: i cassetti -----------------------------------------------
 #
 # Dalla chat personale un fatto finisce nel quaderno a cui appartiene, senza che
@@ -1288,7 +1401,7 @@ NAMES = [
 ]
 
 SCENARIOS = {s.name: s for s in [*STAGE_1, *LATER, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY,
-                                 *DRAWERS, *NAMES]}
+                                 *DRAWERS, *NAMES, *NOTEBOOK_LEARNING]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)
