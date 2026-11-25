@@ -1011,6 +1011,13 @@ class SubagentManager(
         peer_line = line_mark(ctx.metadata) if ctx is not None else None
         if peer_line is not None:
             spec = replace(spec, peer_line=peer_line)
+        # Il turno ordinario che lancia (``agent.turn_work``): i file
+        # dell'aiutante stanno sotto la sua risposta.
+        from jenny.agent import turn_work
+
+        origin_turn = turn_work.current_turn()
+        if origin_turn is not None:
+            spec = replace(spec, origin_turn=origin_turn)
         plan_id, plan_step = _plan_metadata()
         if plan_id or plan_step:
             spec = replace(spec, plan_id=plan_id, plan_step=plan_step)
@@ -1399,14 +1406,21 @@ class SubagentManager(
                     except Exception:  # noqa: BLE001 — il lavoro parte comunque
                         logger.opt(exception=True).warning(
                             "Subagent [{}]: peer request not told about its journal", task_id)
+                if spec.origin_turn:
+                    self._turn_helper_started(spec, journal.key, status.lineage_id or task_id)
             self._run_policies[task_id] = policy
             initial.extend(messages)
             run_policy.append(policy)
+            from jenny.agent import turn_work
             from jenny.peers import gate as peer_gate
 
+            # Quel che l'aiutante fa e il registro non annulla (un messaggio,
+            # una ricerca) e i promemoria che crea vanno nella riga del turno
+            # che l'ha lanciato, anche dopo una ripresa; senza turno, in nessuna.
+            origin_ref = self._turn_ref(spec)
             with (enter_workspace_scope(workspace_scope), enter_subagent_policy(policy),
                   bind_journal(journal, step=spec.plan_step),
-                  peer_gate.entered(spec.peer_act)):
+                  peer_gate.entered(spec.peer_act), turn_work.bound(origin_ref)):
                 result = await self.runner.run(AgentRunSpec(
                     initial_messages=messages,
                     tools=tools,
@@ -1893,6 +1907,37 @@ class SubagentManager(
             key for key in self._session_tasks
             if self.get_running_count_by_session(key) > 0
         )
+
+    def _turn_ref(self, spec: SubagentSpec) -> Any:
+        """La riga del turno che ha lanciato *spec*, se ne ha uno."""
+        from jenny.agent import turn_work
+
+        root = self._journal_root()
+        if root is None or not spec.origin_turn:
+            return None
+        return turn_work.ref_for(
+            root, spec.origin_turn, session=spec.session_key or "",
+            chat=f"{spec.origin_channel}:{spec.origin_chat_id}")
+
+    def _turn_helper_started(self, spec: SubagentSpec, journal_key: str, lineage: str) -> None:
+        """Il registro di un aiutante entra nella riga del turno che l'ha lanciato."""
+        from jenny.agent import turn_work
+
+        ref = self._turn_ref(spec)
+        if ref is None:
+            return
+        turn_work.helper_started(
+            ref.root, ref.turn, journal_key, lineage, session=ref.session, chat=ref.chat)
+
+    def working_for_turn(self, turn: str) -> bool:
+        """Se un aiutante lanciato dal turno *turn* lavora ancora (``agent.turn_work``)."""
+        for tid, task in list(self._running_tasks.items()):
+            if task.done():
+                continue
+            spec = self._spec_for_task(tid)
+            if spec is not None and spec.origin_turn == turn:
+                return True
+        return False
 
     def get_running_ids_by_session(self, session_key: str) -> frozenset[str]:
         """Gli id dei subagent vivi di una sessione, adesso.

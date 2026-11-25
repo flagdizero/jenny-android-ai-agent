@@ -17,7 +17,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from jenny.agent.write_journal import UndoReport, journal_for, undo_set
+from jenny.agent.write_journal import UndoReport, journal_entries, journal_for, undo_set
 
 
 def journal_file_items(root: Path, keys: Iterable[str]) -> list[dict[str, Any]]:
@@ -25,13 +25,15 @@ def journal_file_items(root: Path, keys: Iterable[str]) -> list[dict[str, Any]]:
 
     Ogni voce ha la forma dell'elenco di «cosa ha toccato»:
     ``{"kind": "file", "label": <percorso>, "undoable": True}``. Le cartelle non
-    sono voci; un registro che non si legge si salta.
+    sono voci; un registro che non si legge si salta. Legge dal database, senza
+    aprire registri vivi: un elenco chiesto per un turno finito non deve
+    rimetterne in memoria il registro.
     """
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
     for key in keys:
         try:
-            entries = journal_for(root, key).entries()
+            entries = journal_entries(root, key)
         except Exception:  # noqa: BLE001 — un registro illeggibile non ferma l'elenco
             continue
         for entry in entries:
