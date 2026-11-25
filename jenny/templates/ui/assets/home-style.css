@@ -2152,15 +2152,22 @@ button.home-wakes-act:active { background: var(--active); }
 /* «Riprova» sotto una risposta finita in un errore del modello (10/10/2026):
    un'azione vera, quindi un bottone col suo nome e non un'icona muta, alto
    quanto un dito. */
+/* I bottoni sotto un errore del modello: «Riprova» e/o «Apri Chi risponde»
+   (v. `ERROR_ACTIONS` in home-chat.js), affiancati finche' ci stanno. */
+.home-retry-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  /* La bolla e' una colonna flex: senza, la riga si allargava a tutta la
+     bolla (visto sull'emulatore). */
+  align-self: flex-start;
+  margin-top: 6px;
+}
 .home-retry {
   display: inline-flex;
-  /* La bolla e' una colonna flex: senza, il bottone si allargava a tutta
-     la riga (visto sull'emulatore). */
-  align-self: flex-start;
   align-items: center;
   gap: 6px;
   min-height: 40px;
-  margin-top: 6px;
   padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
