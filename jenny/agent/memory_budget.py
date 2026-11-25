@@ -279,7 +279,8 @@ def make_write_size_guard(report: Sequence[FileBudget]) -> WriteSizeGuard:
             f"{item.budget:,} char budget by {over:,}. Nothing was written; the file on disk "
             "is unchanged. Free space first, in this same turn: read the file, delete entries "
             "that are obsolete, superseded, or recoverable from the repo, then write the "
-            "shortened text — a write that makes the file smaller is always accepted, even "
+            "shortened text (shorten the wording, never the names, places, dates or numbers in "
+            "it) — a write that makes the file smaller is always accepted, even "
             "while it is still over budget. Adding a fact costs the same as pruning one: if "
             "the new fact is worth keeping, something already in the file is not."
         )

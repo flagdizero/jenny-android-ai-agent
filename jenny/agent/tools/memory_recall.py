@@ -29,13 +29,18 @@ un file di indice sarebbe una seconda verità da tenere allineata.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
-from jenny.agent.memory_archive import ArchivedEntry, history_archive_dir, list_archived
+from jenny.agent.memory_archive import (
+    ArchiveChain,
+    ArchivedEntry,
+    archive_chains,
+    history_archive_dir,
+    list_archived,
+)
 from jenny.agent.memory_search import query_terms, search
 from jenny.agent.tools.base import Tool, tool_parameters
 from jenny.agent.tools.memory_entries import MEMORY_TARGETS, parse_entries
@@ -69,43 +74,6 @@ _NO_MATCH = (
 )
 
 
-@dataclass
-class _Chain:
-    """Le formulazioni archiviate di uno stesso fatto, dalla più recente."""
-
-    versions: list[ArchivedEntry] = field(default_factory=list)
-
-    @property
-    def latest(self) -> ArchivedEntry:
-        return self.versions[0]
-
-
-def _chains(entries: list[ArchivedEntry]) -> list[_Chain]:
-    """Raggruppa le voci per catena di ``superseded_by``, nell'ordine dell'archivio.
-
-    Ogni voce segue i legami finché restano in archivio; dove escono (la voce
-    nuova è viva, o non c'è più) quella è la testa della catena. Un ciclo — la
-    stessa formulazione tolta, rimessa e ritolta — si ferma alla prima voce già
-    vista. La catena prende il posto della sua voce più recente nell'elenco.
-    """
-    by_id = {e.id: e for e in entries}
-
-    def head(entry: ArchivedEntry) -> str:
-        seen = {entry.id}
-        current = entry
-        while current.superseded_by in by_id and current.superseded_by not in seen:
-            current = by_id[current.superseded_by]
-            seen.add(current.id)
-        return current.id
-
-    # ``entries`` arriva già dalla più recente, e un dict tiene l'ordine
-    # d'inserimento: ogni catena prende il posto della sua prima voce vista.
-    groups: dict[str, _Chain] = {}
-    for entry in entries:
-        groups.setdefault(head(entry), _Chain()).versions.append(entry)
-    return list(groups.values())
-
-
 def _first_line(text: str) -> str:
     stripped = text.strip()
     return stripped.splitlines()[0] if stripped else ""
@@ -119,7 +87,7 @@ def _status(entry: ArchivedEntry) -> str:
     return ""
 
 
-def _index_line(chain: _Chain) -> str:
+def _index_line(chain: ArchiveChain) -> str:
     """Una riga per fatto: l'id per aprirlo, e la formulazione più recente.
 
     Il fatto viene troncato a riga, non a carattere: una voce multi-riga si
@@ -233,7 +201,7 @@ class MemoryRecallTool(_RecallTool):
                 "The memory archive is empty: no fact has been demoted yet. "
                 "Nothing was lost — there is simply nothing here to recall."
             )
-        chains = _chains(entries)
+        chains = archive_chains(entries)
         if ids:
             return self._open(chains, ids)
         if query:
@@ -252,7 +220,7 @@ class MemoryRecallTool(_RecallTool):
                 out[entry.id] = (rel, entry.text)
         return out
 
-    def _open(self, chains: list[_Chain], ids: list[str]) -> str:
+    def _open(self, chains: list[ArchiveChain], ids: list[str]) -> str:
         wanted = [str(i).strip() for i in ids if str(i).strip()]
         by_id = {e.id: chain for chain in chains for e in chain.versions}
         live = self._live_entries()
@@ -282,7 +250,7 @@ class MemoryRecallTool(_RecallTool):
             )
         return "\n\n".join(parts)
 
-    def _search(self, chains: list[_Chain], query: list[str]) -> str:
+    def _search(self, chains: list[ArchiveChain], query: list[str]) -> str:
         terms = query_terms(query)
         if not terms:
             return "The query has no word of three letters or more to search for."
@@ -301,7 +269,7 @@ class MemoryRecallTool(_RecallTool):
             header += f" Only the first {len(shown)} are listed."
         return header + "\n\n" + "\n".join(shown)
 
-    def _list(self, chains: list[_Chain], page: int) -> str:
+    def _list(self, chains: list[ArchiveChain], page: int) -> str:
         pages = _pages([_index_line(c) for c in chains])
         page = min(page, len(pages))
         lines = pages[page - 1]

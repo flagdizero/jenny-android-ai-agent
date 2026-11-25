@@ -184,6 +184,12 @@ A Dream cycle is already running, so this one did not start — Dream runs one c
 
 Every so often the run begins with a **memory review pass** (see [Memory and Dream](./memory.md)). When it does, its result is written as a line in front of the outcome, in the same message, for example `A memory review pass ran first and freed 1,240 chars across MEMORY.md, USER.md, SOUL.md.`, or `…ran first; nothing was freed across…`, or `…ran first but did not complete cleanly…`. It can go on to say that some writes were refused by their size budget and never landed (the Memory drawer shows which file is full), and that facts were moved into `memory/archive/`, naming their ids so you can find them again with `recall`.
 
+After a run, the outcome can end with one more line, when shorter rewrites have left names or numbers out of the entries of `USER.md` and `memory/MEMORY.md` (see [Names and numbers are the fact](./memory.md#names-and-numbers-are-the-fact)):
+
+```text
+Of the 151 names and numbers your profile's entries have held, 67 are no longer in it: shorter rewrites left them out. The older wordings are still in `memory/archive/`.
+```
+
 If there's no new history to process yet (common on a fresh or short chat, since Dream only reads from `memory/history.jsonl`, which is only populated after compaction), you get a longer explanation instead, ending with suggestions like enabling `idleCompactAfterMinutes`. See [Memory and Dream](./memory.md) for the full model.
 
 The command takes no arguments. The three file budgets, the review cadence, and Dream's own schedule are in the workshop's **Memory** drawer (*How much she remembers* and *Dream*), which also shows what each file currently measures — the number the budget is chosen from. `/dream budget …` answers with a line saying so.

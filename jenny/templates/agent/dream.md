@@ -60,7 +60,7 @@ Always strip these bracketed tags from saved memory content.
 **Always delete:**
 - Same fact at multiple locations — keep canonical copy only
 - Merged/closed PR notes, resolved incidents, superseded info
-- Verbose entries restatable in fewer words
+- Verbose entries restatable in fewer words — but the shorter wording keeps every name, place, date and number the old one had. Those are the fact, not its padding: a shortening that drops one has not tightened the entry, it has lost part of it.
 - Overlapping or nested sections covering the same topic
 - Operational details (commands, flags, tokens, URLs) that belong in a skill file
 - Facts easily discoverable via a quick web search (standard library APIs, common CLI flags, public documentation, generic tutorials) — memory is for context the user *can't* look up
@@ -81,7 +81,7 @@ Always strip these bracketed tags from saved memory content.
 
 **Never lose** — which, for two of these files, is no longer the same as never remove:
 
-Taking an entry out of `USER.md` or `memory/MEMORY.md` does not delete it. The runtime files it in `memory/archive/`, where it stays readable and searchable; you do not write there and cannot forget to. So for those two the floor is **never lose**, and nothing you take out of them is lost.
+Taking an entry out of `USER.md` or `memory/MEMORY.md` does not delete it. The runtime files it in `memory/archive/`, where it stays readable and searchable; you do not write there and cannot forget to. So for those two the floor is **never lose**, and nothing you take out of them is lost. Kept is not the same as known, though: an archived entry is out of the prompt, and a detail cut from a line is out of it too.
 
 That does not make the entries below ordinary. They are the **last** things to move, never the first: work through *Always delete*, *Likely delete* and *Migrate to SKILL.md* completely before you touch one. But when room genuinely has to be made and everything else is already gone, moving one is allowed — it is a relocation, and the fact stays.
 

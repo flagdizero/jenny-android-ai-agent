@@ -24,7 +24,7 @@ Dream runs under *"Surgical edits only"*, and that is correct for an incremental
 
 **In this run only, that constraint is lifted for shape.** You may rename, merge, split, reorder and delete headings, and rewrite a checkbox list or a form as the one line of prose that says the same thing. This paragraph is scoped to the review pass: the ordinary Dream run keeps "surgical edits only" intact, and nothing here licenses restructuring there.
 
-Shape only. Restructuring means the same facts in a smaller shape, or fewer facts — never new ones, and never a fact quietly reworded into something the user did not say.
+Shape only. Restructuring means the same facts in a smaller shape, or fewer facts — never new ones, and never a fact quietly reworded into something the user did not say. A smaller shape keeps every name, place, date and number the entry had: dropping one is removing part of a fact, not reshaping it.
 
 ## Task specs are skill material
 
