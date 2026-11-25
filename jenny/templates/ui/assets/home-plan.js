@@ -299,9 +299,11 @@ export class HomePlan {
     live, thread, chatEl, composer = {}, currentNotebook, currentPlace, onChange, onLockChange,
     onComposerChange, sendText, appendOwn, turnRunning, sheet,
     stagedItems, stagedFailed, refreshStaged, onDraftsChange, keyboard = physicalKeyboard,
-    helpers,
+    helpers, hasOlder,
   } = {}) {
     this.keyboard = keyboard;
+    /* Se sopra la storia a schermo ce n'e' altra da caricare (v. `place`). */
+    this.hasOlder = hasOlder || (() => false);
     this.helpers = helpers || (() => []);
     this.live = live;
     this.thread = thread;
@@ -864,7 +866,8 @@ export class HomePlan {
   }
 
   /* Dove sta la scheda: nel filo, prima del primo messaggio arrivato dopo la
-     sua ancora, o in fondo se non ce ne sono. Un piano finito si ancora alla
+     sua ancora, o in fondo se non ce ne sono. Un piano finito il cui posto non
+     e' ancora caricato resta fuori dal filo finche' non lo e'. Un piano finito si ancora alla
      sua fine. Uno vivo (proposto, in corso, in pausa, fermo su una domanda)
      all'ultima proposta o all'Approva: dopo l'Approva scende in fondo, dove lo
      stai guardando, e poi resta li' mentre i resoconti di Jenny gli scorrono
@@ -883,10 +886,21 @@ export class HomePlan {
       ? plan.updated_at
       : lastHistoryAt(plan, ['proposed', 'approved']) || plan.created_at;
     const end = Date.parse(anchor || '') || 0;
+    const messages = [...thread.querySelectorAll(':scope > .home-msg')];
+    /* Un piano finito sta dove e' finito, e quel posto puo' non essere ancora
+       a schermo: la pagina caricata e' tutta successiva alla sua fine, e sopra
+       c'e' altra storia. Li' la scheda non si mette — finiva in cima a ogni
+       pagina, e in fondo a una chat appena azzerata da `/new`, dove un piano
+       di giorni prima riempiva lo schermo (Titan, 25/11/2026). Entra quando
+       arriva la pagina con un messaggio di prima della sua fine, o quando
+       sopra non c'e' piu' niente. Un piano vivo no: quello va tenuto davanti. */
+    if (end && RAN_STATUSES.has(plan.status) && this.hasOlder()
+        && !messages.some((n) => Number(n.dataset.at) <= end)) {
+      this.card.remove();
+      return;
+    }
     /* Senza un'ora non si sa dove: in fondo, mai in cima al filo. */
-    const after = end
-      ? [...thread.querySelectorAll(':scope > .home-msg')].find((n) => Number(n.dataset.at) > end)
-      : null;
+    const after = end ? messages.find((n) => Number(n.dataset.at) > end) : null;
     const target = after || this.live;
     if (this.card.parentNode === thread && this.card.nextSibling === target) return;
     thread.insertBefore(this.card, target);

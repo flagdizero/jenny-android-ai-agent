@@ -402,6 +402,70 @@ assert.ok(card().compareDocumentPosition(mine) & Node.DOCUMENT_POSITION_FOLLOWIN
 """)
 
 
+def test_a_finished_plan_waits_for_the_page_it_ended_in() -> None:
+    """Un piano finito giorni fa non sale in cima alla pagina a schermo, e non
+    scende in fondo a una chat azzerata da ``/new``: aspetta la pagina in cui e'
+    finito. Sul Titan (25/11/2026) dopo un ``/new`` in un quaderno la scheda di
+    un piano chiuso riempiva lo schermo, e a ogni pagina caricata compariva in
+    cima per un attimo."""
+    run_home(_HEAD + """
+import { threads, hooks } from './boot.mjs';
+const ended = Date.parse('2026-10-23T12:00:00Z');
+current = plan({ status: 'done', done: 3, total: 3, updated_at: '2026-10-23T12:00:00Z',
+  steps: [step('s1', 'A', { status: 'done' }), step('s2', 'B', { status: 'done' }),
+    step('s3', 'C', { status: 'done' })] });
+open = [];
+// La pagina a schermo e' tutta di dopo, e sopra c'e' altra storia.
+threads['project:orto'] = {
+  messages: [{ role: 'user', content: 'oggi', sentAt: ended + 5000 },
+    { role: 'assistant', content: 'eccomi', turnId: 't2', sentAt: ended + 6000 }],
+  page: { before_cursor: 'c1', has_more_before: true },
+};
+// La pagina prima: quella in cui il piano e' finito, ed e' l'ultima.
+hooks.fetch = (u) => (u.pathname.endsWith('/webui-thread') && u.searchParams.get('before') === 'c1'
+  ? { ok: true, status: 200, text: async () => '', json: async () => ({
+      messages: [{ role: 'user', content: 'fai il piano', sentAt: ended - 9000 },
+        { role: 'assistant', content: 'fatto', turnId: 't1', sentAt: ended - 1000 }],
+      page: { before_cursor: null, has_more_before: false } }) }
+  : undefined);
+await toNotebook();
+const thread = document.getElementById('home-thread');
+assert.equal(thread.querySelectorAll(':scope > .home-msg').length, 2);
+assert.equal(card(), null, 'il suo posto non sta a schermo: niente scheda');
+// Il piano si rilegge: resta fuori.
+frame({ event: 'plan_changed', notebook: 'orto', plan_id: 'p1' });
+await tick(40);
+assert.equal(card(), null);
+// Arriva la sua pagina: entra fra il messaggio di prima e quello di dopo.
+await app.chat.pager.loadMore();
+await tick(20);
+const msgs = [...thread.querySelectorAll(':scope > .home-msg')];
+assert.equal(msgs.length, 4);
+assert.ok(card(), 'con la sua pagina la scheda entra');
+assert.equal(card().previousElementSibling, msgs[1], 'dopo gli ultimi messaggi di prima');
+assert.equal(card().nextElementSibling, msgs[2], 'prima del primo di dopo');
+""")
+
+
+def test_a_finished_plan_shows_when_nothing_older_is_left() -> None:
+    """Senza altra storia sopra non c'e' una pagina da aspettare: la scheda si
+    vede, in cima a quel che c'e' (o da sola, in un filo vuoto)."""
+    run_home(_HEAD + """
+import { threads } from './boot.mjs';
+const ended = Date.parse('2026-10-23T12:00:00Z');
+current = plan({ status: 'done', done: 3, total: 3, updated_at: '2026-10-23T12:00:00Z' });
+open = [];
+threads['project:orto'] = {
+  messages: [{ role: 'user', content: 'oggi', sentAt: ended + 5000 }],
+  page: { before_cursor: null, has_more_before: false },
+};
+await toNotebook();
+const thread = document.getElementById('home-thread');
+assert.ok(card(), 'niente sopra: la scheda si vede');
+assert.equal(card().nextElementSibling, thread.querySelector(':scope > .home-msg'));
+""")
+
+
 def test_a_plan_without_a_time_goes_to_the_bottom_not_the_top() -> None:
     """Senza un'ora nella storia non si sa dove ancorarla: in fondo, mai in cima."""
     run_home(_HEAD + """
