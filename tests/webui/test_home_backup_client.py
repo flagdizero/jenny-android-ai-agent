@@ -87,6 +87,8 @@ __SNAPSHOT_DETAIL__
 __SNAPSHOT_WHEN__
 
 __WHEN_TEXT__
+const STALE_DAYS = 30;
+__STALE_DAYS__
 __BACKUP_VALUE__
 __ROW_HTML__
 
@@ -97,6 +99,10 @@ class HomeBackup {
   __SET_BACKUP__
   __OPEN__
   __VALUE__
+  __STALE__
+  __WARN__
+  __COUNT_SINCE__
+  __PAINT_STALE__
   __APPLY_TRANSLATIONS__
   __RUN_EXPORT__
   __RUN_IMPORT__
@@ -132,7 +138,12 @@ def _harness() -> str:
         .replace("__TRANSLATIONS__", json.dumps({"it": it}, ensure_ascii=False))
         .replace("__T__", member(I18N_JS.read_text(encoding="utf-8"), "t"))
         .replace("__T_OR__", i18n_helpers())
-        .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay")))
+        .replace("__WHEN_TEXT__", "\n".join(function(WHEN_JS.read_text(encoding="utf-8"), n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay", "ago")))
+        .replace("__STALE_DAYS__", function(room, "staleDays"))
+        .replace("__STALE__", member(room, "stale"))
+        .replace("__WARN__", member(room, "warn"))
+        .replace("__COUNT_SINCE__", member(room, "_countSince"))
+        .replace("__PAINT_STALE__", member(room, "_paintStale"))
         .replace("__BACKUP_VALUE__", function(room, "backupValue"))
         .replace("__ROW_HTML__", function(room, "rowHtml"))
         .replace("__CTOR__", member(room, "constructor"))
@@ -413,3 +424,85 @@ def test_snapshot_dates_stay_apart_past_a_week() -> None:
     """)
 
 
+
+
+def test_an_old_file_turns_the_row_yellow_and_says_the_days() -> None:
+    """Oltre 30 giorni il file e' vecchio: la riga dice i giorni, non una data
+    («47 giorni fa»), e va colorata. Mai fatto non si colora: il primo giorno
+    sarebbe un rimprovero, e la riga dice gia' «mai»."""
+    _run_js("""
+      const old = (Date.now() - 47 * day) / 1000;
+      const s = room({ last_export_at: old });
+      assert.equal(s.stale(), 47);
+      assert.equal(s.value(), i18n.t('scope.ago.days', { n: '47' }));
+      assert.equal(s.warn(), true);
+
+      const fresh = room({ last_export_at: (Date.now() - 10 * day) / 1000 });
+      assert.equal(fresh.stale(), 0);
+      assert.equal(fresh.warn(), false);
+
+      const never = room(null);
+      assert.equal(never.stale(), 0);
+      assert.equal(never.warn(), false);
+      assert.equal(never.value(), i18n.t('home.backup.never'));
+    """)
+
+
+def test_the_room_says_how_old_and_what_would_be_lost() -> None:
+    """In cima alla stanza: da quanti giorni, quanti salvataggi locali sono
+    venuti dopo (quel che un telefono perso si porterebbe via), e il gesto."""
+    _run_js(_TAP + """
+      const exported = (NOW - 40 * day) / 1000;
+      SNAPS.list = [snap(1), snap(2), { id: 'vecchio', created_at_ms: NOW - 50 * day, trigger: 'auto' }];
+      const s = room({ last_export_at: exported });
+      const card = nodi['home-backup-stale'];
+      assert.equal(card.hidden, false);
+      assert.ok(card.innerHTML.includes(i18n.t('home.backup.stale.title', { days: 40 })), card.innerHTML);
+      assert.ok(card.innerHTML.includes(i18n.t('home.backup.stale.go')));
+      await s.open();
+      assert.ok(card.innerHTML.includes(i18n.t('home.backup.stale.since', { n: 2 })),
+        'i salvataggi dopo il file non sono contati: ' + card.innerHTML);
+
+      await click('home-backup-stale', { target: { closest: (sel) => (sel.includes('export') ? {} : null) } });
+      assert.ok(actions.includes('export'), 'Fai un file adesso non ha esportato');
+      assert.equal(card.hidden, true, 'il file appena fatto non ha spento l avviso');
+      assert.equal(s.warn(), false);
+    """)
+
+
+def test_an_unreadable_history_keeps_the_plain_sentence() -> None:
+    _run_js(_TAP + """
+      SNAPS.list = null;
+      const s = room({ last_export_at: (NOW - 40 * day) / 1000 });
+      await s.open();
+      assert.ok(nodi['home-backup-stale'].innerHTML.includes(i18n.t('home.backup.stale.sub')));
+    """)
+
+
+def test_an_extension_that_copies_by_itself_silences_the_notice() -> None:
+    """Con la copia automatica accesa un file vecchio non e' un problema. Con
+    la copia spenta l'avviso vale anche li'. L'estensione puo' colorare la riga
+    per conto suo (una copia in ritardo)."""
+    _run_js(_EXTENSION + """
+      const s = room({ last_export_at: (Date.now() - 60 * day) / 1000 });
+      ext.covers = true;
+      ext.coversBackup = function () { return this.covers; };
+      ext.warn = function () { return false; };
+      s.attachExtension(ext);
+      assert.equal(s.stale(), 0);
+      assert.equal(nodi['home-backup-stale'].hidden, true);
+      assert.equal(s.value(), 'al sicuro');
+      assert.equal(s.warn(), false);
+
+      ext.covers = false;
+      s.refresh();
+      assert.equal(s.stale(), 60);
+      assert.equal(nodi['home-backup-stale'].hidden, false);
+      assert.equal(s.value(), i18n.t('scope.ago.days', { n: '60' }));
+
+      const late = room({ last_export_at: Date.now() / 1000 });
+      ext.covers = true;
+      ext.warn = () => true;
+      late.attachExtension(ext);
+      assert.equal(late.warn(), true, 'la copia in ritardo non colora la riga');
+    """)

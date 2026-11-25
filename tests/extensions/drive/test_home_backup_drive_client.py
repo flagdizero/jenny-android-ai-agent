@@ -100,6 +100,8 @@ const HISTORY_FIRST = 8;
 __SNAPSHOT_WHEN__
 const iconHtml = (name) => `<i class="ti ti-${name}" aria-hidden="true"></i>`;
 __ROW_HTML__
+const STALE_DAYS = 30;
+__STALE_DAYS__
 __BACKUP_VALUE__
 __DRIVE_VALUE__
 __CLASS__
@@ -132,7 +134,8 @@ const on = (extra = {}) => ({ available: true, provider: 'drive', enabled_at_ms:
 """
         .replace("__IT__", json.dumps(IT, ensure_ascii=False))
         .replace("__T__", member(I18N_JS, "t"))
-        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay")))
+        .replace("__WHEN__", "\n".join(function(WHEN_JS, n) for n in ("dayOffset", "dayAndTime", "whenText", "shortDate", "nearDay", "ago")))
+        .replace("__STALE_DAYS__", function(ROOM_JS, "staleDays"))
         .replace("__LATE__", late)
         .replace("__BLOCKING__", blocking)
         .replace("__PURE__", pure)
@@ -414,3 +417,26 @@ def test_mounting_reads_the_state() -> None:
       assert.equal(nodi['home-backup-ext'].hidden, false);
     """)
 
+
+
+def test_an_old_file_matters_only_with_the_copy_off() -> None:
+    """Con la copia su Drive accesa il telefono si copia da solo ogni notte: un
+    file vecchio non e' un problema, e l'avviso del core tace. Con la copia
+    spenta il file e' di nuovo l'unica difesa, e l'avviso vale anche qui. Una
+    copia in ritardo colora la riga per conto suo."""
+    _run("""
+      const old = { last_export_at: daysAgo(47) / 1000 };
+      const { page } = await room(on({ last_success_ms: NOW - H, recent_copies_ms: [NOW - H] }), old);
+      assert.equal(page.stale(), 0);
+      assert.equal(nodi['home-backup-stale'].hidden, true);
+      assert.equal(page.warn(), false);
+
+      const off = await room({ available: true, provider: '' }, old);
+      assert.equal(off.page.stale(), 47);
+      assert.equal(nodi['home-backup-stale'].hidden, false);
+      assert.equal(off.page.warn(), true);
+      assert.equal(off.page.value(), T('scope.ago.days', { n: '47' }));
+
+      const late = await room(on({ last_success_ms: daysAgo(5), recent_copies_ms: [daysAgo(5)] }));
+      assert.equal(late.page.warn(), true, 'una copia in ritardo non colora la riga');
+    """)

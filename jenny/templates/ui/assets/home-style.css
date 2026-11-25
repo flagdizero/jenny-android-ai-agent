@@ -6089,6 +6089,13 @@ dialog.home-photo-viewer[open] { display: flex; }
 .home-row > .ti:first-child { flex: none; color: var(--accent); font-size: 18px; }
 .home-row-label { flex: 1; min-width: 0; font-size: 14px; }
 .home-row-value { flex: none; color: var(--text-muted); font-size: 13px; }
+/* Una riga che chiede attenzione (il file di backup vecchio): gialla, col
+   pallino davanti, cosi' si vede anche senza distinguere i colori. */
+.home-row-value.is-warn { color: var(--warning); }
+.home-row-value.is-warn::before {
+  content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px;
+  border-radius: 50%; background: var(--warning); vertical-align: 1px;
+}
 
 /* Tre bottoni non stanno accanto a un'etichetta su uno schermo largo 590:
    l'etichetta sale, i bottoni prendono la riga tutta. */
@@ -6450,6 +6457,21 @@ dialog.home-photo-viewer[open] { display: flex; }
 #home-backup-room .home-you-scroll { gap: 12px; }
 .home-backup-ext { padding: 14px 16px; }
 .home-backup-ext[hidden] { display: none; }
+/* Il file vecchio, in cima: da quanti giorni, cosa si perderebbe, il gesto. */
+.home-backup-stale {
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+  border-color: color-mix(in oklab, var(--warning) 65%, var(--border));
+}
+.home-backup-stale[hidden] { display: none; }
+.home-backup-stale-head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.home-backup-stale-head .ti { color: var(--warning); font-size: 19px; }
+.home-backup-stale p { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.4; }
+.home-backup-stale-go {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
+}
+.home-backup-stale-go:active { background: var(--hover); }
 .home-backup-row {
   display: grid; grid-template-columns: 24px minmax(0, 1fr) 16px; gap: 10px; align-items: center;
   width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px;

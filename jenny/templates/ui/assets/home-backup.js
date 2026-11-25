@@ -26,7 +26,7 @@
  */
 
 import { i18n } from './shared/i18n.js';
-import { dayOffset, nearDay, whenText } from './shared/when.js';
+import { ago, dayOffset, nearDay, whenText } from './shared/when.js';
 import { api } from './shared/api-client.js';
 import { escapeHtml } from './shared/utils.js';
 import { confirmDialog } from './shared/dialog.js';
@@ -48,6 +48,21 @@ export function snapshotWhen(ms, now = Date.now(), locale = i18n.locale) {
     return at.toLocaleString(locale, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   }
   return nearDay(at, { now, locale });
+}
+
+/** Dopo quanti giorni un file di backup e' «vecchio». Il file e' l'unica
+ *  difesa da un telefono perso dove non c'e' una copia automatica: la storia
+ *  locale vive sullo stesso telefono. */
+export const STALE_DAYS = 30;
+
+/** Da quanti giorni l'ultimo file e' vecchio, oppure 0: fatto da meno di
+ *  `STALE_DAYS`, o mai fatto. Mai fatto non si colora: il primo giorno
+ *  sarebbe un rimprovero, e la riga dice gia' «mai». */
+export function staleDays(backup, now = Date.now()) {
+  const when = Number(backup?.last_export_at) || 0;
+  if (!when) return 0;
+  const days = dayOffset(when * 1000, now);
+  return days > STALE_DAYS ? days : 0;
 }
 
 /** La riga che si legge senza entrare: quando l'hai esportato l'ultima volta.
@@ -81,6 +96,7 @@ export class HomeBackup {
     this.exportBtn = document.getElementById('home-backup-export');
     this.importBtn = document.getElementById('home-backup-import');
     this.historyBtn = document.getElementById('home-backup-history');
+    this.staleCard = document.getElementById('home-backup-stale');
     this.historyList = document.getElementById('home-backup-history-list');
 
     this._onExported = onExported;
@@ -92,12 +108,19 @@ export class HomeBackup {
     /* L'estensione agganciata (v. `attachExtension`), e se la sua scheda si vede. */
     this._ext = null;
     this._extShown = false;
+    /* I salvataggi locali dopo l'ultimo file (v. `_countSince`), e per quale
+       file sono stati contati. */
+    this._since = null;
+    this._sinceFor = null;
 
     this.moreToggle?.addEventListener('click', () => this._toggleMore());
     this.exportBtn?.addEventListener('click', () => this.runExport());
     this.importBtn?.addEventListener('click', () => this.runImport());
     this.historyBtn?.addEventListener('click', () => this._toggleHistory());
     this.historyList?.addEventListener('click', (e) => this._onHistoryClick(e));
+    this.staleCard?.addEventListener('click', (e) => {
+      if (e.target.closest('[data-action="export"]')) this.runExport();
+    });
   }
 
   /** Aggancia un'estensione di backup. Tutti i metodi sono facoltativi:
@@ -106,7 +129,10 @@ export class HomeBackup {
    *  - `paintRows(el)` disegna le sue righe in fondo alle «Altre opzioni»;
    *  - `value(backup, now)` la riga di «Tu e Jenny», o `null` per la nostra;
    *  - `moreOpenByDefault()` se le «Altre opzioni» partono aperte;
-   *  - `open()` la stanza si e' aperta (per rileggere uno stato).
+   *  - `open()` la stanza si e' aperta (per rileggere uno stato);
+   *  - `coversBackup(now)` se l'estensione fa gia' le copie da sola: allora
+   *    un file vecchio non e' un problema, e l'avviso tace;
+   *  - `warn(now)` se la riga di «Tu e Jenny» va colorata per conto suo.
    *
    *  Quando il suo stato cambia, l'estensione chiama `refresh()`. */
   attachExtension(ext) {
@@ -129,11 +155,49 @@ export class HomeBackup {
   open() {
     this._paint();
     this._ext?.open?.();
+    this._countSince();
   }
 
-  /** Il valore per la riga di «Tu e Jenny». */
+  /** Da quanti giorni il file e' vecchio, se conta (v. `staleDays`). Con
+   *  un'estensione che copia da sola, non conta. */
+  stale(at) {
+    const now = at || Date.now();
+    if (this._ext?.coversBackup?.(now)) return 0;
+    return staleDays(this.backup, now);
+  }
+
+  /** Il valore per la riga di «Tu e Jenny». Un file vecchio si dice in
+   *  giorni, «47 giorni fa», non con una data: e' il numero che conta. */
   value() {
-    return this._ext?.value?.(this.backup, Date.now()) || backupValue(this.backup);
+    const now = Date.now();
+    if (this.stale(now)) return ago(Number(this.backup.last_export_at), now);
+    return this._ext?.value?.(this.backup, now) || backupValue(this.backup);
+  }
+
+  /** Se la riga di «Tu e Jenny» va colorata: il file e' vecchio, o
+   *  l'estensione ha un suo motivo. */
+  warn() {
+    const now = Date.now();
+    return this.stale(now) > 0 || !!this._ext?.warn?.(now);
+  }
+
+  /* Quanti salvataggi della storia locale sono venuti dopo l'ultimo file:
+     e' quel che un telefono perso si porterebbe via. Solo con il file
+     vecchio, e una lettura fallita non dice niente invece di dire zero. */
+  async _countSince() {
+    const exported = Number(this.backup?.last_export_at) || 0;
+    if (!this.stale() || this._sinceFor === exported) return;
+    this._sinceFor = exported;
+    this._since = null;
+    try {
+      const data = await api.getSnapshotHistory(200);
+      const since = (data?.snapshots || [])
+        .filter((s) => Number(s.created_at_ms) > exported * 1000).length;
+      if (this._sinceFor === exported) this._since = since;
+    } catch (err) {
+      console.warn('home: snapshot count failed', err);
+    }
+    this._paint();
   }
 
   applyTranslations() {
@@ -231,6 +295,29 @@ export class HomeBackup {
     return rows + more;
   }
 
+  /* ── Il file vecchio ─────────────────────────────────────────────────── */
+
+  /* In cima alla stanza: da quanti giorni, cosa e' cambiato da allora, e il
+     gesto. Niente notifiche: il colore della riga e questa frase bastano. */
+  _paintStale() {
+    if (!this.staleCard) return;
+    const days = this.stale();
+    this.staleCard.hidden = !days;
+    if (!days) {
+      this.staleCard.innerHTML = '';
+      return;
+    }
+    const sub = this._since
+      ? i18n.t('home.backup.stale.since', { n: this._since })
+      : i18n.t('home.backup.stale.sub');
+    const button = backupNativeAvailable()
+      ? `<button class="home-backup-stale-go" type="button" data-action="export">${iconHtml('file-download')}<span>${escapeHtml(i18n.t('home.backup.stale.go'))}</span></button>`
+      : '';
+    this.staleCard.innerHTML = `<div class="home-backup-stale-head">${iconHtml('alert-triangle')}`
+      + `<strong>${escapeHtml(i18n.t('home.backup.stale.title', { days }))}</strong></div>`
+      + `<p>${escapeHtml(sub)}</p>${button}`;
+  }
+
   /* ── «Altre opzioni» ─────────────────────────────────────────────────── */
 
   _toggleMore() {
@@ -248,6 +335,7 @@ export class HomeBackup {
   /* ── Il disegno ──────────────────────────────────────────────────────── */
 
   _paint() {
+    this._paintStale();
     if (this.extCard) {
       this._extShown = !!this._ext?.paintCard?.(this.extCard, Date.now());
       this.extCard.hidden = !this._extShown;

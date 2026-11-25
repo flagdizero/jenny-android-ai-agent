@@ -104,6 +104,7 @@ console.warn = () => {{}};
 const painted = [];
 const room = (name) => ({{
   value: () => name,
+  warn: () => false,
   setFloating() {{}}, setName() {{}}, setSettings() {{}}, setBackup() {{}},
   setVersion(v) {{ painted.push(v ? v.current : null); }},
 }});

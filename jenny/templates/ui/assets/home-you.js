@@ -105,9 +105,13 @@ export class HomeYou {
     if (this.updatesValue) this.updatesValue.textContent = value || '';
   }
 
-  /** Quando l'hai esportato l'ultima volta, sulla riga che porta al backup. */
-  sayBackup(value) {
-    if (this.backupValue) this.backupValue.textContent = value || '';
+  /** Quando l'hai esportato l'ultima volta, sulla riga che porta al backup.
+   *  Con *warn* la riga e' gialla, col pallino: il file e' vecchio, o la
+   *  copia automatica non va. */
+  sayBackup(value, warn = false) {
+    if (!this.backupValue) return;
+    this.backupValue.textContent = value || '';
+    this.backupValue.classList?.toggle('is-warn', !!warn);
   }
 
   /** Come sta lei, sulla riga che porta da lei: «piccola · flottante». */

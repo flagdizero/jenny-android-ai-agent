@@ -1637,6 +1637,12 @@
     "backup": {
       "title": "Backup",
       "never": "never",
+      "stale": {
+        "title": "Your last backup file is {days} days old.",
+        "sub": "If you lose the phone, everything that changed since then goes with it.",
+        "since": "Since then Jenny has saved {n} times, but only on this phone: if you lose it, they go with it.",
+        "go": "Make a file now"
+      },
       "more": {
         "title": "More options",
         "file": "Copy to a file",

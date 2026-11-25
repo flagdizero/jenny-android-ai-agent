@@ -79,6 +79,24 @@ export class DriveBackupCard {
     return backupValue(backup, this.cloud, now);
   }
 
+  /** La copia su Drive e' accesa: un file vecchio non e' un problema, il
+   *  telefono si copia da solo ogni notte. Con la copia spenta, o qui non
+   *  disponibile, l'avviso del core sul file vecchio vale anche in questa
+   *  build. Finche' lo stato non e' arrivato non si sa: meglio tacere che
+   *  avvisare per sbaglio chi ha Drive acceso. */
+  coversBackup(now) {
+    if (!this.cloud) return true;
+    const kind = cloudView(this.cloud, now).kind;
+    return kind !== 'off' && kind !== 'unavailable';
+  }
+
+  /** La riga di «Tu e Jenny» gialla quando la copia chiede un gesto: in
+   *  ritardo da tre giorni, bloccata, senza password o rovinata. */
+  warn(now) {
+    if (!this.cloud) return false;
+    return ['late', 'blocked', 'nopass', 'damaged'].includes(cloudView(this.cloud, now).kind);
+  }
+
   /** Aperte da sole quando la copia su Drive qui non si puo' fare: allora la
    *  copia su file e' la strada, e non deve stare dietro un tocco in piu'. */
   moreOpenByDefault() {

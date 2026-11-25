@@ -375,7 +375,7 @@ class HomeApp {
     /* Il backup. La terza vista di `shared/backup-flow.js`; l'unica cosa nuova
        e' la data, che prima non esisteva da nessuna parte. */
     this.backupRoom = new HomeBackup({
-      onExported: () => this.you.sayBackup(this.backupRoom.value()),
+      onExported: () => this.you.sayBackup(this.backupRoom.value(), this.backupRoom.warn()),
     });
 
     /* Le stanze di un quaderno: la bacheca, il cassetto di una scheda, e una
@@ -1395,7 +1395,7 @@ class HomeApp {
     this.updatesRoom.setVersion(data?.version || null);
     this.you.sayUpdates(this.updatesRoom.value());
     this.backupRoom.setBackup(data?.backup || null);
-    this.you.sayBackup(this.backupRoom.value());
+    this.you.sayBackup(this.backupRoom.value(), this.backupRoom.warn());
   }
 
   /** La stanza di lei: com'e' fatta. Ci si arriva solo da «Tu e Jenny», che
