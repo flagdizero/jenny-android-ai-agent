@@ -236,6 +236,8 @@ export class HomeChat {
     this.onRetry = null;
     /* Chi vuole sapere quali risposte (per turno) sono a schermo: «Ho fatto». */
     this.onTurnsShown = null;
+    /* Un turno dal vivo appena chiuso, con quanto ci ha messo. */
+    this.onTurnClosed = null;
     /* Chi apre «Chi risponde» da un errore che si ripara li' (chiave
        rifiutata, credito finito, modello irraggiungibile). */
     this.onOpenModel = null;
@@ -806,6 +808,8 @@ export class HomeChat {
     this._resetTurn();
     this._announce(closing);
     if (closing?.dataset?.turn) this.onTurnsShown?.([closing.dataset.turn]);
+    /* Un turno lungo: chi vuole proporre il piano a passi (`home-plan.js`). */
+    if (closing?.isConnected) this.onTurnClosed?.(closing, latencyMs);
   }
 
   /* Le risposte del filo che sanno il loro turno: «Ho fatto» chiede i conti

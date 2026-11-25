@@ -59,6 +59,11 @@ class _Provider:
         return SimpleNamespace(content=self.reply, finish_reason="stop")
 
 
+
+# La coda della frase fissa: due cose che si fanno qui, e come chiedere il resto.
+_FALLBACK_TAIL = (" Quello che mi racconti diventa pagine, e quello che conta può stare sulla bacheca."
+                  " Chiedimi pure cos'altro si può fare qui.")
+
 @pytest.fixture(autouse=True)
 def _no_transcript(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(module, "has_webui_transcript", lambda key: False)
@@ -119,7 +124,8 @@ async def test_a_model_that_fails_still_leaves_a_greeting(tmp_path: Path, failur
     assert out["fallback"] is True
     assert out["text"] == (
         "Ciao! Questo è il nostro spazio per parlare di: "
-        "l'orto sul balcone: semine, raccolti, parassiti. Cominciamo?"
+        "l'orto sul balcone: semine, raccolti, parassiti."
+        " Quello che mi racconti diventa pagine, e quello che conta può stare sulla bacheca. Chiedimi pure cos'altro si può fare qui."
     )
     assert sessions.sessions["project:orto"].messages[0]["content"] == out["text"]
     assert len(bus.out) == 2
@@ -140,7 +146,7 @@ async def test_a_slow_model_gives_way_to_the_fixed_sentence(
 
 async def test_a_notebook_without_a_scope_line_is_named(tmp_path: Path) -> None:
     out, _, _ = await _greet(tmp_path, provider=None, scope="(no scope set)")
-    assert out["text"] == "Ciao! Questo è il nostro spazio per parlare di: orto. Cominciamo?"
+    assert out["text"] == "Ciao! Questo è il nostro spazio per parlare di: orto." + _FALLBACK_TAIL
 
 
 async def test_a_conversation_picked_up_is_not_greeted(tmp_path: Path) -> None:
@@ -211,4 +217,4 @@ async def test_the_command_reads_the_scope_line_the_user_wrote(
         get_llm=lambda: None,
     )
     out = await commands.project_greet(ctx, {"name": "grasse", "lang": "it"})
-    assert out["text"] == "Ciao! Questo è il nostro spazio per parlare di: piante grasse di casa. Cominciamo?"
+    assert out["text"] == "Ciao! Questo è il nostro spazio per parlare di: piante grasse di casa." + _FALLBACK_TAIL

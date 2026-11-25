@@ -729,6 +729,8 @@ class HomeApp {
     /* «Riprova» sotto una risposta finita in errore: rimanda la stessa
        domanda, allegati compresi, e quel che hai nel campo resta li'. Non il
        tasto Piano di allora: quella pianificazione puo' essere finita. */
+    /* Dopo un turno lungo in un quaderno, una volta: il piano a passi. */
+    this.chat.onTurnClosed = (node, latencyMs) => this.plan?.offerAfterLongTurn?.(node, latencyMs);
     this.chat.onRetry = (again) => {
       if (!again?.text && !again?.media?.length) return;
       this._sendText(again.text || '', again.media || [], again.entries || []);
