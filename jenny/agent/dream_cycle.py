@@ -37,6 +37,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -171,6 +172,22 @@ def release_dream_cycle() -> None:
     _CYCLE_IN_FLIGHT.clear()
 
 
+def cycle_in_flight() -> bool:
+    """True mentre un ciclo di Dream tiene la presa.
+
+    Per chi guarda da fuori e non deve aspettare — la stanza «Cosa ricorda di
+    te» mostra una riga invece di bloccarsi —, da qualunque thread: non prende
+    niente e non recupera prese rimaste indietro, quello resta di
+    :func:`claim_dream_cycle`.
+    """
+    return bool(_CYCLE_IN_FLIGHT)
+
+
+def _memory_workspace(store: "MemoryStore") -> Path:
+    """La radice dei file di memoria, presa come la prende ``sync_soul``."""
+    return Path(store.soul_file).parent
+
+
 
 
 # I tag con cui il Consolidator marca un fatto destinato a **restare**. Sono la
@@ -198,6 +215,7 @@ class _NoEntries:
     entries_replaced = 0
     entries_removed = 0
     entries_already_present = 0
+    entries_locked = 0
 
 
 NO_ENTRIES = _NoEntries()
@@ -244,6 +262,7 @@ def batch_was_not_consolidated(
     already_present: int = 0,
     attempted: int = 0,
     removed: int = 0,
+    locked: int = 0,
 ) -> bool:
     """True quando il cursore **non** va avanzato pur avendo il run scritto qualcosa.
 
@@ -330,6 +349,11 @@ def batch_was_not_consolidated(
     ``interval_h`` al default — durante i quali il review forzato a 2 ha la sua
     occasione di liberare spazio davvero. Poi si molla, e l'allarme di
     :func:`_alert_stuck` è già partito: l'utente lo sa.
+
+    ``locked`` sono le ``replace``/``remove`` rifiutate su una voce che l'utente
+    ha corretto (``agent/memory_locks.py``). Come ``already_present``, è un fatto
+    che ha già una decisione — quella dell'utente — e trattenere il lotto lo
+    rigiocherebbe contro lo stesso lucchetto, per sempre.
     """
     if stuck >= STUCK_IS_ALARMING:
         return False
@@ -337,7 +361,7 @@ def batch_was_not_consolidated(
         return False
     if not attempted:
         return False
-    if added or already_present:
+    if added or already_present or locked:
         return False
     if (replaced or removed) and "[correction]" in history_text:
         return False
@@ -427,12 +451,19 @@ async def take_dream_snapshot(
 
 
 def _measure(store: "MemoryStore", cfg: "DreamConfig") -> list["FileBudget"]:
-    """Report di budget dei tre file di memoria, con i tetti di *cfg*."""
+    """Report di budget dei tre file di memoria, con i tetti di *cfg*.
+
+    Le voci col lucchetto non contano (``memory_locks.budget_exemptions``), come
+    le regole dell'utente in ``SOUL.md``: sono parole sue, non di Dream.
+    """
+    from jenny.agent.memory_locks import budget_exemptions
+
     return budget_report(
         store,
         memory_chars=cfg.memory_budget_chars,
         user_chars=cfg.user_budget_chars,
         soul_chars=cfg.soul_budget_chars,
+        locked=budget_exemptions(_memory_workspace(store)),
     )
 
 
@@ -487,6 +518,13 @@ async def begin_dream_cycle(
     ha modo di prenderlo e vale ``snapshotted=False`` (v.
     :func:`take_dream_snapshot`).
     """
+    # Prima di tutto i lucchetti: una voce corretta dall'utente che la chat,
+    # l'editor o la stanza hanno cambiato dopo il ciclo scorso si ritrova qui, e
+    # il lucchetto la segue invece di rimettere la versione vecchia. Prima della
+    # misura, perché le voci col lucchetto non contano nel budget.
+    from jenny.agent.memory_locks import reassert, reconcile
+
+    reconcile(_memory_workspace(store))
     report = _measure(store, cfg)
     guard = make_write_size_guard(report)
     runs_since_review, stuck = store.get_review_state()
@@ -573,6 +611,10 @@ async def begin_dream_cycle(
         write_size_guard=guard,
         **review_kwargs,
     )
+    # Il review pass ristruttura i file interi, ed è lui a spostare più spesso
+    # una voce col lucchetto: torna al suo posto prima del turno incrementale,
+    # che altrimenti la vedrebbe sparita e la misura con lei.
+    reassert(_memory_workspace(store))
     # Si azzera solo ``runs_since_review``: il review è avvenuto, la cadenza
     # periodica riparte. ``stuck`` resta dov'è, perché dice un'altra cosa — da
     # quanti run di fila Dream non consolida — e un review appena girato non è
@@ -774,7 +816,14 @@ async def _run_dream_batch(
     # tipo è un batch personale, che è il comportamento di sempre. Il tipo del
     # batch sceglie la cassetta in cui Dream può scrivere.
     scope = getattr(batch, "scope", "personal")
-    dream_tools = store.build_dream_tools(write_size_guard=prologue.guard, scope=scope)
+    history_text = MemoryStore.dream_prompt_history(prompt)
+    # Una correzione detta in chat passa anche sulle voci col lucchetto: il
+    # lucchetto ferma il riordino di Dream, non l'utente che dice «è cambiato»
+    # (``agent/memory_locks.py``).
+    dream_tools = store.build_dream_tools(
+        write_size_guard=prologue.guard, scope=scope,
+        user_correction="[correction]" in history_text,
+    )
     # ``getattr``: il registry Dream espone ``file_states``, ma il contratto resta
     # tollerante verso registry di altra provenienza (e verso i doppi dei test).
     dream_file_states = getattr(dream_tools, "file_states", None)
@@ -791,12 +840,13 @@ async def _run_dream_batch(
     entries = getattr(dream_tools, "memory_entries", None) or NO_ENTRIES
     held_batch = advanced and batch_was_not_consolidated(
         before=before,
-        history_text=MemoryStore.dream_prompt_history(prompt),
+        history_text=history_text,
         stuck=prologue.stuck + prologue.nothing_new,
         added=entries.entries_added,
         replaced=entries.entries_replaced,
         already_present=entries.entries_already_present,
         removed=getattr(entries, "entries_removed", 0),
+        locked=_int_or_zero(getattr(entries, "entries_locked", 0)),
         # Se non ha tentato nessuna scrittura non ha mancato niente: ha deciso
         # che non c'era da scrivere.
         attempted=getattr(dream_file_states, "writes_attempted", 0),
@@ -911,9 +961,14 @@ def finish_dream_cycle(
     # sono la stessa cartella (``MemoryStore.__init__``), ma cosi' il file da
     # riparare e la cartella in cui si cercano le regole non possono
     # disaccordarsi — e' un attributo solo invece di due da tenere allineati.
+    from jenny.agent.memory_locks import reassert
     from jenny.agent.soul_rules import sync_soul
 
     sync_soul(store.soul_file.parent, store.soul_file)
+    # Lo stesso per le voci che l'utente ha corretto in ``USER.md`` e
+    # ``memory/MEMORY.md``: la verità sta in ``state.sqlite``, fuori dalla
+    # portata di Dream, e si rimette qui (``agent/memory_locks.py``).
+    reassert(_memory_workspace(store))
 
     runs_since_review += 1
     store.set_review_state(

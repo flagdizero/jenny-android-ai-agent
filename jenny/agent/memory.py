@@ -1445,8 +1445,15 @@ class MemoryStore:
         *,
         write_size_guard: Callable[[Path, str], str | None] | None = None,
         scope: str = "personal",
+        user_correction: bool = False,
     ):
         """Build the restricted tool registry used by Dream runs.
+
+        *user_correction* dice che il lotto porta una correzione detta in chat
+        (``[correction]``): allora le voci col lucchetto (``agent/memory_locks.py``)
+        cedono, e il lucchetto segue la voce nuova. Senza, ``memory`` rifiuta di
+        toccarle e la rete al confine del file annota quelle che gli strumenti di
+        file tolgono, perché ``reassert`` le rimetta.
 
         *scope* dice **su che tipo di batch** gira questo run, e cambia la
         cassetta invece del prompt (08/09/2026):
@@ -1517,7 +1524,12 @@ class MemoryStore:
         # (v. 2.4b del piano). Passandolo a tutti e quattro, qualunque cosa
         # riscriva USER.md o memory/MEMORY.md fa passare dall'archivio le voci che
         # sta per togliere, senza che nessuno debba ricordarsene.
-        entry_archiver = make_entry_archiver(workspace)
+        from jenny.agent.memory_locks import MemoryLocks
+
+        locks = MemoryLocks(workspace)
+        entry_archiver = make_entry_archiver(
+            workspace, locks=locks, yield_locks=user_correction,
+        )
         is_project_scope = scope == "project"
         editable_files = (
             [self.user_file.resolve()]
@@ -1630,6 +1642,8 @@ class MemoryStore:
             write_size_guard=write_size_guard,
             entry_archiver=entry_archiver,
             allowed_targets={"user"} if is_project_scope else None,
+            locks=locks,
+            yield_locks=user_correction,
         )
         tools.register(memory_entries)
         if is_project_scope:

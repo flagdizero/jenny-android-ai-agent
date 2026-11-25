@@ -92,6 +92,18 @@ The lines sit in the turn's runtime context, never in the system prompt: the cac
 
 The archive is read into memory once, in the background, when the app starts, and again whenever it changes. Until that first read finishes, a message recalls nothing. A name that is never written with a capital, an indirect reference ("my sister"), or a fact that never made it into `USER.md` is not recalled this way: for those Jenny still searches with `recall`, `recall_history` and `recall_chat`. When she searches with `recall`, each fact it finds is shown by its newest wording, and the line also names what its older wordings say that no live file says any more (`— in no live file any more: …`): in a chain of shorter and shorter rewrites the newest is the poorest, and the lost detail is visible without opening the entry.
 
+### Entries you corrected are locked
+
+An entry of `USER.md` or `memory/MEMORY.md` that you corrected yourself gets a lock, and Dream does not reword it. The lock is kept outside the workspace, in the app's own database, so nothing Dream can write reaches it, and the memory files carry no mark of it.
+
+- Dream's entry tool refuses to replace or remove a locked entry, and lists it as `[locked]`.
+- If a whole-file rewrite (the review pass, mostly) drops or rewords it anyway, the app puts your wording back where it was at the end of the pass, and files Dream's wording in `memory/archive/`.
+- A locked entry does not count against Dream's size budget, like the rules you gave her in `SOUL.md`.
+- A correction you tell Jenny in chat still reaches it: when the conversation Dream is reading carries a correction, the lock gives way for that pass, and moves to the new wording.
+- A change made outside Dream — in chat, in the workshop's file editor — is never undone. At the start of the next cycle the lock follows the entry that replaced it, picked by similarity, or is dropped. Similarity can pick a neighbouring entry.
+
+An entry you removed stays removed: its archived copy is marked `forgotten: yes`, recall by name and `recall` never bring it back, and if Dream proposes the same sentence again it is not written.
+
 ## Why Dream can say "nothing to process"
 
 If you run `/dream` on a chat that just started, or one that's still short, Jenny will reply that there's no conversation history to process yet. This is expected, not a bug: Dream only reads from `memory/history.jsonl`, and fresh conversations only reach that file *after* the Consolidator has compacted them (see Stage 1 above). A short, still-active chat simply hasn't produced any compacted history for Dream to read yet.
