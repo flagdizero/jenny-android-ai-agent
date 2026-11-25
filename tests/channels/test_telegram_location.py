@@ -2,7 +2,8 @@
 
 Una posizione (o venue) dall'owner viene registrata come override per-canale
 (``runtime.location``) e innesca un turno LLM col marker sintetico; col toggle
-posizione off si ricade sulla risposta di servizio "media_unsupported".
+posizione off risponde "location_off" (dice dove si accende); con coordinate
+storte resta la risposta di servizio "media_unsupported".
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from jenny.config.paths import set_workspace_dir
 from jenny.config.schema import Config, TelegramConfig
 from jenny.runtime import location
 from jenny.runtime.context import get_runtime_context
+from jenny.runtime.user_text import say
 
 
 class FakeAPI:
@@ -95,7 +97,7 @@ async def test_venue_uses_title_and_address_as_place() -> None:
     assert location._TELEGRAM["42"].place == "Piazza Maggiore, Bologna"
 
 
-async def test_toggle_off_falls_back_to_service_reply(monkeypatch) -> None:
+async def test_toggle_off_says_location_is_off(monkeypatch) -> None:
     import jenny.config.loader as loader
 
     cfg = Config()
@@ -106,13 +108,19 @@ async def test_toggle_off_falls_back_to_service_reply(monkeypatch) -> None:
     await ch._handle_update(
         _update("42", location={"latitude": 45.0, "longitude": 9.0})
     )
-    # Toggle off: niente registrazione, niente turno, solo la risposta di
-    # servizio. È il ramo ``_LOCATION_KEYS`` del canale: senza, una posizione
-    # con il toggle spento sparirebbe in silenzio.
+    # Toggle off: niente registrazione, niente turno, e una risposta che dice
+    # che la posizione è spenta e dove si accende — non il generico «non so
+    # gestire questo messaggio», che faceva pensare a un limite di Telegram.
     assert "42" not in location._TELEGRAM
     assert bus.inbound.empty()
     assert len(api.sent) == 1
-    assert "can't handle" in api.sent[0][1].lower()
+    reply = api.sent[0][1]
+    assert reply == say("telegram.location_off", language=ch._language)
+    assert "can't handle" not in reply.lower()
+    assert "Hands → Location" in reply
+    # La ricerca dei posti funziona anche a posizione spenta: la frase non
+    # deve dire il contrario.
+    assert "search" not in reply.lower()
 
 
 async def test_malformed_location_is_not_a_turn() -> None:
@@ -123,3 +131,4 @@ async def test_malformed_location_is_not_a_turn() -> None:
     assert bus.inbound.empty()
     assert "42" not in location._TELEGRAM
     assert len(api.sent) == 1
+    assert api.sent[0][1] == say("telegram.media_unsupported", language=ch._language)
