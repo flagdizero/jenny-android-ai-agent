@@ -50,7 +50,7 @@ export class HomeYou {
    *  @param onModel     la riga che porta a chi risponde.
    *  @param onUpdates   la riga che porta agli aggiornamenti.
    *  @param onBackup    la riga che porta al backup. */
-  constructor({ onWorkshop, onJenny, onModel, onUpdates, onBackup, onPeers, onReminders } = {}) {
+  constructor({ onWorkshop, onJenny, onModel, onUpdates, onBackup, onPeers, onReminders, onMemory } = {}) {
     this.el = document.getElementById('home-you');
     this.themesEl = document.getElementById('home-themes');
     this.themeLabel = document.getElementById('home-theme-label');
@@ -68,6 +68,8 @@ export class HomeYou {
     this.backupValue = document.getElementById('home-backup-value');
     this.peersLabel = document.getElementById('home-peers-label');
     this.peersValue = document.getElementById('home-peers-value');
+    this.memoryLabel = document.getElementById('home-memory-label');
+    this.memoryValue = document.getElementById('home-memory-value');
     this.remindersLabel = document.getElementById('home-reminders-label');
     this.remindersValue = document.getElementById('home-reminders-value');
     this._painted = false;
@@ -84,6 +86,8 @@ export class HomeYou {
       ?.addEventListener('click', () => onBackup?.());
     document.getElementById('home-row-peers')
       ?.addEventListener('click', () => onPeers?.());
+    document.getElementById('home-row-memory')
+      ?.addEventListener('click', () => onMemory?.());
     document.getElementById('home-row-reminders')
       ?.addEventListener('click', () => onReminders?.());
     this.themesEl?.addEventListener('click', (e) => {
@@ -123,6 +127,11 @@ export class HomeYou {
     if (this.jennyValue) this.jennyValue.textContent = value || '';
   }
 
+  /** Cosa sa di te, sulla sua riga: quante cose. */
+  sayMemory(value) {
+    if (this.memoryValue) this.memoryValue.textContent = value || '';
+  }
+
   /** I promemoria accesi, sulla loro riga: «5 attivi», «nessuno». */
   sayReminders(value) {
     if (this.remindersValue) this.remindersValue.textContent = value || '';
@@ -148,6 +157,7 @@ export class HomeYou {
     if (this.updatesLabel) this.updatesLabel.textContent = i18n.t('home.updates.title');
     if (this.backupLabel) this.backupLabel.textContent = i18n.t('home.backup.title');
     if (this.peersLabel) this.peersLabel.textContent = i18n.t('home.peers.title');
+    if (this.memoryLabel) this.memoryLabel.textContent = i18n.t('home.memory.title');
     if (this.remindersLabel) this.remindersLabel.textContent = i18n.t('home.reminders.title');
     /* Il nome del tema non si traduce — «Jenny Kyoto» e' un nome — ma la frase
        che lo racconta si', e cambia con la lingua. */

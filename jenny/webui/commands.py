@@ -326,7 +326,10 @@ async def workspace_write(ctx: CommandContext, params: Mapping[str, Any]) -> dic
         # fino a 1 MB di disco su una CPU Android sono centinaia di ms in cui il
         # gateway non risponderebbe a nessun altro (stessa ragione per cui il
         # decode dei media sta in un thread, v. ``_save_envelope_media``).
-        if base is None:
+        root = Path(ctx.get_workspace_root())
+        if _is_memory_file(root, full_path):
+            await asyncio.to_thread(_write_memory_file, root, full_path, content, base)
+        elif base is None:
             await asyncio.to_thread(write_file, full_path, content)
         else:
             await asyncio.to_thread(_write_file_unchanged, full_path, content, base)
@@ -733,7 +736,7 @@ def _lf(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _write_file_unchanged(full: Path, content: str, base: str) -> None:
+def _write_file_unchanged(full: Path, content: str, base: str, *, before=None) -> None:
     """``write_file`` solo se *full* e' ancora *base*, confronto e scrittura nello
     stesso thread (v. :func:`_write_page_unchanged` per la finestra che resta).
 
@@ -749,7 +752,40 @@ def _write_file_unchanged(full: Path, content: str, base: str) -> None:
         raise CommandError("conflict", "file changed on disk: nothing was saved") from None
     if _lf(raw) != _lf(base):
         raise CommandError("conflict", "file changed on disk: nothing was saved")
+    if before is not None:
+        before(full, content)
     write_file(full, content)
+
+
+def _write_memory_file(root: Path, full: Path, content: str, base: str | None) -> None:
+    """L'editor salva ``USER.md`` o ``memory/MEMORY.md``: prima l'archivio.
+
+    Le voci che il salvataggio toglie vanno in ``memory/archive/`` come le
+    toglie Dream; quelle cancellate senza una che le sostituisca valgono come
+    tolte dall'utente (``forgotten``), che il richiamo per nome non riporta.
+    Fino al 25/11/2026 l'editor le cancellava senza lasciare traccia.
+    """
+    from jenny.agent.memory_service import archive_hand_edit
+    from jenny.webui.workspace_files import write_file
+
+    def archive(path: Path, text: str) -> None:
+        archive_hand_edit(root, path, text)
+
+    if base is None:
+        archive(full, content)
+        write_file(full, content)
+    else:
+        _write_file_unchanged(full, content, base, before=archive)
+
+
+def _is_memory_file(root: Path, full: Path) -> bool:
+    from jenny.agent.tools.memory_entries import MEMORY_TARGETS
+
+    try:
+        resolved = full.resolve()
+        return any((root / rel).resolve() == resolved for rel in MEMORY_TARGETS.values())
+    except OSError:
+        return False
 
 
 def _write_page_unchanged(full: Path, content: str, base: str) -> None:
@@ -1567,6 +1603,8 @@ _COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
     "staged": ("jenny.webui.staged_commands", "STAGED_COMMANDS"),
     # «Usa il telefono»: la modalità e le app su «Sempre».
     "phone": ("jenny.webui.phone_commands", "PHONE_COMMANDS"),
+    # «Cosa ricorda di te»: le voci di memoria, corrette e tolte dall'utente.
+    "memory": ("jenny.webui.memory_commands", "MEMORY_COMMANDS"),
     # L'«Annulla» dopo aver tolto un promemoria.
     "cron": ("jenny.webui.cron_commands", "CRON_COMMANDS"),
 }
