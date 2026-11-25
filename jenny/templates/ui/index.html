@@ -322,6 +322,14 @@
             <span class="home-row-value" id="home-jenny-value"></span>
             <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
           </button>
+          <!-- Cosa sa di te: le voci di USER.md e i suoi appunti, come frasi, da
+               correggere o togliere (`home-memory.js`). -->
+          <button class="home-row" id="home-row-memory" type="button">
+            <i class="ti ti-notebook" aria-hidden="true"></i>
+            <span class="home-row-label" id="home-memory-label"></span>
+            <span class="home-row-value" id="home-memory-value"></span>
+            <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
+          </button>
           <!-- I promemoria della chat personale: quanti sono accesi, e dentro
                quelli chiesti da te e quelli messi da lei, con pausa e cestino
                (`home-reminders.js`). Quelli dei quaderni stanno sulle bacheche. -->
@@ -667,6 +675,11 @@
        Un menu: l'elenco delle collegate, la pagina di ognuna (parla, cosa può
        fare qui, cronologia, nome, scollega) e il collegamento di una nuova in
        tre passi. La riempie `home-peers.js`. -->
+  <!-- «Cosa ricorda di te»: la riempie `home-memory.js`. -->
+  <section class="home-memory-room" id="home-memory-room">
+    <div class="home-you-scroll" id="home-memory-body"></div>
+  </section>
+
   <!-- «Promemoria»: la riempie `home-reminders.js`. -->
   <section class="home-reminders-room" id="home-reminders-room">
     <div class="home-you-scroll" id="home-reminders-body"></div>
@@ -785,6 +798,11 @@
 <!-- Ferma o annulla una mini-me (`home-work.js`): la stessa forma del Ferma del
      piano, quindi le stesse classi del suo foglio. -->
 <dialog class="oc-sheet home-plan-sheet home-work-sheet" id="home-work-sheet">
+  <div class="oc-sheet-inner home-plan-sheet-inner"></div>
+</dialog>
+
+<!-- Correggere una voce di «Cosa ricorda di te» (`home-memory.js`). -->
+<dialog class="oc-sheet home-plan-sheet home-memory-sheet" id="home-memory-sheet">
   <div class="oc-sheet-inner home-plan-sheet-inner"></div>
 </dialog>
 

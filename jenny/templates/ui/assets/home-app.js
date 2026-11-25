@@ -38,6 +38,7 @@ import { HomeModel } from './home-model.js';
 import { HomeUpdates } from './home-updates.js';
 import { HomeWakes } from './home-wakes.js';
 import { HomeReminders } from './home-reminders.js';
+import { HomeMemory } from './home-memory.js';
 import { HomeBackup } from './home-backup.js';
 import { prepareExtensions, mountExtensions } from './shared/extensions.js';
 import { HomeYou } from './home-you.js';
@@ -131,6 +132,8 @@ const BACK_TO = {
   peers: 'settings',
   /* «Promemoria»: quelli della chat personale (`home-reminders.js`). */
   reminders: 'settings',
+  /* «Cosa ricorda di te»: le voci di memoria (`home-memory.js`). */
+  memory: 'settings',
 };
 
 /* Le stanze di un quaderno: da qui Jenny apre la chat **del quaderno**, da
@@ -308,6 +311,7 @@ class HomeApp {
       onBackup: () => this.openBackup(),
       onPeers: () => this.openPeers(),
       onReminders: () => this.openReminders(),
+      onMemory: () => this.openMemory(),
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
@@ -385,6 +389,10 @@ class HomeApp {
         this.remindersRoom.setPayload(payload);
         this.you.sayReminders(this.remindersRoom.value());
       },
+    });
+    /* «Cosa ricorda di te»: la riga dice quante cose sa di te. */
+    this.memoryRoom = new HomeMemory({
+      onChange: () => this.you.sayMemory(this.memoryRoom.value()),
     });
     /* Il backup. La terza vista di `shared/backup-flow.js`; l'unica cosa nuova
        e' la data, che prima non esisteva da nessuna parte. */
@@ -1392,6 +1400,9 @@ class HomeApp {
    *  rilettura fallita lascia a schermo quel che c'era. */
   async _openSettings() {
     this.you.open();
+    /* La riga di «Cosa ricorda di te» si scrive da sola: una lettura in
+       piu', fuori dal giro delle impostazioni. */
+    this.memoryRoom?.refresh();
     this.you.sayJenny(this.jennyRoom.value());
     const gen = this._settingsGen;
     const cached = this._settings ? await this._settings : null;
@@ -1460,6 +1471,12 @@ class HomeApp {
   openPeers({ add = false, link = null } = {}) {
     this._setView('peers');
     this.peersRoom.open({ add, link });
+  }
+
+  /** «Cosa ricorda di te». */
+  openMemory() {
+    this._setView('memory');
+    this.memoryRoom.open();
   }
 
   /** «Promemoria». */
@@ -1975,6 +1992,7 @@ class HomeApp {
        intanto e' andata avanti per conto suo. */
     if (view !== 'updates') this.updatesRoom?.close();
     if (view !== 'peers') this.peersRoom?.close();
+    if (view !== 'memory') this.memoryRoom?.close();
     if (view !== 'model') this._modelFromChat = false;
 
     if (view !== 'board' && view !== 'drawer') this.boardSheet?.close();
@@ -2053,6 +2071,7 @@ class HomeApp {
     if (this.view === 'updates') this._setHeadTitle(i18n.t('home.updates.title'));
     if (this.view === 'backup') this._setHeadTitle(i18n.t('home.backup.title'));
     if (this.view === 'reminders') this._setHeadTitle(i18n.t('home.reminders.title'));
+    if (this.view === 'memory') this._setHeadTitle(i18n.t('home.memory.title'));
     if (this.view === 'peers') {
       this._setHeadTitle(this.peersRoom?.headName() || i18n.t('home.peers.title'));
     }
@@ -3266,6 +3285,8 @@ class HomeApp {
     this.updatesRoom?.applyTranslations();
     this.backupRoom?.applyTranslations();
     this.remindersRoom?.render();
+    this.memoryRoom?.render();
+    this.you?.sayMemory(this.memoryRoom?.value());
     this.you?.sayReminders(this.remindersRoom?.value());
     this._appsTrash?.applyTranslations();
     this.staged?.applyTranslations();

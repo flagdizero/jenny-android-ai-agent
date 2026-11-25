@@ -106,6 +106,12 @@ export const rpc = {
     return send(`cron.${method}`, params);
   },
 
+  /** «Cosa ricorda di te» (`memory.list`, `.correct`, `.remove`, `.restore`):
+   *  `jenny/webui/memory_commands.py`. */
+  memory(method, params = {}) {
+    return send(`memory.${method}`, params);
+  },
+
   /** Le bozze che aspettano un tuo tocco (`staged.list`, `staged.install`,
    *  `staged.discard`): `jenny/webui/staged_commands.py`. */
   staged(method, params = {}) {
