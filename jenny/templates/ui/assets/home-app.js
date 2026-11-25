@@ -37,6 +37,7 @@ import { HomePhone } from './home-phone.js';
 import { HomeModel } from './home-model.js';
 import { HomeUpdates } from './home-updates.js';
 import { HomeWakes } from './home-wakes.js';
+import { HomeReminders } from './home-reminders.js';
 import { HomeBackup } from './home-backup.js';
 import { prepareExtensions, mountExtensions } from './shared/extensions.js';
 import { HomeYou } from './home-you.js';
@@ -128,6 +129,8 @@ const BACK_TO = {
   backup: 'settings',
   /* «Altre Jenny»: l'elenco delle collegate e il collegamento (`home-peers.js`). */
   peers: 'settings',
+  /* «Promemoria»: quelli della chat personale (`home-reminders.js`). */
+  reminders: 'settings',
 };
 
 /* Le stanze di un quaderno: da qui Jenny apre la chat **del quaderno**, da
@@ -304,6 +307,7 @@ class HomeApp {
       onUpdates: () => this.openUpdates(),
       onBackup: () => this.openBackup(),
       onPeers: () => this.openPeers(),
+      onReminders: () => this.openReminders(),
     });
     /* `jennyRoom` e non `jenny`: quella e' lei, lo sprite che cammina sul
        bordo. Questa e' la stanza che dice com'e' fatta. */
@@ -367,10 +371,20 @@ class HomeApp {
       /* Sulla pagina di una collegata la testa dice il suo nome. */
       onHead: () => { if (this.view === 'peers') this._applyHead(); },
     });
+    /* «Promemoria»: quelli della chat personale, con pausa e cestino. La riga
+       di Impostazioni dice quanti sono accesi. */
+    this.remindersRoom = new HomeReminders({
+      onChange: () => this.you.sayReminders(this.remindersRoom.value()),
+    });
     /* «Troppi risvegli»: la pastiglia sopra il campo e il foglio di chi sveglia
-       Jenny di piu'. L'elenco intero sta in officina, nel cassetto Mani. */
+       Jenny di piu'. «Tutti i promemoria» apre la stanza qui sopra, e ogni sua
+       lettura le passa l'elenco: una richiesta per tutti e due. */
     this.wakes = new HomeWakes({
-      onAll: () => api.navigate('/html-mobile/workshop.html?mode=hands'),
+      onAll: () => this.openReminders(),
+      onPayload: (payload) => {
+        this.remindersRoom.setPayload(payload);
+        this.you.sayReminders(this.remindersRoom.value());
+      },
     });
     /* Il backup. La terza vista di `shared/backup-flow.js`; l'unica cosa nuova
        e' la data, che prima non esisteva da nessuna parte. */
@@ -1448,6 +1462,12 @@ class HomeApp {
     this.peersRoom.open({ add, link });
   }
 
+  /** «Promemoria». */
+  openReminders() {
+    this._setView('reminders');
+    this.remindersRoom.open();
+  }
+
   /** «Backup». */
   openBackup() {
     this._setView('backup');
@@ -2032,6 +2052,7 @@ class HomeApp {
     if (this.view === 'model') this._setHeadTitle(i18n.t('home.model.title'));
     if (this.view === 'updates') this._setHeadTitle(i18n.t('home.updates.title'));
     if (this.view === 'backup') this._setHeadTitle(i18n.t('home.backup.title'));
+    if (this.view === 'reminders') this._setHeadTitle(i18n.t('home.reminders.title'));
     if (this.view === 'peers') {
       this._setHeadTitle(this.peersRoom?.headName() || i18n.t('home.peers.title'));
     }
@@ -3244,6 +3265,8 @@ class HomeApp {
     this.modelRoom?.applyTranslations();
     this.updatesRoom?.applyTranslations();
     this.backupRoom?.applyTranslations();
+    this.remindersRoom?.render();
+    this.you?.sayReminders(this.remindersRoom?.value());
     this._appsTrash?.applyTranslations();
     this.staged?.applyTranslations();
     this.plan?.applyTranslations();

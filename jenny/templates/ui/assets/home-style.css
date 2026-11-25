@@ -2986,6 +2986,7 @@ button.home-wakes-act:active { background: var(--active); }
 .home-model-room,
 .home-updates-room,
 .home-peers-room,
+.home-reminders-room,
 .home-backup-room {
   display: none;
   flex: 1;
@@ -2998,6 +2999,7 @@ button.home-wakes-act:active { background: var(--active); }
 .home-shell[data-view='model'] .home-model-room,
 .home-shell[data-view='updates'] .home-updates-room,
 .home-shell[data-view='peers'] .home-peers-room,
+.home-shell[data-view='reminders'] .home-reminders-room,
 .home-shell[data-view='backup'] .home-backup-room { display: flex; }
 
 /* Sei righe diventate una: da quando la chat sta dentro un pannello della
@@ -6453,6 +6455,38 @@ dialog.home-photo-viewer[open] { display: flex; }
   /* Non `#fff`: su `--error` il bianco sta a 3,6:1 nel tema di serie. */
   color: var(--on-error);
 }
+
+/* ── «Promemoria» ───────────────────────────────────────────────────────
+   Due gruppi (chiesti da te, messi da Jenny), una riga per promemoria: il
+   nome, quando e cosa succede adesso, l'interruttore della pausa e il
+   cestino. Una riga spenta (in pausa, o un singolo gia' suonato) si legge piu'
+   chiara, ma resta leggibile: e' ancora li', e si puo' riaccendere. */
+#home-reminders-room .home-you-scroll { gap: 14px; }
+.home-reminders-section { display: flex; flex-direction: column; gap: 6px; }
+.home-reminders-sec {
+  padding: 0 4px; color: var(--text-muted); font-size: 12px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.home-reminders-row { cursor: default; gap: 10px; }
+.home-reminders-row > .ti:first-child { color: var(--accent); font-size: 19px; flex: none; }
+.home-reminders-row .home-row-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.home-reminders-name { overflow-wrap: anywhere; }
+.home-reminders-when { color: var(--text-muted); font-size: 12px; line-height: 1.35; }
+.home-reminders-row.is-off .home-reminders-name { color: var(--text-muted); }
+.home-reminders-row.is-off > .ti:first-child { color: var(--text-faint); }
+.home-reminders-remove {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text-muted); font-size: 18px; cursor: pointer;
+}
+.home-reminders-remove:active { background: var(--hover); }
+.home-reminders-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 28px 16px; color: var(--text-muted); text-align: center;
+}
+.home-reminders-empty .ti { font-size: 32px; color: var(--text-faint); }
+.home-reminders-empty p { margin: 0; line-height: 1.45; }
+.home-reminders-foot { margin: 2px 4px 0; color: var(--text-muted); font-size: 12px; line-height: 1.45; }
 
 /* ── «Backup» (versione D) ────────────────────────────────────────────────
    Righe con icona, titolo e una riga che spiega: il file, il suo ripristino,

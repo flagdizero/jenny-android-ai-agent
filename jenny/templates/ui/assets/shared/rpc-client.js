@@ -100,6 +100,12 @@ export const rpc = {
     return send(`phone.${method}`, params);
   },
 
+  /** I promemoria (`cron.restore`: l'«Annulla» dopo il cestino):
+   *  `jenny/webui/cron_commands.py`. */
+  cron(method, params = {}) {
+    return send(`cron.${method}`, params);
+  },
+
   /** Le bozze che aspettano un tuo tocco (`staged.list`, `staged.install`,
    *  `staged.discard`): `jenny/webui/staged_commands.py`. */
   staged(method, params = {}) {
