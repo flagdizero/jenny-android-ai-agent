@@ -262,6 +262,22 @@ def read_row(root: Path, turn: str) -> dict[str, Any] | None:
     }
 
 
+def mark_state(root: Path, turn: str, state: str) -> None:
+    """Il turno e' stato annullato (``undone``) o rimesso (``open``) dalla casa.
+
+    Una riga che non c'e' nasce qui: un turno puo' avere toccato solo file del
+    suo registro, senza annotare altro (``end`` la crea a fine turno, ma un
+    processo ucciso a meta' puo' averla saltata).
+    """
+    if state not in {STATE_OPEN, STATE_UNDONE}:
+        raise ValueError(f"unknown turn state {state!r}")
+    with _db(root).write() as conn:
+        _ensure_row(conn, ref_for(root, turn))
+        conn.execute(
+            "UPDATE turn_work SET state = ?, undone_at = ? WHERE turn = ?",
+            (state, time.time() if state == STATE_UNDONE else None, turn))
+
+
 # -- chi annota ---------------------------------------------------------------------
 
 

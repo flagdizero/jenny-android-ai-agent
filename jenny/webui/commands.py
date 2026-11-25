@@ -130,6 +130,9 @@ class CommandContext:
     # ``get_llm``: nasce con l'agente. Senza, le RPC ``plan.*`` che muovono un
     # piano rispondono ``unavailable`` e le letture vanno allo store.
     get_plan_driver: Callable[[], Any | None] | None = None
+    # Il ``SubagentManager``, risolto a call-time: ``turn.undo`` non torna a prima
+    # di un turno mentre un aiutante di quel turno sta ancora scrivendo.
+    get_subagent_manager: Callable[[], Any | None] | None = None
 
 
 Command =Callable[[CommandContext, Mapping[str, Any]], Awaitable[dict[str, Any]]]
@@ -1569,6 +1572,8 @@ _COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
     "phone": ("jenny.webui.phone_commands", "PHONE_COMMANDS"),
     # L'«Annulla» dopo aver tolto un promemoria.
     "cron": ("jenny.webui.cron_commands", "CRON_COMMANDS"),
+    # «Ho fatto» sotto una risposta, e «Torna a prima di questo turno».
+    "turn": ("jenny.webui.turn_commands", "TURN_COMMANDS"),
 }
 
 

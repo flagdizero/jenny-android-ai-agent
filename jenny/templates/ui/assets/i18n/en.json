@@ -1838,6 +1838,27 @@
         "no": "No"
       }
     },
+    "did": {
+      "label": "Done: {what}",
+      "file": "{n} file",
+      "files": "{n} files",
+      "job": "{n} reminder",
+      "jobs": "{n} reminders",
+      "other": "{n} other thing",
+      "others": "{n} other things",
+      "working": "Still working",
+      "stillWorking": "a helper is still working",
+      "undoneLabel": "Back to before this turn",
+      "loading": "One moment…",
+      "unavailable": "I can't read what I did.",
+      "undo": "Go back to before this turn",
+      "redo": "Put it back as it was",
+      "undoneNote": "You went back to before this turn.",
+      "expired": "Too long ago: you can't go back from here any more.",
+      "workingNote": "A helper of this turn is still working: wait for her to finish.",
+      "conflict": "Something changed in the meantime: here is the list now.",
+      "failed": "That didn't work, try again."
+    },
     "reminders": {
       "title": "Reminders",
       "active": "{n} on",

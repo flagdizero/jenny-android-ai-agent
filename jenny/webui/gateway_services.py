@@ -144,6 +144,7 @@ def build_gateway_services(
             bus=bus,
             get_llm=get_llm,
             get_plan_driver=get_plan_driver,
+            get_subagent_manager=get_subagent_manager,
         ),
         session_manager=session_manager,
         get_subagent_manager=get_subagent_manager,

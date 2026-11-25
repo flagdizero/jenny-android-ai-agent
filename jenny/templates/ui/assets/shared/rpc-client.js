@@ -106,6 +106,12 @@ export const rpc = {
     return send(`cron.${method}`, params);
   },
 
+  /** «Ho fatto» e il ritorno a prima di un turno (`turn.summaries`, `.work`,
+   *  `.undo`, `.redo`): `jenny/webui/turn_commands.py`. */
+  turn(method, params = {}) {
+    return send(`turn.${method}`, params);
+  },
+
   /** Le bozze che aspettano un tuo tocco (`staged.list`, `staged.install`,
    *  `staged.discard`): `jenny/webui/staged_commands.py`. */
   staged(method, params = {}) {
