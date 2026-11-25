@@ -1912,6 +1912,7 @@
     },
     "askApp": {
       "title": "Chiedi a {name} un'app",
+      "quoted": "«{text}»",
       "example": "Fammi un'app per segnare quante ore dormo"
     },
     "peers": {

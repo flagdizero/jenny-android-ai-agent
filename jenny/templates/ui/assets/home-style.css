@@ -7139,7 +7139,9 @@ div.home-memory-text { cursor: default; }
 /* «Chiedi a Jenny un'app», in cima alla pagina App. */
 .home-ask-app {
   display: grid; grid-template-columns: 24px minmax(0, 1fr) 16px; gap: 10px; align-items: center;
-  margin: 4px 0 10px; padding: 12px 14px; border: 1px dashed var(--border-strong); border-radius: 14px;
+  /* Gli stessi 18 px di lato della ricerca sopra (`.launcher-search-row`):
+     a 0 toccava i bordi dello schermo (jenny_s22, 25/11/2026). */
+  margin: 0 18px 10px; padding: 12px 14px; border: 1px dashed var(--border-strong); border-radius: 14px;
   background: transparent; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer;
 }
 .home-ask-app[hidden] { display: none; }

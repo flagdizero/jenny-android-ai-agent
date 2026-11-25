@@ -1912,6 +1912,7 @@
     },
     "askApp": {
       "title": "Ask {name} for an app",
+      "quoted": "“{text}”",
       "example": "Make me an app to track how many hours I sleep"
     },
     "peers": {

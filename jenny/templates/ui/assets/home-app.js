@@ -870,7 +870,7 @@ class HomeApp {
     const title = document.getElementById('home-ask-app-title');
     const example = document.getElementById('home-ask-app-example');
     if (title) title.textContent = i18n.t('home.askApp.title', { name: this._personalName || DEFAULT_BOT_NAME });
-    if (example) example.textContent = `«${i18n.t('home.askApp.example')}»`;
+    if (example) example.textContent = i18n.t('home.askApp.quoted', { text: i18n.t('home.askApp.example') });
   }
 
   /* I suggerimenti di partenza: solo nella chat personale, e solo finche' non
