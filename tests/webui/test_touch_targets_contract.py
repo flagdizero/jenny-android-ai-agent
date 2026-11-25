@@ -56,3 +56,42 @@ def test_every_small_cross_reaches_24px_of_touch() -> None:
         if not re.search(r"position:\s*(relative|absolute)", base):
             problems.append(f"{sheet}: `{selector}` non contiene il suo `::after`")
     assert not problems, problems
+
+
+# I tasti piccoli della casa che si usano ogni giorno (giro UX dell'11/10/2026,
+# §9): Copia (26 px), gli interruttori (alti 22), Salva (alto 28). Per loro la
+# soglia e' quella delle linee guida Android, 44 px, non il minimo WCAG.
+_EVERYDAY = (
+    ("home-style.css", ".home-copy"),
+    ("home-style.css", ".home-switch"),
+    ("home-style.css", ".home-save"),
+)
+
+
+def _insets(halo: str) -> tuple[float, float]:
+    """(verticale, orizzontale) dell'``inset`` di un anello: uno o due valori."""
+    m = re.search(r"(?:^|[;\s])inset:\s*(-?[\d.]+)(?:px)?(?:\s+(-?[\d.]+)(?:px)?)?", halo)
+    assert m, halo
+    v = float(m.group(1))
+    h = float(m.group(2)) if m.group(2) is not None else v
+    return v, h
+
+
+def test_everyday_small_buttons_reach_44px_of_touch() -> None:
+    problems = []
+    for sheet, selector in _EVERYDAY:
+        base = _body(sheet, selector)
+        halo = _body(sheet, f"{selector}::after")
+        if not halo or "position: absolute" not in halo:
+            problems.append(f"`{selector}` non ha un'area di tocco in piu'")
+            continue
+        if not re.search(r"position:\s*(relative|absolute)", base):
+            problems.append(f"`{selector}` non contiene il suo `::after`")
+        v, h = _insets(halo)
+        height = _px(base, "height")
+        width = _px(base, "width")
+        if height is not None and height - 2 * v < 44:
+            problems.append(f"`{selector}` e' alto {height - 2 * v:.0f} px al dito")
+        if width is not None and width - 2 * h < 44:
+            problems.append(f"`{selector}` e' largo {width - 2 * h:.0f} px al dito")
+    assert not problems, problems

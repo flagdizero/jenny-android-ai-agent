@@ -269,3 +269,17 @@ def test_the_hidden_scroll_button_is_out_of_the_tab_order() -> None:
     )
     assert "visibility: visible;" in shown
     assert re.search(r"transition:[^;]*visibility 0s[;,]", shown)
+
+
+def test_the_first_run_says_its_steps_and_its_choices() -> None:
+    """Il primo avvio aveva zero attributi aria (giro UX dell'11/10/2026, §9):
+    i pallini non dicevano a che passo sei, le schede del formato non dicevano
+    quale era scelta, e i modelli erano `div` che la tastiera non raggiungeva."""
+    wizard = (ASSETS / "onboarding-wizard.js").read_text(encoding="utf-8")
+    assert 'role="progressbar"' in wizard and "onboarding.stepOf" in wizard
+    assert wizard.count('aria-pressed="${this.format ===') == 2
+    assert 'role="button" tabindex="0"' in wizard
+    assert "overlay.setAttribute('role', 'status')" in wizard
+    assert "_announceStep()" in wizard
+    for lang in ("it", "en"):
+        assert "{n}" in locale(lang)["onboarding"]["stepOf"]

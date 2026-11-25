@@ -42,6 +42,7 @@ _METHODS = (
     "_markPassing",
     "_dropPassing",
     "_turnEnd",
+    "_announce",
     "_ensureTurn",
 )
 

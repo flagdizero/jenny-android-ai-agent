@@ -798,7 +798,28 @@ export class HomeChat {
 
   _turnEnd(latencyMs) {
     this._seconds = latencyMs != null ? latencyMs : null;
+    const closing = this.turnNode;
     this._resetTurn();
+    this._announce(closing);
+  }
+
+  /** Dice a TalkBack una risposta appena finita, dal vivo.
+   *
+   *  Solo qui, a turno chiuso: durante lo streaming il testo cambia a ogni
+   *  delta, e un annuncio per delta sarebbe una raffica. Mai dalla rilettura
+   *  della storia, che non passa di qui. Il testo e' quello disegnato (niente
+   *  asterischi del markdown); una scheda o un errore si leggono come sono. */
+  _announce(node) {
+    const live = document.getElementById('home-announce');
+    if (!live || !node?.isConnected) return;
+    const text = [...node.querySelectorAll('.home-block')]
+      .map((block) => block.textContent.trim())
+      .filter(Boolean)
+      .join('\n');
+    if (!text) return;
+    /* Lo stesso testo due volte di fila non si ripeterebbe: prima si svuota. */
+    live.textContent = '';
+    window.setTimeout(() => { live.textContent = text; }, 50);
   }
 
   /** Chiude la bolla del turno in corso.

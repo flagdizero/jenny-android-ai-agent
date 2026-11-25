@@ -119,6 +119,10 @@ While detached, a floating round button ("Jump to bottom") appears with a badge 
 
 Scrolling to the very top of the chat automatically loads older history (infinite scroll upward). When the conversation on screen is too short to scroll — right after `/new`, for instance — a **Show the previous conversation** button at the top does the same.
 
+## With a screen reader
+
+In the home the conversation is a log for TalkBack, and it does not read itself out when you open it or scroll back through history. A reply Jenny has just finished is read once, as shown on screen (no markdown symbols); a mini-me's bubble announces itself, as before. The line that says the connection dropped is announced too. The small buttons you use every day — Copy under a reply, the switches, Save — answer to a 44 px touch area, larger than they look. The first-run setup says which step you are on ("Step 2 of 4"), which provider format and which model are selected, and announces the key test while it runs.
+
 ## Common errors
 
 - **"WebSocket not connected. Waiting for reconnection..."** — appears if you try to send a message while the socket is down. Wait for the status dot to turn green, or just try again shortly; reconnection is automatic.

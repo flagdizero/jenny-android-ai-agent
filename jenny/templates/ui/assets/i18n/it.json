@@ -1017,6 +1017,7 @@
     "customModelPlaceholder": "provider/nome-modello",
     "orCustomModel": "Oppure digita un nome modello personalizzato",
     "botName": "Nome assistente",
+    "stepOf": "Passo {n} di {of}",
     "launch": "Avvia",
     "next": "Avanti",
     "configuring": "Configurazione del bot...",
