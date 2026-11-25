@@ -169,7 +169,7 @@ def list_memory(workspace: Path, *, today: date | None = None) -> dict[str, Any]
 
 def _lost_by_live_entry(
     archived: list[ArchivedEntry], live_text: str, live_ids: dict[str, str],
-) -> dict[str, list[dict[str, str]]]:
+) -> dict[str, list[dict[str, Any]]]:
     """Per ogni voce viva, i nomi e i numeri che le sue formulazioni vecchie
     dicevano e che nessun file vivo dice piu'.
 
@@ -186,28 +186,34 @@ def _lost_by_live_entry(
     if not by_chain:
         return {}
     lost = lost_details(chains, live_text, only=set(by_chain))
-    out: dict[str, list[dict[str, str]]] = {}
+    # Una riga per **frase vecchia**, con tutte le parole che porta: «Metal»,
+    # «Gear» e «Solid» vengono dalla stessa formulazione, e tre righe con tre
+    # «Rimetti» che rimettono la stessa frase erano rumore (visto sui dati veri
+    # di jenny_s22 il 25/11/2026: 51 righe su 62 voci).
+    out: dict[str, list[dict[str, Any]]] = {}
     for index, details in lost.items():
         live_id = by_chain[index]
         bucket = out.setdefault(live_id, [])
-        seen = {item["word"] for item in bucket}
+        by_version = {item["id"]: item for item in bucket}
+        seen = {w for item in bucket for w in item["words"]}
         for detail in details:
             if detail.shown in seen:
                 continue
             seen.add(detail.shown)
-            bucket.append({
-                "word": detail.shown,
-                "id": detail.version.id,
-                "text": plain(detail.version.text),
-                "date": detail.version.demoted,
-            })
+            item = by_version.get(detail.version.id)
+            if item is None:
+                item = {"words": [], "id": detail.version.id,
+                        "text": plain(detail.version.text), "date": detail.version.demoted}
+                by_version[detail.version.id] = item
+                bucket.append(item)
+            item["words"].append(detail.shown)
     return out
 
 
 def _recent(
     archived: list[ArchivedEntry],
     live_ids: dict[str, str],
-    lost_by_entry: dict[str, list[dict[str, str]]],
+    lost_by_entry: dict[str, list[dict[str, Any]]],
     today: date,
 ) -> list[dict[str, Any]]:
     """«Dimenticato di recente»: tolte, cambiate, non vere, e i dettagli persi."""

@@ -1851,7 +1851,7 @@
       "emptyNotes": "No notes for now.",
       "locked": "corrected by you",
       "remove": "Remove",
-      "lost": "A rewrite lost “{word}”.",
+      "lost": "A rewrite lost: {word}.",
       "putBack": "Put back",
       "putBackDetail": "Put back the sentence with {word}",
       "recent": "Recently forgotten",

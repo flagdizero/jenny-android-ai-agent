@@ -144,15 +144,17 @@ export class HomeMemory {
     return row;
   }
 
-  /* Sotto la voce: cosa una riscrittura ha perso, e «Rimetti» per ognuno. */
+  /* Sotto la voce: cosa una riscrittura ha perso, una riga per frase vecchia
+     (con tutte le sue parole) e un «Rimetti» per riga. */
   _lost(entry) {
     const box = el('div', 'home-memory-lost');
     for (const detail of entry.lost) {
+      const words = (detail.words || [detail.word]).filter(Boolean).join(', ');
       const line = el('div', 'home-memory-lost-line');
-      line.appendChild(el('span', null, t('lost', { word: detail.word })));
+      line.appendChild(el('span', null, t('lost', { word: words })));
       const put = button('home-memory-putback', t('putBack'),
         () => this._restore(detail.id, entry.id));
-      put.setAttribute('aria-label', t('putBackDetail', { word: detail.word }));
+      put.setAttribute('aria-label', t('putBackDetail', { word: words }));
       line.appendChild(put);
       box.appendChild(line);
     }

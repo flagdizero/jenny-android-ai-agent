@@ -159,8 +159,8 @@ def test_put_back_a_lost_detail_goes_next_to_the_new_wording(ws) -> None:
     new_id = svc.correct(ws, "user", CREMONA, "Lives in Lodi", "changed")["id"]
     listed = {e["id"]: e for f in svc.list_memory(ws)["files"] for e in f["entries"]}
     lost = listed[new_id]["lost"]
-    assert {d["word"] for d in lost} >= {"Oreste"}
-    carrier = next(d for d in lost if d["word"] == "Oreste")
+    assert {w for d in lost for w in d["words"]} >= {"Oreste"}
+    carrier = next(d for d in lost if "Oreste" in d["words"])
     assert carrier["id"] == CREMONA
 
     svc.restore(ws, carrier["id"], after=new_id)
@@ -193,3 +193,17 @@ def test_a_hand_edit_of_another_file_is_ignored(ws) -> None:
     (ws / "notes.md").write_text("- a\n", encoding="utf-8")
     svc.archive_hand_edit(ws, ws / "notes.md", "")
     assert list_archived(ws / "memory") == []
+
+
+def test_lost_details_are_one_line_per_old_sentence(ws) -> None:
+    """Tre parole perse dalla stessa frase vecchia sono una riga, non tre."""
+    text = (ws / "USER.md").read_text(encoding="utf-8").replace(
+        "- Short answers", "- Plays Metal Gear Solid with Oreste")
+    (ws / "USER.md").write_text(text, encoding="utf-8")
+    old = entry_id("- Plays Metal Gear Solid with Oreste")
+    new_id = svc.correct(ws, "user", old, "Plays video games", "changed")["id"]
+    listed = {e["id"]: e for f in svc.list_memory(ws)["files"] for e in f["entries"]}
+    lost = listed[new_id]["lost"]
+    assert len(lost) == 1, lost
+    assert set(lost[0]["words"]) >= {"Metal", "Gear", "Solid"}
+    assert lost[0]["id"] == old

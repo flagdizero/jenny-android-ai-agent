@@ -1851,7 +1851,7 @@
       "emptyNotes": "Nessun appunto per ora.",
       "locked": "corretta da te",
       "remove": "Togli",
-      "lost": "Una riscrittura ha perso «{word}».",
+      "lost": "Una riscrittura ha perso: {word}.",
       "putBack": "Rimetti",
       "putBackDetail": "Rimetti la frase con {word}",
       "recent": "Dimenticato di recente",
