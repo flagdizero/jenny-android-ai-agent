@@ -18,6 +18,7 @@ import pytest
 
 from jenny.agent.tools.python_exec import PythonExecTool
 from jenny.security.network import configure_ssrf_whitelist
+from tests.support.net import loopback_as_a_server
 
 
 @pytest.fixture
@@ -138,12 +139,13 @@ async def test_a_unix_socket_is_refused(tmp_path, no_whitelist):
 async def test_an_allowed_destination_still_connects(tmp_path, listener, no_whitelist):
     """La guardia non toglie la rete: una destinazione permessa passa.
 
-    Il loopback viene aperto con ``security.ssrfWhitelist``, che è anche
-    l'eccezione che vale per ``http_get``: stessa politica, stessa porta.
+    Il loopback fa da server di fuori aperto con ``security.ssrfWhitelist``
+    (``loopback_as_a_server``), che è anche l'eccezione che vale per
+    ``http_get``: stessa politica, stessa porta.
     """
     port, _, received = listener
-    configure_ssrf_whitelist(["127.0.0.0/8"])
-    out = await _tool(tmp_path).execute(code=_open_connection(port))
+    with loopback_as_a_server():
+        out = await _tool(tmp_path).execute(code=_open_connection(port))
     assert "CONNECTED" in out, out
     assert received(1) == [b"hi"]
 

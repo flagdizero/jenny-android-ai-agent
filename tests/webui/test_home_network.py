@@ -66,7 +66,7 @@ async def test_add_and_remove_write_the_config_and_the_live_policy(config_file) 
     out = await dispatch_command(None, "network.add", {"address": "192.168.1.20", "name": "  NAS  "})
     entries = {e["entry"]: e for e in out["home_network"]["entries"]}
     assert entries["192.168.1.20/32"] == {"entry": "192.168.1.20/32", "address": "192.168.1.20",
-                                          "name": "NAS", "single": True}
+                                          "name": "NAS", "single": True, "phone": False}
     assert entries["100.64.0.0/10"]["single"] is False, "un intervallo scritto a mano si vede"
     on_disk = json.loads(config_file.read_text(encoding="utf-8"))["security"]
     assert on_disk["ssrfWhitelist"] == ["100.64.0.0/10", "192.168.1.20/32"]
@@ -115,3 +115,21 @@ async def test_the_web_switch_wants_a_boolean(config_file, value) -> None:
         await dispatch_command(None, "network.web_access", {"enabled": value})
     assert err.value.code == "bad_request"
     assert config_file.read_text(encoding="utf-8") == before
+
+
+@pytest.mark.parametrize("cidr,phone", [
+    ("127.0.0.0/8", True),
+    ("0.0.0.0/0", True),
+    ("::/0", True),
+    ("::1/128", True),
+    ("192.168.0.0/16", False),
+    ("100.64.0.0/10", False),
+    ("fd00::/8", False),
+])
+def test_a_hand_written_entry_over_the_phone_is_flagged(cidr, phone) -> None:
+    """Il pavimento viene prima della whitelist: l'officina dice che quella parte non vale."""
+    from types import SimpleNamespace
+
+    config = SimpleNamespace(security=SimpleNamespace(ssrf_whitelist=[cidr], ssrf_names={}))
+    (entry,) = hn.home_network_payload(config)["entries"]
+    assert entry["phone"] is phone

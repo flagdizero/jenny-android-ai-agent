@@ -507,6 +507,7 @@
       "hint": "{name}'s tools can't reach the addresses of your network, for safety. Here you open one at a time: the NAS, Home Assistant, another computer.",
       "empty": "No addresses: Jenny reaches nothing at home.",
       "range": "a whole range, written by hand",
+      "phoneClosed": "The phone itself stays closed: this entry does not open it.",
       "remove": "Remove {name}",
       "name": "Name",
       "namePlaceholder": "NAS",
