@@ -7121,3 +7121,17 @@ div.home-memory-text { cursor: default; }
   white-space: nowrap;
   border: 0;
 }
+
+/* Il piano a passi proposto una volta, sotto una risposta lunga in un
+   quaderno (`HomePlan.offerAfterLongTurn`): tratteggiato, come un consiglio. */
+.home-plan-offer {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 10px 12px;
+  border: 1px dashed var(--border-strong); border-radius: 12px;
+}
+.home-plan-offer p { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.4; }
+.home-plan-offer-go {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 40px;
+  padding: 0 14px; border: 1px solid var(--border); border-radius: 999px; background: transparent;
+  color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
+}
+.home-plan-offer-go:active { background: var(--hover); }

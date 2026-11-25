@@ -56,9 +56,15 @@ MAX_GREETING_CHARS = 600
 # Quanto di ``USER.md`` arriva al modello: gli serve il nome, non la biografia.
 MAX_USER_NOTES_CHARS = 1500
 
+# Dal 25/11/2026 anche la frase fissa dice due cose che si fanno in un quaderno
+# e come chiedere il resto, come il saluto del modello (``notebook_greeting.md``):
+# un quaderno si impara usandolo, con Jenny che spiega.
 FALLBACK_GREETINGS: dict[str, str] = {
-    "it": "Ciao! Questo è il nostro spazio per parlare di: {scope}. Cominciamo?",
-    "en": "Hi! This is our space to talk about: {scope}. Shall we start?",
+    "it": ("Ciao! Questo è il nostro spazio per parlare di: {scope}. Quello che mi racconti "
+           "diventa pagine, e quello che conta può stare sulla bacheca. Chiedimi pure cos'altro "
+           "si può fare qui."),
+    "en": ("Hi! This is our space to talk about: {scope}. What you tell me becomes pages, and "
+           "what matters can sit on the board. Ask me what else we can do here."),
 }
 
 _LANGUAGE_NAMES = {"it": "Italian", "en": "English"}

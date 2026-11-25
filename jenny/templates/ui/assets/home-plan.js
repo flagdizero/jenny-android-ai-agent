@@ -34,7 +34,7 @@
 import { rpc } from './shared/rpc-client.js';
 import { i18n } from './shared/i18n.js';
 import { showToast } from './shared/utils.js';
-import { el, icon } from './shared/dom.js';
+import { button, el, icon } from './shared/dom.js';
 import { closeActionSheet, openActionSheet, sheetHead, sheetRow } from './shared/sheet.js';
 import { AppState } from './shared/state.js';
 import { renderMarkdown } from './shared/markdown.js';
@@ -47,6 +47,9 @@ import { physicalKeyboard } from './home-focus.js';
  *  `proposed` no: una proposta non ha ancora toccato niente. */
 export const LIVE_STATUSES = new Set(['running', 'pausing', 'paused', 'blocked']);
 /* Chiusi dopo aver girato: hanno i registri, e la scheda resta finche' non la togli. */
+/* Un turno «lungo», dopo il quale si propone una volta il piano a passi. */
+const LONG_TURN_MS = 60_000;
+const PLAN_HINT_KEY = 'jenny.planOffer.';
 const RAN_STATUSES = new Set(['done', 'stopped', 'rolled_back']);
 /* Il composer e' spento solo mentre un passo gira: in pausa e in blocco si parla. */
 const COMPOSER_OFF = new Set(['running', 'pausing']);
@@ -676,6 +679,34 @@ export class HomePlan {
       return { plan: true, planRevise: AppState.planRevise };
     }
     return { plan: true };
+  }
+
+  /* ── Il piano a passi, proposto una volta ───────────────────────────── */
+
+  /** Dopo un turno lungo in un quaderno, la prima volta, sotto la risposta: il
+   *  piano a passi, che pochi scoprono da soli (giro UX dell'11/10/2026,
+   *  quaderni). Lo decide il codice, non il modello: il prompt gli vieta di
+   *  proporre piani (`plan/driver.py`). Una volta per quaderno; il ricordo sta
+   *  in questo telefono (`localStorage`), e' una comodita' di chi guarda. */
+  offerAfterLongTurn(node, latencyMs) {
+    const notebook = this.currentNotebook?.();
+    if (!node || !notebook || !(Number(latencyMs) >= LONG_TURN_MS)) return;
+    if (!this.toggle || this.toggle.hidden || AppState.planTurn || this._status()) return;
+    const key = `${PLAN_HINT_KEY}${notebook}`;
+    try {
+      if (window.localStorage.getItem(key)) return;
+      window.localStorage.setItem(key, String(Date.now()));
+    } catch { /* senza memoria si propone, e basta */ }
+    const box = el('div', 'home-plan-offer');
+    box.appendChild(el('p', null, t('offer.text')));
+    const go = button('home-plan-offer-go', null, () => {
+      box.remove();
+      if (!AppState.planTurn) this._setToggle(true);
+      this.composer.input?.focus?.({ preventScroll: true });
+    });
+    go.append(icon('ti-list-check'), el('span', null, t('offer.go')));
+    box.appendChild(go);
+    node.appendChild(box);
   }
 
   /* ── Il composer ─────────────────────────────────────────────────────── */

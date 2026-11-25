@@ -1133,6 +1133,10 @@
       "failed": "Non ci sono riuscita. Riprova."
     },
     "plan": {
+      "offer": {
+        "text": "Per un lavoro lungo come questo c'è il piano a passi: te lo propongo, lo approvi, e lo porto avanti un passo alla volta.",
+        "go": "Fammi un piano"
+      },
       "toggle": "Piano",
       "toggleOn": "Piano acceso: il prossimo messaggio chiede un piano",
       "toggleOff": "Chiedi un piano",

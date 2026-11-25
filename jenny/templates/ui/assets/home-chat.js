@@ -234,6 +234,8 @@ export class HomeChat {
        la risposta che non e' arrivata): riceve `{text, media, entries}`, cioe'
        la domanda intera, allegati compresi. */
     this.onRetry = null;
+    /* Un turno dal vivo appena chiuso, con quanto ci ha messo. */
+    this.onTurnClosed = null;
     /* Chi apre «Chi risponde» da un errore che si ripara li' (chiave
        rifiutata, credito finito, modello irraggiungibile). */
     this.onOpenModel = null;
@@ -801,6 +803,8 @@ export class HomeChat {
     const closing = this.turnNode;
     this._resetTurn();
     this._announce(closing);
+    /* Un turno lungo: chi vuole proporre il piano a passi (`home-plan.js`). */
+    if (closing?.isConnected) this.onTurnClosed?.(closing, latencyMs);
   }
 
   /** Dice a TalkBack una risposta appena finita, dal vivo.

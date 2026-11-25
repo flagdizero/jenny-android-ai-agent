@@ -1133,6 +1133,10 @@
       "failed": "That didn't work. Try again."
     },
     "plan": {
+      "offer": {
+        "text": "For a long job like this there's the step-by-step plan: I propose it, you approve it, and I carry it out one step at a time.",
+        "go": "Make me a plan"
+      },
       "toggle": "Plan",
       "toggleOn": "Plan on: the next message asks for a plan",
       "toggleOff": "Ask for a plan",
