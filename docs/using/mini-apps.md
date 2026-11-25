@@ -20,7 +20,7 @@ An app can still talk to Jenny (see [Directionality](#jenny-and-the-app-talk-in-
 
 ## Creating an app
 
-Apps are created only through chat — there is no app editor or "new app" button. Just ask, in your own words, in the personal chat or in a notebook's chat: "make me an app for tracking my plants", "I want to note my ETF purchases and see what the portfolio is worth".
+Apps are created only through chat — there is no app editor or "new app" button. The home's Apps page says so in a tile at the top, **Ask Jenny for an app**, which opens the chat with an example already in the field (change it before sending). Just ask, in your own words, in the personal chat or in a notebook's chat: "make me an app for tracking my plants", "I want to note my ETF purchases and see what the portfolio is worth".
 
 <p align="center"><img src="../img/apps.png" alt="A mini-app Jenny wrote on request: a meal log for a cat, with today's total and the meals" width="300"></p>
 

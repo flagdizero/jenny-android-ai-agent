@@ -82,6 +82,10 @@ Pressing **Launch** does the following, in order:
 3. Adds a localized welcome message to the chat — in English: *"Hi, I'm {assistant name} and from today I live on your smartphone. Nice to meet you!"*
 4. Signals the gateway to create and start the agent **immediately, with no app restart**. The gateway was already running (just without an agent); it picks up the new configuration and becomes usable right away.
 
+## Right after
+
+The chat opens with Jenny's welcome, and under it four suggestions: a reminder, a notebook, an app, and a reminder for when you get somewhere. A tap puts the sentence in the field without sending it, so you can change it first; they go away with your first message. The welcome stays in the chat after that.
+
 ## Interrupting the wizard
 
 - **Before pressing Launch on step 3**: nothing has been persisted yet. The phone's Back button moves one step back (and closes the restore passphrase dialog first, if it's open), but it never leaves the wizard: the only way out is closing the app, and reopening it lands you back at step 1 — you start over from scratch.

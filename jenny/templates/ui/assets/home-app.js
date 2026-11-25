@@ -732,6 +732,8 @@ class HomeApp {
       if (!again?.text && !again?.media?.length) return;
       this._sendText(again.text || '', again.media || [], again.entries || []);
     };
+    /* «Chiedi a Jenny un'app» in cima alla pagina App. */
+    this._wireAskApp();
     /* «Apri Chi risponde» sotto un errore che si ripara li'. */
     this.chat.onOpenModel = () => this.openModelFromChat();
     /* I due comandi della bacheca in testa: la lente, l'unica porta verso
@@ -835,6 +837,7 @@ class HomeApp {
     try {
       const shown = await (fresh ? this.chat.reload() : this.chat.load());
       if (shown === null) return;  // scavalcata: decide la lettura dopo
+      this._offerStarts?.();
       /* Una lettura riuscita toglie il messaggio d'errore precedente: se
          restasse, il vuoto di questa conversazione direbbe «non riesco a
          leggerla» di una storia che abbiamo appena letto. */
@@ -849,6 +852,42 @@ class HomeApp {
     } finally {
       this._threadReads -= 1;
     }
+  }
+
+  /* «Chiedi a Jenny un'app», in cima alla pagina App: apre la chat personale
+     col campo gia' riempito dall'esempio, che si puo' cambiare prima di
+     mandarlo. */
+  _wireAskApp() {
+    const tile = document.getElementById('home-ask-app');
+    if (!tile || tile.dataset.wired) return;
+    tile.dataset.wired = '1';
+    tile.addEventListener('click', () => {
+      this.openChatOver({ prefill: i18n.t('home.askApp.example') });
+    });
+  }
+
+  _paintAskApp() {
+    const title = document.getElementById('home-ask-app-title');
+    const example = document.getElementById('home-ask-app-example');
+    if (title) title.textContent = i18n.t('home.askApp.title', { name: this._personalName || DEFAULT_BOT_NAME });
+    if (example) example.textContent = `«${i18n.t('home.askApp.example')}»`;
+  }
+
+  /* I suggerimenti di partenza: solo nella chat personale, e solo finche' non
+     hai scritto niente (lo decide `HomeChat.offerStarts`). Un promemoria, un
+     quaderno, un'app e un arrivo in un posto: le quattro cose che Jenny sa
+     fare e che una chat vuota non racconta. */
+  _offerStarts() {
+    if (projectNameOf(sessionManager.currentKey)) {
+      this.chat.dropStarts?.();
+      return;
+    }
+    const items = ['reminder', 'notebook', 'app', 'arrival'].map((key) => ({
+      icon: { reminder: 'ti-alarm', notebook: 'ti-notebook', app: 'ti-apps', arrival: 'ti-map-pin' }[key],
+      label: i18n.t(`home.starts.${key}.label`),
+      text: i18n.t(`home.starts.${key}.text`),
+    }));
+    this.chat.offerStarts?.(items, (text) => this._prefill(text));
   }
 
   /* Un filo che non e' arrivato, riprovato: a visibilita', a Home, quando la
@@ -3284,6 +3323,7 @@ class HomeApp {
     this.modelRoom?.applyTranslations();
     this.updatesRoom?.applyTranslations();
     this.backupRoom?.applyTranslations();
+    this._paintAskApp();
     this.remindersRoom?.render();
     this.memoryRoom?.render();
     this.you?.sayMemory(this.memoryRoom?.value());

@@ -1890,6 +1890,29 @@
       "removed": "Reminder removed: {name}",
       "howToAdd": "A new reminder is asked for in the chat. Notebook reminders live on their boards."
     },
+    "starts": {
+      "title": "Where to start",
+      "reminder": {
+        "label": "A reminder",
+        "text": "Remind me to drink a glass of water at 4 pm"
+      },
+      "notebook": {
+        "label": "A notebook",
+        "text": "Let's open a notebook for our home recipes"
+      },
+      "app": {
+        "label": "An app",
+        "text": "Make me an app to track our household spending"
+      },
+      "arrival": {
+        "label": "When you get somewhere",
+        "text": "When I get home, remind me to water the plants"
+      }
+    },
+    "askApp": {
+      "title": "Ask {name} for an app",
+      "example": "Make me an app to track how many hours I sleep"
+    },
     "peers": {
       "title": "Other Jennys",
       "none": "none",
