@@ -87,5 +87,6 @@ No workspace checkpoint was taken for this run, so a deletion here is final. Rem
 ## Working method
 
 - Read each file in full before editing it; contents are not embedded in this prompt.
+- An entry the `memory` tool lists as `[locked]` was corrected by the user: leave it word for word. It does not count against the budget, and the app puts it back if it goes.
 - Batch the edits to one file into as few calls as possible.
 - If a file is already tight, leave it exactly as it is. **A review run that changes nothing is a valid outcome, not a failed one** — do not manufacture an edit to justify the turn.

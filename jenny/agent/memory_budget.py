@@ -16,7 +16,7 @@ contare da solo mentre compone il testo.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -56,14 +56,23 @@ class FileBudget:
     # Contate, un testo lungo dell'utente porterebbe il file oltre il tetto e
     # ogni scrittura di Dream verrebbe rifiutata.
     skip_user_rules: bool = False
+    # Per USER.md e MEMORY.md: le voci che l'utente ha corretto, che hanno il
+    # lucchetto (v. ``agent/memory_locks.py``). Non contano per la stessa
+    # ragione delle regole qui sopra: non le ha scritte Dream, e Dream non le può
+    # accorciare, quindi contarle renderebbe il tetto irraggiungibile.
+    skip_entries: frozenset[str] = frozenset()
 
     def measure(self, text: str) -> int:
         """Caratteri di *text* come li conta questo budget."""
-        return measure_text(text, skip_user_rules=self.skip_user_rules)
+        return measure_text(
+            text, skip_user_rules=self.skip_user_rules, skip_entries=self.skip_entries,
+        )
 
     def measure_now(self) -> int:
         """Caratteri del file adesso, con la stessa regola di ``chars``."""
-        return count_chars(self.path, skip_user_rules=self.skip_user_rules)
+        return count_chars(
+            self.path, skip_user_rules=self.skip_user_rules, skip_entries=self.skip_entries,
+        )
 
     @property
     def enforced(self) -> bool:
@@ -86,13 +95,19 @@ class FileBudget:
         return self.chars * 100 // self.budget
 
 
-def measure_text(text: str, *, skip_user_rules: bool = False) -> int:
+def measure_text(text: str, *, skip_user_rules: bool = False,
+                 skip_entries: Collection[str] = ()) -> int:
     """Caratteri di *text*; con *skip_user_rules* senza il blocco dell'utente.
 
     Il blocco è quello che ``soul_rules.find_block`` riconosce: gli stessi
     estremi che la proiezione riscrive, così budget e proiezione non possono
     disaccordarsi su dove finisca la parte dell'utente.
+
+    *skip_entries* sono id di voci (``memory_entries.entry_id``) che non
+    contano: le loro righe, a-capo compresi, escono dalla misura.
     """
+    if skip_entries:
+        text = _without_entries(text, skip_entries)
     if not skip_user_rules:
         return len(text)
     from jenny.agent.soul_rules import find_block
@@ -108,7 +123,26 @@ def measure_text(text: str, *, skip_user_rules: bool = False) -> int:
     return len(text[:start].rstrip() + text[end:])
 
 
-def count_chars(path: Path, *, skip_user_rules: bool = False) -> int:
+def _without_entries(text: str, ids: Collection[str]) -> str:
+    """*text* senza le righe delle voci *ids*.
+
+    Import pigro come per ``soul_rules``: il parser delle voci sta nel layer dei
+    tool, e questo modulo resta importabile senza di lui.
+    """
+    from jenny.agent.tools.memory_entries import parse_entries
+
+    skipped: set[int] = set()
+    for entry in parse_entries(text):
+        if entry.id in ids:
+            skipped.update(range(entry.start, entry.end))
+    if not skipped:
+        return text
+    lines = text.splitlines(keepends=True)
+    return "".join(line for i, line in enumerate(lines) if i not in skipped)
+
+
+def count_chars(path: Path, *, skip_user_rules: bool = False,
+                skip_entries: Collection[str] = ()) -> int:
     """Caratteri del file, ``0`` se manca o non è leggibile.
 
     ``errors="ignore"`` perché la misura non deve mai diventare il motivo per
@@ -120,7 +154,7 @@ def count_chars(path: Path, *, skip_user_rules: bool = False) -> int:
         text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return 0
-    return measure_text(text, skip_user_rules=skip_user_rules)
+    return measure_text(text, skip_user_rules=skip_user_rules, skip_entries=skip_entries)
 
 
 def _canonical(path: Path) -> Path:
@@ -150,6 +184,7 @@ def budget_report(
     memory_chars: int,
     user_chars: int,
     soul_chars: int,
+    locked: Mapping[str, Collection[str]] | None = None,
 ) -> list[FileBudget]:
     """Misura i tre file di memoria e li accoppia ai rispettivi budget.
 
@@ -157,6 +192,11 @@ def budget_report(
     tiene questo modulo indipendente dallo schema di configurazione, che vive e
     cambia altrove. Il chiamante estrae i numeri da dove preferisce; qui dentro
     non c'è nulla da riallineare quando quello schema si muove.
+
+    *locked* sono, per etichetta (``USER.md``, ``MEMORY.md``), gli id delle voci
+    col lucchetto, che la misura salta (v. ``FileBudget.skip_entries``). Arriva
+    dal chiamante per la stessa ragione dei tetti: questo modulo non apre
+    database.
 
     L'ordine della lista è quello di rendering (MEMORY, USER, SOUL) ed è parte
     del contratto: ``render_gauge`` non riordina.
@@ -166,16 +206,19 @@ def budget_report(
         ("USER.md", store.user_file, user_chars, False),
         ("SOUL.md", store.soul_file, soul_chars, True),
     )
-    return [
-        FileBudget(
+    exempt = locked or {}
+    out: list[FileBudget] = []
+    for label, path, budget, skip in specs:
+        entries = frozenset(exempt.get(label, ()))
+        out.append(FileBudget(
             label=label,
             path=path,
-            chars=count_chars(path, skip_user_rules=skip),
+            chars=count_chars(path, skip_user_rules=skip, skip_entries=entries),
             budget=max(0, budget),
             skip_user_rules=skip,
-        )
-        for label, path, budget, skip in specs
-    ]
+            skip_entries=entries,
+        ))
+    return out
 
 
 def render_gauge(report: Sequence[FileBudget], *, for_review: bool = False) -> str:

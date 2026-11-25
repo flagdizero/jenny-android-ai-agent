@@ -35,7 +35,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, Collection
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,8 +61,19 @@ from jenny.utils.helpers import clip
 from jenny.utils.path import atomic_write
 
 if TYPE_CHECKING:
+    from jenny.agent.memory_locks import MemoryLocks
     from jenny.agent.tools.context import ToolContext
     from jenny.agent.tools.filesystem import WriteSizeGuard
+
+# Una serratura per ogni lettura-modifica-scrittura **per voce** dei due file:
+# lo strumento ``memory`` di Dream (dalla lettura al commit), ``reassert`` e
+# ``reconcile`` di ``agent/memory_locks.py``, e domani il servizio della stanza
+# «Cosa ricorda di te», che gira in un thread della RPC. Senza, una delle strade
+# rilegge il file mentre l'altra lo riscrive e la sua copia vecchia vince.
+# Rientrante perché ``reassert`` può chiamare codice che la riprende. Non copre
+# gli strumenti di file interi (``edit_file``, ``apply_patch``): stanno in un
+# altro modulo, ed è la rete di ``make_entry_archiver`` a vederli.
+ENTRIES_LOCK = threading.RLock()
 
 # Nome logico → path relativo al workspace. Gli stessi nomi di
 # ``/dream budget <memory|user|soul>``: chi legge i log del comando e chi legge
@@ -444,8 +456,13 @@ def _joined(lines: list[str]) -> str:
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
-def render_entries(entries: list[Entry]) -> str:
-    """Elenco delle voci con i loro id, per la risposta del tool."""
+def render_entries(entries: list[Entry], *, locked: Collection[str] = ()) -> str:
+    """Elenco delle voci con i loro id, per la risposta del tool.
+
+    Le voci in *locked* (v. ``agent/memory_locks.py``) portano ``[locked]``
+    accanto all'id: Dream le vede prima di provare a toccarle, e il prompt dice
+    cosa vuol dire.
+    """
     if not entries:
         return "(no entries)"
     out: list[str] = []
@@ -454,7 +471,8 @@ def render_entries(entries: list[Entry]) -> str:
         if entry.heading != heading:
             heading = entry.heading
             out.append(f"## {heading}" if heading else "## (no section)")
-        out.append(f"  {entry.id}  {_summarize(entry.text)}")
+        mark = " [locked]" if entry.id in locked else ""
+        out.append(f"  {entry.id}{mark}  {_summarize(entry.text)}")
     return "\n".join(out)
 
 
@@ -540,7 +558,44 @@ def memory_erosion(workspace: Path) -> Erosion:
     return erosion(list_archived(root / "memory"), texts, live_ids)
 
 
-def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
+def _track_locks(locks: "MemoryLocks", source: str, gone: list[Entry],
+                 arrived: list[Entry], successors: dict[str, str], *,
+                 yield_locks: bool) -> None:
+    """Annota cosa è successo alle voci col lucchetto che questa scrittura toglie.
+
+    Di norma il lucchetto tiene: la riga prende ``displaced_by`` (la voce che ha
+    preso il posto, o ``-``), e ``memory_locks.reassert`` rimette la voce a fine
+    passata. Con *yield_locks* — il lotto porta una correzione detta in chat —
+    il lucchetto segue la voce nuova, o cade se nessuna l'ha sostituita.
+
+    Una voce che era già il posto di una voce spostata (Dream riscrive due volte
+    la stessa riga) passa il segno alla sua erede: ``reassert`` deve trovare la
+    voce che c'è, non quella che c'era.
+    """
+    rows = {row.entry_id: row for row in locks.rows(source)}
+    if not rows:
+        return
+    arrived_by_id = {entry.id: entry for entry in arrived}
+    for entry in gone:
+        successor = successors.get(entry.id, "")
+        if entry.id in rows:
+            if not yield_locks:
+                locks.mark_displaced(source, entry.id, successor)
+            elif successor:
+                locks.move(source, entry.id, arrived_by_id[successor])
+            else:
+                locks.unlock(source, entry.id)
+        for row in rows.values():
+            if row.displaced_by == entry.id and not yield_locks:
+                locks.mark_displaced(source, row.entry_id, successor)
+
+
+def make_entry_archiver(
+    workspace: Path,
+    *,
+    locks: "MemoryLocks | None" = None,
+    yield_locks: bool = False,
+) -> Callable[[Path, str], None]:
     """Gancio pre-scrittura che degrada le voci in uscita da un file di memoria.
 
     Perché non basta farlo dentro ``memory remove`` (v. 2.4b del piano). Il
@@ -573,6 +628,12 @@ def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
       scrittura legittima né far fallire un run: qui la degradazione è una rete,
       non una condizione. L'ordine forte — archivia, e solo allora togli — resta
       dentro ``memory remove``, dove la voce da salvare si conosce con certezza.
+
+    Con *locks* (``agent/memory_locks.py``) la rete guarda anche i lucchetti: una
+    voce corretta dall'utente che una scrittura di Dream toglie viene annotata
+    come spostata, mai rifiutata — a rimetterla ci pensa ``reassert`` a fine
+    passata. *yield_locks* è il lotto con una correzione detta in chat, dove il
+    lucchetto segue la voce nuova invece (v. :func:`_track_locks`).
     """
     root = Path(workspace)
     memory_dir = root / "memory"
@@ -613,6 +674,24 @@ def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
         gone = [entry for entry in old_entries if entry.id not in surviving]
         arrived = [entry for entry in new_entries if entry.id not in old_ids]
         successors = pair_successors(gone, arrived)
+        if locks is not None:
+            try:
+                if gone:
+                    _track_locks(
+                        locks, source, gone, arrived, successors, yield_locks=yield_locks,
+                    )
+                # Una frase che l'utente ha tolto e che Dream riscrive con uno
+                # strumento di file (``memory add`` la ferma da sé): la si annota,
+                # e ``reassert`` la toglie a fine passata. Solo qui, sulle
+                # scritture di Dream: la stessa frase rimessa dalla chat è una
+                # scelta dell'utente, e non si disfa.
+                for entry in arrived:
+                    found = find_archived(memory_dir, entry.id)
+                    archived = read_archived(found) if found is not None else None
+                    if archived is not None and archived.forgotten:
+                        locks.note_readded(source, entry.id)
+            except Exception:  # noqa: BLE001 — la rete non ferma mai una scrittura
+                logger.exception("Could not track the locked entries leaving {}", source)
         for entry in gone:
             save(entry.text, entry.heading, successors.get(entry.id, ""))
         _log_dropped_anchors(source, gone, arrived, successors)
@@ -643,8 +722,15 @@ class MemoryEntryTool(Tool):
         write_size_guard: "WriteSizeGuard | None" = None,
         entry_archiver: Callable[[Path, str], None] | None = None,
         allowed_targets: set[str] | None = None,
+        locks: "MemoryLocks | None" = None,
+        yield_locks: bool = False,
     ) -> None:
         self._workspace = Path(workspace)
+        # Le voci corrette dall'utente (``agent/memory_locks.py``): ``replace`` e
+        # ``remove`` le rifiutano, a meno che il lotto porti una correzione detta
+        # in chat (*yield_locks*), e allora il lucchetto segue la voce nuova.
+        self._locks = locks
+        self._yield_locks = yield_locks
         # Le destinazioni che *questo* montaggio del tool concede. ``None`` vuol
         # dire tutte, che e' il caso di Dream sulla conversazione personale e il
         # comportamento di sempre.
@@ -696,6 +782,11 @@ class MemoryEntryTool(Tool):
         # duplicati è indistinguibile da un batch mancato, e distinguerli
         # richiedeva una soglia di riempimento tarata a occhio.
         self.entries_already_present = 0
+        # Una ``replace``/``remove`` rifiutata perché la voce ha il lucchetto.
+        # Non è un tentativo di scrittura (il rifiuto arriva prima di contarlo),
+        # e ``batch_was_not_consolidated`` non trattiene un lotto per questo:
+        # rigiocarlo incontrerebbe lo stesso lucchetto.
+        self.entries_locked = 0
 
     @property
     def name(self) -> str:
@@ -794,8 +885,55 @@ class MemoryEntryTool(Tool):
             headline,
             f"{MEMORY_TARGETS[file]}: {len(text):,} chars, {len(entries)} entries",
             "",
-            render_entries(entries),
+            render_entries(entries, locked=self._locked(file)),
         ])
+
+    def _locked(self, file: str) -> frozenset[str]:
+        """Gli id col lucchetto in *file*; un database illeggibile ne dà nessuno.
+
+        Nessuno e non un rifiuto: il lucchetto protegge una correzione, ma un
+        guasto del database non deve fermare il consolidamento di tutto il resto.
+        Lo dice il log.
+        """
+        if self._locks is None:
+            return frozenset()
+        try:
+            return self._locks.locked_ids(MEMORY_TARGETS[file])
+        except Exception:  # noqa: BLE001 — v. la docstring
+            logger.opt(exception=True).warning("memory tool: locks unreadable, none applied")
+            return frozenset()
+
+    def _move_lock(self, file: str, old: Entry, new: Entry | None) -> None:
+        """Il lucchetto cede a una correzione: segue *new*, o cade se non c'è."""
+        if self._locks is None:
+            return
+        source = MEMORY_TARGETS[file]
+        try:
+            if new is not None:
+                self._locks.move(source, old.id, new)
+            else:
+                self._locks.unlock(source, old.id)
+        except Exception:  # noqa: BLE001 — ``reconcile`` lo ritrova al ciclo dopo
+            logger.opt(exception=True).warning(
+                "memory tool: could not move the lock of {} in {}", old.id, source,
+            )
+            return
+        logger.info(
+            "memory tool: locked entry {} in {} yields to a correction ({})",
+            old.id, source, f"now {new.id}" if new is not None else "lock dropped",
+        )
+
+    def _lock_refusal(self, file: str, action: str, entry: Entry) -> str:
+        self.entries_locked += 1
+        logger.info(
+            "memory tool: {} of locked entry {} in {} refused",
+            action, entry.id, MEMORY_TARGETS[file],
+        )
+        return (
+            f"Cannot {action} {entry.id} in {MEMORY_TARGETS[file]}: it is locked, because "
+            "the user corrected it themselves. Leave it exactly as it is and go on with the "
+            "rest; this refusal does not hold the batch."
+        )
 
     @staticmethod
     def _facts(kwargs: dict[str, Any]) -> list[str]:
@@ -918,6 +1056,12 @@ class MemoryEntryTool(Tool):
                 f"{' or '.join(MEMORY_TARGETS[t] for t in sorted(self._allowed_targets))} "
                 f"has no other home here, and should be left out."
             )
+        # Dalla lettura al commit sotto la stessa serratura di ``reassert`` e
+        # della stanza: il testo letto qui è quello che si riscrive.
+        with ENTRIES_LOCK:
+            return self._run(action, file, kwargs)
+
+    def _run(self, action: str, file: str, kwargs: dict[str, Any]) -> str:
         path = self._path(file)
         text = self._read(path)
 
@@ -934,6 +1078,12 @@ class MemoryEntryTool(Tool):
 
         if action == "replace":
             target = str(kwargs.get("target") or "")
+            old_entry, _ = find_entry(parse_entries(text), target)
+            # Il lucchetto prima di tutto il resto, e prima che il tentativo si
+            # conti: un rifiuto qui non è una scrittura mancata.
+            locked = old_entry is not None and old_entry.id in self._locked(file)
+            if old_entry is not None and locked and not self._yield_locks:
+                return self._lock_refusal(file, "replace", old_entry)
             new_text, why = replace_entry(text, target, str(kwargs.get("text") or ""))
             if why:
                 return f"Cannot replace in {MEMORY_TARGETS[file]}: {why}"
@@ -945,14 +1095,22 @@ class MemoryEntryTool(Tool):
             # del file (``_commit``) vedrebbe solo una voce sparita e una comparsa.
             # Dopo il controllo del budget, perché una sostituzione rifiutata
             # lascia la voce viva e non deve figurare come sostituita.
-            old_entry, _ = find_entry(parse_entries(text), target)
-            after = {e.id for e in parse_entries(new_text)}
+            new_entries = parse_entries(new_text)
+            after = {e.id for e in new_entries}
             if old_entry is not None and old_entry.id not in after:
                 replaced_by = after - {e.id for e in parse_entries(text)}
+                successor = next(iter(replaced_by), "")
                 # Un archivio che non si scrive non ferma la sostituzione: la rete
                 # in ``_commit`` riprova senza legame, come per ogni altra scrittura.
                 with suppress(OSError):
-                    self._demote(file, old_entry, superseded_by=next(iter(replaced_by), ""))
+                    self._demote(file, old_entry, superseded_by=successor)
+                if locked:
+                    # Il lotto porta una correzione: il lucchetto segue la voce
+                    # nuova. Prima del commit, così la rete al confine del file la
+                    # trova già spostata e non la annota come tolta da Dream.
+                    self._move_lock(file, old_entry, next(
+                        (e for e in new_entries if e.id == successor), None,
+                    ))
             self._commit(path, new_text)
             self.entries_replaced += 1
             return self._report(file, path, "Replaced.")
@@ -961,6 +1119,9 @@ class MemoryEntryTool(Tool):
             new_text, why, entry = remove_entry(text, str(kwargs.get("target") or ""))
             if why or entry is None:
                 return f"Cannot remove from {MEMORY_TARGETS[file]}: {why}"
+            locked = entry.id in self._locked(file)
+            if locked and not self._yield_locks:
+                return self._lock_refusal(file, "remove", entry)
             # Prima l'archivio, poi la rimozione — l'ordine è la garanzia. È la
             # stessa regola che il prompt del review pass insegna per spostare un
             # fatto ("scrivi la destinazione, conferma, poi cancella l'origine"),
@@ -986,6 +1147,9 @@ class MemoryEntryTool(Tool):
                 # perché quella è una proprietà del guard, non di questo tool, e
                 # ingoiare un rifiuto direbbe "rimossa" su un file intatto.
                 return refusal
+            if locked:
+                # Una correzione ha tolto la voce: il lucchetto cade con lei.
+                self._move_lock(file, entry, None)
             self.entries_removed += 1
             return self._report(
                 file, path, f"Removed {entry.id}. Kept in the archive as {archived.name}.",

@@ -120,6 +120,7 @@ USER.md and memory/MEMORY.md are lists of facts, and you change them one fact at
 - **Propose the whole batch in one call.** `add` takes `texts`, a list: put every fact you want saved for this file in it. The answer says, fact by fact, whether it was added or was already there.
 - **Do not read the file first to work out what is new.** Propose everything and let the answer tell you — that is what it is for, and a fact you decided not to propose leaves no trace that it was ever considered. Use `list` when you need the id of an entry you intend to `replace` or `remove`.
 - An entry already in the file costs nothing to propose: it is reported as already present and nothing is written.
+- An entry the tool lists as `[locked]` was corrected by the user: leave it word for word. It does not count against the budget, and only a `[correction]` in this batch may change it.
 
 SOUL.md and `skills/<name>/SKILL.md` have no entry tool — they are prose with a structure, not lists.
 
