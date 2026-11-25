@@ -145,8 +145,12 @@ class Scenario:
     nonces: tuple[str, ...] = ("n",)
 
     def render(self, text: str, nonces: Mapping[str, str]) -> str:
+        # ``{N}`` e' il nonce di ``{n}`` con l'iniziale maiuscola: un nome proprio,
+        # che il codice riconosce come tale (``jenny/agent/anchors.py``), mentre
+        # l'utente lo scrive minuscolo come sul telefono.
         for key, value in nonces.items():
             text = text.replace("{" + key + "}", value)
+            text = text.replace("{" + key.upper() + "}", value[:1].upper() + value[1:])
         return text
 
 

@@ -69,11 +69,14 @@ _DF_FLOOR = 8
 _DF_SHARE = 0.05
 
 #: La riga di testa del blocco: la cerca anche il conteggio nella cronologia.
+#: «Answer from it directly» è la stessa frase del diario (``diary_section.md``):
+#: senza, sull'emulatore il modello cercava lo stesso con ``recall`` e, fra i
+#: risultati larghi («amico», «città»), prendeva un altro amico (25/11/2026, 2 giri su 3).
 HEADER = (
     "Older wordings from your own memory archive about what this message names. "
+    "What a line states, you know: answer from it directly, without searching for it. "
     "They are dated and may be out of date: what your memory files say now, a later "
-    "line, or what the user says now wins. Use them only if the conversation needs "
-    "them, and never recite them."
+    "line, or what the user says now wins. Never recite them unprompted."
 )
 #: In un quaderno: sono fatti della persona, non materiale del quaderno.
 NOTEBOOK_NOTE = (
