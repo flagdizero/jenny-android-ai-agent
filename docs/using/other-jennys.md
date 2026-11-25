@@ -91,7 +91,7 @@ You can tell the line is passed by three things. The row of pages at the top is 
 
 **When she doesn't answer.** Your message waits, the head says *not answering*, and a strip above the field offers **Retry** and **Back to Jenny**. What you wrote leaves when she is back.
 
-**The permission.** It is off until you turn it on, on the phone that *receives*: **Settings → Other Jennys → Can pass the line here** for that Jenny. Whoever holds the other phone can then do on this one what you could do by typing here, so turn it on only between phones that are both yours. Turning it off closes a line that is open.
+**The permission.** It is off until you turn it on, on the phone that *receives*: **Settings → Other Jennys**, tap that Jenny, then **Pass the line here**. Whoever holds the other phone can then do on this one what you could do by typing here, so turn it on only between phones that are both yours. Turning it off closes a line that is open.
 
 The line can also be passed from Telegram: the other Jenny's replies arrive with her name in front, and `/torna` brings you back.
 

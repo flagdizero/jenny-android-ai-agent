@@ -1811,9 +1811,7 @@
       "emptyTitle": "Nessun'altra Jenny",
       "emptyBody": "Se hai Jenny su un altro telefono, collegale: le fai domande, o le parli direttamente da qui.",
       "add": "Collega un'altra Jenny",
-      "more": "File, cronologia, scollega: in officina",
-      "talk": "Parla",
-      "computer": "opencode",
+      "computer": "computer",
       "computerNote": "Risponde e basta: non chiede niente a questa Jenny, quindi qui non ci sono permessi.",
       "line": "Può passare la linea qui",
       "lineSub": "Da {name} parli con questa Jenny",
@@ -1838,7 +1836,73 @@
         "repair": "da ricollegare",
         "unreachable": "non risponde",
         "seen": "vista {time}",
-        "never": "mai vista"
+        "never": "mai vista",
+        "seenComputer": "visto {time}"
+      },
+      "intro": "Le tue Jenny sugli altri telefoni e sul computer. Tocca una per parlarle o per decidere cosa può fare qui.",
+      "sec": {
+        "linked": "Collegate",
+        "add": "Aggiungi",
+        "phone": "Questo telefono",
+        "link": "Collegamento"
+      },
+      "addSub": "Con un QR, in un minuto",
+      "net": {
+        "label": "Tailscale",
+        "on": "attivo",
+        "off": "non attivo",
+        "offSub": "Finché non torna su, le altre Jenny non si raggiungono.",
+        "note": "Le Jenny si parlano su Tailscale, la tua rete privata: deve essere attivo sui due lati."
+      },
+      "uses": {
+        "title": "Cosa ci fai con un'altra Jenny",
+        "short": "Cosa ci fai",
+        "note": "Lo chiedi a parole, in chat. Cosa può fare qui lo decidi nella sua pagina.",
+        "ask": "Le fai una domanda",
+        "askSay": "«chiedi a {name} se è arrivata la mail»",
+        "act": "Le chiedi di fare una cosa",
+        "actSay": "«chiedi a {name} di ricordarmelo lunedì»",
+        "line": "Le parli direttamente da qui",
+        "lineSay": "«passami {name}»"
+      },
+      "defaultExample": "Lavoro",
+      "talkTo": "Parla con {name}",
+      "perm": {
+        "title": "Cosa può fare qui",
+        "line": "Passare la linea qui",
+        "files": "Ricevere file da qui",
+        "filesSub": "Solo quelli che questa Jenny allega"
+      },
+      "history": "Cronologia",
+      "queued": "{count} in attesa",
+      "ping": "Prova il collegamento",
+      "pingSent": "Prova inviata a {name}",
+      "rename": "Cambia nome",
+      "unlink": "Scollega {name}",
+      "unlinkTitle": "Scollegare {name}?",
+      "unlinkBody": "Le due Jenny smettono di parlarsi. Se l'altra è raggiungibile, si scollega anche lei; per ricollegarle serve un codice nuovo.",
+      "unlinked": "Collegamento con {name} tolto",
+      "repair": {
+        "title": "Da ricollegare",
+        "body": "Questo telefono non ha più la chiave del collegamento: succede dopo un ripristino. Collegale di nuovo: nome e permessi restano.",
+        "go": "Ricollega"
+      },
+      "down": {
+        "title": "Non risponde",
+        "body": "Controlla che l'altro telefono sia acceso e con Tailscale attivo.",
+        "bodyComputer": "Controlla che il computer sia acceso, con Tailscale attivo e opencode aperto.",
+        "bodyHere": "Tailscale non è attivo su questo telefono: finché non torna su, da qui non si raggiunge.",
+        "queued": "In attesa: {count}. Partono da soli appena torna.",
+        "retry": "Riprova adesso"
+      },
+      "ago": {
+        "now": "un attimo fa",
+        "date": "il {date}"
+      },
+      "back": {
+        "list": "torna alle altre Jenny",
+        "peer": "torna a {name}",
+        "add": "torna al passo prima"
       },
       "addLead": "Tieni vicino l'altro telefono. Tutti e due devono essere su Tailscale.",
       "showQr": "Mostra il QR qui",

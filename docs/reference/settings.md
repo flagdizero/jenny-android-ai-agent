@@ -69,14 +69,22 @@ She always docks on the right edge. That is not a setting.
 
 The Jennys on your other phones, and your computer if it is linked ([Your other Jenny](../using/other-jennys.md)). The row shows their names.
 
+The room is a list: one row per linked Jenny, with her name and when she was last seen, or that she is not answering. Below it are **Link another Jenny** (three steps: show the QR here or type the other one's code; then her name and two switches) and whether Tailscale is on on this phone. Tap a Jenny to open her page:
+
 | Control | Effect | Default |
 |---|---|---|
-| **Talk** | Passes the line to that Jenny and takes you to the chat. | — |
-| **Can pass the line here** | From her phone you write straight to this Jenny, with the same powers as when you write here (`line`). | Off |
+| **Talk to …** | Passes the line to that Jenny and takes you to the chat. It stays available when she is not answering: what you write leaves when she is back. | — |
+| **Pass the line here** | From her phone you write straight to this Jenny, with the same powers as when you write here (`line`). | Off |
 | **Questions and requests** | One level out of four: *nothing*, *questions only*, *asks first*, *does everything*. It writes `canAsk` and `act` together. | questions only |
-| **Link another Jenny** | Three steps: show the QR here or type the other one's code; then her name, and the two switches above. | — |
+| **Get files from here** | Her answers can carry a file this Jenny attaches (`sendFiles`). | Off |
+| **History** | What passed between the two, and the requests to act that arrived from her, each with **Undo** while what it touched can still be put back. The row says how many messages are waiting to leave. | — |
+| **Test the link** | Sends her a test message; her state updates when she answers. | — |
+| **Change name** | The name you say in chat ("pass me Work"). | — |
+| **Unlink …** | Asks first, then removes the link on both sides if she is reachable. Linking again needs a new code. | — |
 
-A linked computer shows only **Talk**. Files in answers, the history and unlinking are in the workshop: [Hands → Other Jennys](#other-jennys-1).
+A Jenny that is not answering says so at the top of her page, with what to check and **Try again now**. One that *needs relinking* (after a restore) offers **Relink**: her name and permissions stay. A linked computer has no permissions to give: it only answers.
+
+Two finer permissions are only in the workshop: confirming phone use from her phone, and the two-line summary after a line. See [Hands → Other Jennys](#other-jennys-1).
 
 ### Updates
 
@@ -263,7 +271,7 @@ Each linked Jenny is a row with its state (*Last contact*, *Not reachable*, *N w
 | **Can ask me questions** | That Jenny can ask this one questions, answered in a read-only turn (`canAsk`). | On |
 | **Answers can carry files** | Answers to that Jenny can attach files, up to 3 of 20 MB (`sendFiles`). | Off |
 | **Can ask me to do things** | `act`: **No**, **Yes, but ask me before sending anything out** (opening a page, downloading, a command on one of your servers or network access from code waits for **Allow** on a notification), or **Yes, everything**. | No |
-| **Can pass the line here** | From her phone you write straight to this Jenny, with the same powers as when you write here (`line`). Also in the house: **Settings → Other Jennys**. | Off |
+| **Can pass the line here** | From her phone you write straight to this Jenny, with the same powers as when you write here (`line`). Also in the house: **Settings → Other Jennys**, on her page. | Off |
 | **Leaves a two-line summary** | When a line from that Jenny closes, this one sends her two lines on what was said (`lineTrace`). | On |
 | **History** | Opens the list of questions, answers, files, tests and decisions, in both directions. Above it, **Requests to act**: the latest requests from that Jenny with their state (*In progress*, *Still working on it*, *Done*, *Refused*, *Undone*…) and **Undo**. | — |
 

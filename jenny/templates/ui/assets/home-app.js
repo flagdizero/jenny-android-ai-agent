@@ -359,7 +359,8 @@ class HomeApp {
         this.line.status = { ...status, line: this.line.line };
         this.line.apply();
       },
-      onWorkshop: () => api.navigate('/html-mobile/workshop.html?mode=hands'),
+      /* Sulla pagina di una collegata la testa dice il suo nome. */
+      onHead: () => { if (this.view === 'peers') this._applyHead(); },
     });
     /* «Troppi risvegli»: la pastiglia sopra il campo e il foglio di chi sveglia
        Jenny di piu'. L'elenco intero sta in officina, nel cassetto Mani. */
@@ -1992,7 +1993,9 @@ class HomeApp {
     if (this.view === 'model') this._setHeadTitle(i18n.t('home.model.title'));
     if (this.view === 'updates') this._setHeadTitle(i18n.t('home.updates.title'));
     if (this.view === 'backup') this._setHeadTitle(i18n.t('home.backup.title'));
-    if (this.view === 'peers') this._setHeadTitle(i18n.t('home.peers.title'));
+    if (this.view === 'peers') {
+      this._setHeadTitle(this.peersRoom?.headName() || i18n.t('home.peers.title'));
+    }
     this._applyPath(notebook);
     this._applyBackLabel();
   }
@@ -2010,6 +2013,9 @@ class HomeApp {
     /* Il percorso della pagina dice da quale cassetto viene: «Acero › travaso
        acero». Sei sempre a un tocco dal riassunto e a due dalla bacheca. */
     if (this.view === 'reader') root = this._readerCard ? this._cardTitle || notebook || '' : notebook || '';
+    /* La pagina di una collegata e' della stanza «Altre Jenny», non delle
+       Impostazioni: «Altre Jenny › Lavoro». */
+    if (this.view === 'peers' && this.peersRoom?.headName()) root = i18n.t('home.peers.title');
     if (this.pathRootName) this.pathRootName.textContent = root;
     this._paintDot(this.pathRootDot, this.view === 'drawer' || this.view === 'reader' ? color : null);
     this._paintDot(this.headDot, this.view === 'board' ? color : null);
@@ -2028,6 +2034,10 @@ class HomeApp {
    *  freccia; dalla bacheca porta **all'elenco** dei Quaderni (deciso con
    *  l'utente il 26/09/2026). */
   goToPathRoot() {
+    if (this.view === 'peers' && this.peersRoom?.headName()) {
+      this.peersRoom.toList();
+      return true;
+    }
     if (this.view === 'reader' && this._readerCard) return this.goBackOneRoom();
     if (this.view === 'reader' || this.view === 'drawer') {
       if (this.view === 'reader' && !this._setView('board', () => this.goToPathRoot())) return true;
@@ -2046,7 +2056,9 @@ class HomeApp {
      sceglie la stessa tabella che decide il salto, quindi le due non possono
      divergere. Fino al 26/09/2026 era scritta a schermo, come occhiello. */
   _applyBackLabel() {
-    this.backBtn?.setAttribute('aria-label', i18n.t(`home.back.${this._backLabelKey()}`));
+    /* Dentro «Altre Jenny» la freccia fa un passo nella stanza, e lo dice lei. */
+    const inside = this.view === 'peers' ? this.peersRoom?.backLabel() : null;
+    this.backBtn?.setAttribute('aria-label', inside || i18n.t(`home.back.${this._backLabelKey()}`));
   }
 
   /* Dove porta davvero la freccia. «Torna alla chat» da una stanza voleva
