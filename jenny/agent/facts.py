@@ -60,6 +60,9 @@ TRIGGER_MIN_CHARS = 4
 #: Oltre quante volte il blocco è già nella cronologia replicata non se ne
 #: aggiunge un altro: ogni blocco resta nella storia fino alla compattazione.
 MAX_BLOCKS_IN_HISTORY = 6
+#: Quanto un turno aspetta il catalogo che si sta rifacendo: sul Mac 1.100 voci
+#: si leggono in 170 ms; oltre il tetto il turno usa il catalogo di prima.
+WAIT_FOR_REBUILD_S = 0.5
 #: Un'ancora che compare in più catene di così non distingue niente — il nome
 #: dell'utente, la sua città — e non fa scattare: ``max(minimo, quota)``.
 _DF_FLOOR = 8
@@ -134,6 +137,9 @@ class FactCatalogue:
         self._state: _State | None = None
         self._lock = threading.Lock()
         self._building = False
+        # Acceso quando nessuna costruzione è in corso: :meth:`wait` lo aspetta.
+        self._idle = threading.Event()
+        self._idle.set()
 
     @property
     def ready(self) -> bool:
@@ -163,6 +169,7 @@ class FactCatalogue:
             if self._building or not self.stale():
                 return
             self._building = True
+            self._idle.clear()
 
         def run() -> None:
             try:
@@ -172,8 +179,19 @@ class FactCatalogue:
             finally:
                 with self._lock:
                     self._building = False
+                    self._idle.set()
 
         threading.Thread(target=run, name="fact-catalogue", daemon=True).start()
+
+    def wait(self, timeout: float) -> bool:
+        """Aspetta al più *timeout* secondi che finisca una costruzione in corso.
+
+        Serve al turno che trova l'archivio appena cambiato — Dream ha appena
+        spostato una formulazione — perché non risponda col catalogo di prima.
+        Un'attesa corta e con un tetto, mai una costruzione nel turno: se non
+        basta, il turno usa il catalogo che c'è.
+        """
+        return self._idle.wait(timeout)
 
     def _build(self, stamp: int | None) -> _State:
         memory = self._workspace / "memory"

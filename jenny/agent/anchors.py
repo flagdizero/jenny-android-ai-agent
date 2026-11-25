@@ -211,6 +211,19 @@ def words(text: str) -> frozenset[str]:
     return frozenset(fold(t.text) for t in _tokens(text))
 
 
+def surface_forms(texts: Iterable[str]) -> dict[str, str]:
+    """Per ogni parola piegata, come compare scritta la prima volta in *texts*.
+
+    Le ancore sono piegate (``fold``) per confrontarle; per mostrarle a chi legge
+    si rimettono come erano scritte: «Città di Castello», non «citta».
+    """
+    forms: dict[str, str] = {}
+    for text in texts:
+        for token in _tokens(text):
+            forms.setdefault(fold(token.text), token.text)
+    return forms
+
+
 def delta(old: str, new: str, vocab: Vocabulary | None = None, *,
           extra_stop: Iterable[str] = ()) -> tuple[frozenset[str], frozenset[str]]:
     """Cosa una riscrittura ha tolto e cosa ha aggiunto: ``(cadute, nuove)``.
