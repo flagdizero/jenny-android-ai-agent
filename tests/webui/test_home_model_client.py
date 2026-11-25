@@ -441,13 +441,19 @@ def test_a_catalogue_that_arrives_late_does_not_paint_over_the_one_you_read() ->
 
 
 def test_an_empty_list_says_why() -> None:
-    """I quattro stati del server hanno una frase ciascuno, nella lingua del
-    telefono: `message` e' diagnostica in inglese."""
+    """Gli stati del server hanno una frase ciascuno, nella lingua del
+    telefono: `message` e' diagnostica in inglese. Una chiave rifiutata
+    (``rejected``) non e' «serve una chiave» (``not_configured``)."""
     _run_js("""
       const data = settings([{ name: 'groq' }], 'groq', '');
       await room(data, { groq: { status: 'not_configured', models: [], message: 'Configure this provider.' } });
       assert.equal(nodi['home-models-note'].textContent, i18n.t('common.modelsNeedKey'));
       assert.equal(nodi['home-models-note'].hidden, false);
+
+      await room(data, { groq: { status: 'rejected', models: [],
+        message: 'The provider rejected the configured credential.' } });
+      assert.equal(nodi['home-models-note'].textContent, i18n.t('common.modelsKeyRejected'));
+      assert.notEqual(i18n.t('common.modelsKeyRejected'), 'common.modelsKeyRejected');
 
       await room(data, { groq: { status: 'missing_api_base', models: [] } });
       assert.equal(nodi['home-models-note'].textContent, i18n.t('home.model.needsBase'));

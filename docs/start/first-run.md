@@ -55,7 +55,7 @@ The Next button only enables once both the provider name and the API key are non
 This step tries to fetch the live list of models straight from the provider's `/models` endpoint (a 10-second timeout applies) so you can pick from what's actually available rather than typing an ID from memory.
 
 - If the fetch succeeds, you get a searchable list — type in the **Search models** box to filter it. There's no manual field in this case.
-- If the fetch fails, the list comes back empty, or the provider doesn't expose a `/models` endpoint, the reason is shown where the list would be, and an **Or type a custom model name** field appears below it so you can enter the model ID by hand.
+- If the fetch fails, the list comes back empty, or the provider doesn't expose a `/models` endpoint, the reason is shown where the list would be, in your language — no key, a key the provider refused, no base URL, or a list that did not arrive — and an **Or type a custom model name** field appears below it so you can enter the model ID by hand.
 - This step also has an **Assistant name** field for what you want Jenny to call herself (default "Jenny"). You can change it later in the home's **Settings → Jenny → Her name** (up to 40 characters; changing it erases no memory).
 
 Once a model is selected (from the list or typed manually), the **Launch** button enables. The choice belongs to the provider you entered: if you go back and change the format, the key or the base URL, the model is cleared and you pick it again from the new list.
@@ -74,8 +74,11 @@ Either button takes you to the home, on Jenny's page, with her welcome message.
 
 Pressing **Launch** does the following, in order:
 
-1. **Validates the provider before saving anything.** The backend tries to actually construct a provider from what you entered. If that fails (bad format, missing key, provider rejects the request), you get an error toast on the spot — e.g. `Provider configuration is invalid: ...` — and **nothing is written to config.json**. You stay on the same step and can fix the fields and try again.
-2. Only if validation succeeds: writes `providers.providers` (a list with just this provider — see the note below), `providers.default`, `agents.defaults.model`, `agents.defaults.bot_name`, and the current UI language to `agents.defaults.language`.
+1. **Tests the key before saving anything.** The backend builds the provider from what you entered and asks it one tiny test question with the model you chose (up to 15 seconds; the screen says *Asking the provider a test question, then saving*). If the provider does not answer, **nothing is written to config.json**: you stay on step 3 with a notice that says why — the key was refused, the credit has run out, the model doesn't exist on that provider, the provider couldn't be reached, didn't answer in time, had a problem of its own or got too many requests, or the details don't make a working provider at all.
+   - **Change key** takes you back to step 2 with the key field selected; for a model that doesn't exist the button is **Change model** and opens the field for typing one by hand.
+   - **Try again** asks the test question again.
+   - **Save anyway** appears only when the failure says nothing about the key — no network, no answer in time, a problem on the provider's side, too many requests, or an error Jenny can't classify. It saves without the test question. A refused key, finished credit or a missing model never offers it: saving those would leave a Jenny that cannot answer.
+2. Only once the provider answers (or you chose **Save anyway**): writes `providers.providers` (a list with just this provider — see the note below), `providers.default`, `agents.defaults.model`, `agents.defaults.bot_name`, and the current UI language to `agents.defaults.language`.
 3. Adds a localized welcome message to the chat — in English: *"Hi, I'm {assistant name} and from today I live on your smartphone. Nice to meet you!"*
 4. Signals the gateway to create and start the agent **immediately, with no app restart**. The gateway was already running (just without an agent); it picks up the new configuration and becomes usable right away.
 
@@ -93,8 +96,8 @@ If you have an encrypted `.jbk` backup file instead, tap **Restore from backup**
 ## Things to know that aren't obvious
 
 - **The wizard runs once.** It only appears while no provider is configured, and there is no way back to it from the interface afterwards. (Under the hood, saving it writes a provider list with just the provider you entered — which is why there's no "run setup again" button.) Add further providers from the workshop's **Brain → Who thinks → Add provider**.
-- **Model-fetch error messages come from the backend in English**, regardless of which UI language you're using — for example "The provider rejected the configured credential." or "Configure an API base URL to load models." They aren't translated.
-- **An empty model list is not an error.** If the provider's `/models` endpoint returns zero models (wrong key, wrong base URL, or the provider just doesn't have any), the backend still responds with HTTP 200 and an explanatory message; the wizard shows that message instead of an error banner, and reveals the manual model-ID field.
+- **The test question is a real request.** It costs a handful of tokens on your provider account, once, when you press Launch (and again for each **Try again**).
+- **An empty model list is not an error.** If the provider's `/models` endpoint returns zero models (wrong key, wrong base URL, or the provider just doesn't have any), the backend still responds with HTTP 200 and a status saying why; the wizard shows the reason in your language instead of an error banner, and reveals the manual model-ID field.
 
 ## What's next
 

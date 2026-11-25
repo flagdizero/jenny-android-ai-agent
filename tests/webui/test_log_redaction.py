@@ -72,6 +72,7 @@ def test_redact_masks_multiple_secrets():
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("onboarding_probe_ok")
 async def test_onboarding_does_not_log_api_key_value(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

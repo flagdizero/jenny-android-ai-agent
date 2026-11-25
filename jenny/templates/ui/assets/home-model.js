@@ -388,7 +388,8 @@ export class HomeModel {
     this._sayModels(catalog, rows.length);
   }
 
-  /* Perche' l'elenco e' corto o vuoto. I quattro stati del server hanno una
+  /* Perche' l'elenco e' corto o vuoto. Gli stati del server (`not_configured`,
+     `rejected`, `missing_api_base`, `error`) e il `loading` del client hanno una
      frase ciascuno: `message` e' diagnostica in inglese, e in casa la lingua
      e' quella del telefono. Se lo stato non si riconosce si mostra comunque
      quel che il server ha detto, che e' meglio del silenzio. */
