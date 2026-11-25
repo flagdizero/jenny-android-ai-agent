@@ -1641,6 +1641,12 @@
     "backup": {
       "title": "Backup",
       "never": "mai fatto",
+      "stale": {
+        "title": "L'ultimo file di backup ha {days} giorni.",
+        "sub": "Se perdi il telefono, tutto quello che è cambiato da allora se ne va con lui.",
+        "since": "Da allora Jenny ha fatto {n} salvataggi, ma solo su questo telefono: se lo perdi, se ne vanno con lui.",
+        "go": "Fai un file adesso"
+      },
       "more": {
         "title": "Altre opzioni",
         "file": "Copia su un file",

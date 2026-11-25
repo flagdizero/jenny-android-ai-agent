@@ -37,7 +37,7 @@ Most controls take effect the moment you use them. These ask you to confirm firs
 | **Who answers** | Opens the page where you choose the model. The row shows the provider that answers now. | — |
 | **Jenny** (her name, if you renamed her) | Opens her page: name, mascot and rules (below). The page's title is her name too. The row shows how she is now, for example "small · floating". | — |
 | **Updates** | Opens the update check and install page. The row shows the installed version, and the new one when an update is waiting. | — |
-| **Backup** | Opens export, restore and the local history — and, in the Play Store build, the copy on Google Drive. The row says when you last exported a file, or "never". In the Play Store build, with the Drive copy on, it says how the copy is going instead ("safe · today at 3:12 AM", "no copy for 4 days", "stopped: needs your permission"), and with it off, "only on this phone" until you export a file. | — |
+| **Backup** | Opens export, restore and the local history — and, in the Play Store build, the copy on Google Drive. The row says when you last exported a file, or "never". In the Play Store build, with the Drive copy on, it says how the copy is going instead ("safe · today at 3:12 AM", "no copy for 4 days", "stopped: needs your permission"), and with it off, "only on this phone" until you export a file. When the last file is more than 30 days old and no automatic copy is on, the row turns amber and reads in days ("47 days ago"), and the room opens with a notice and **Make a file now**. | — |
 | **Workshop** | Opens the workshop. | — |
 
 There is no language setting. The interface follows the phone's language (Italian or English, English for anything else).

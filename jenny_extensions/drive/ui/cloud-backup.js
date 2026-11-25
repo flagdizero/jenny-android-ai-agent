@@ -66,8 +66,9 @@ window.jennyCloud = Object.fromEntries(CALLBACKS.map((name) => [name, (value) =>
   if (cb) cb(String(value));
 }]));
 
-/** Tre giorni senza una copia riuscita: la riga lo dice in giallo (e Jenny
- *  in chat, dal cron). Stessa soglia di `ALERT_AFTER_MS` nel gateway. */
+/** Tre giorni senza una copia riuscita: la riga di «Tu e Jenny» lo dice in
+ *  giallo (`DriveBackupCard.warn`), e Jenny in chat, dal cron. Stessa soglia
+ *  di `ALERT_AFTER_MS` nel gateway. */
 export const CLOUD_LATE_MS = 72 * 3600 * 1000;
 
 /** La password più corta che si accetta: `PASSWORD_MIN_LEN` in `cloud.py`. Il

@@ -43,7 +43,7 @@ const modelRoom = {{
   value() {{ return this.data ? `${{this.data.default_provider}}/${{this.data.agent?.model}}` : ''; }},
 }};
 const rows = [];
-const room = () => ({{ value: () => '', setFloating() {{}}, setName() {{}}, setVersion() {{}}, setBackup() {{}} }});
+const room = () => ({{ value: () => '', warn: () => false, setFloating() {{}}, setName() {{}}, setVersion() {{}}, setBackup() {{}} }});
 class Home {{
   constructor() {{
     this._settings = null;

@@ -252,6 +252,7 @@ class App {
       open: () => this.actions.push('backup aperta'),
       setBackup: (v) => this.dataBackup.push(v),
       value: () => 'mai fatto',
+      warn: () => false,
     };
     this.updatesRoom = {
       applyTranslations: () => {},

@@ -86,6 +86,8 @@ The format is documented at the top of `jenny_extensions/drive/cloud.py`.
 
 This is disaster recovery: a single file containing your whole workspace — memory, conversation history, settings, API keys, mini-apps, wiki content — plus the full local snapshot history, all encrypted. It's meant to leave the device.
 
+**When the file gets old.** Where the file is your only defence against a lost phone — the GitHub and F-Droid build, or the Play Store build with the Drive copy off — the home says when it is more than 30 days old. The **Backup** row in Settings turns amber with a dot and reads in days ("47 days ago"); inside the room a notice on top says how old the file is, how many local snapshots came after it (those would be lost with the phone), and offers **Make a file now**. There is no notification. With the Drive copy on, the notice stays quiet: the phone copies itself every night.
+
 **One thing it does not contain: your SSH keys.** The private key for each registered host, and the `known_hosts` file holding the fingerprints you accepted, live in `<filesDir>/ssh` — *beside* the workspace, not inside it, so that the agent's file tools cannot reach them. Export and snapshot both walk the workspace root only, so neither ever sees them. The host list itself is in `config.json`, which *is* in the workspace, so a restore brings your hosts back looking complete — with no key behind them. See [After a restore, SSH is not restored](#after-a-restore-ssh-is-not-restored) below.
 
 ### Exporting
