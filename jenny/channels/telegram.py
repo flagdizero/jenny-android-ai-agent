@@ -473,8 +473,8 @@ class TelegramChannel(NonStreamingChannelMixin):
 
         if picked is None and not text:
             # Niente testo e niente file scaricabile: o è una posizione (che ha
-            # il suo turno sintetico e la sua config), o è un tipo che non
-            # trattiamo, o non è niente.
+            # il suo turno sintetico e la sua config, e risponde da sé se la
+            # posizione è spenta), o è un tipo che non trattiamo, o non è niente.
             if await self._maybe_handle_location(chat_id, sender, message):
                 return
             if has_unsupported_attachment(message) or any(
@@ -640,9 +640,11 @@ class TelegramChannel(NonStreamingChannelMixin):
 
         La registra come override per-canale (usata solo dalle risposte
         Telegram entro il TTL) e innesca un turno LLM così Jenny reagisce, con
-        la posizione già iniettata nel runtime context. Ritorna ``False`` se il
-        messaggio non è una posizione o se il toggle posizione è off — in quel
-        caso il chiamante ricade sulla fallback "media_soon".
+        la posizione già iniettata nel runtime context. Con l'interruttore della
+        posizione spento non registra niente e risponde ``location_off``, che dice
+        dove si accende: il messaggio è gestito, quindi ``True``. Ritorna
+        ``False`` solo se il messaggio non è una posizione valida (coordinate
+        assenti o storte): lì il chiamante risponde ``media_unsupported``.
         """
         raw_loc = message.get("location")
         venue = message.get("venue") if isinstance(message.get("venue"), dict) else None
@@ -657,7 +659,8 @@ class TelegramChannel(NonStreamingChannelMixin):
             return False
 
         # Toggle posizione: caricato lazy (le condivisioni sono rare). Se off,
-        # non registriamo nulla e lasciamo rispondere la fallback media_soon.
+        # non registriamo nulla e diciamo perché: la risposta generica «non so
+        # gestire questo messaggio» faceva credere a un limite di Telegram.
         try:
             from jenny.config.loader import load_config
 
@@ -666,7 +669,8 @@ class TelegramChannel(NonStreamingChannelMixin):
             logger.opt(exception=True).debug("Telegram: could not load location config")
             cfg = None
         if cfg is not None and not getattr(cfg, "enable", True):
-            return False
+            await self._send_raw(chat_id, self._t("location_off"))
+            return True
 
         from dataclasses import replace
 

@@ -404,6 +404,7 @@ _TEXT: dict[str, dict[str, str]] = {
         "telegram.start_prompt": "To pair, send me the 6-digit code shown in Jenny's WebUI.",
         "telegram.wrong_code": "Invalid code. Check the 6-digit code in Jenny's WebUI and try again.",
         "telegram.media_unsupported": "🤷 I can't handle this kind of message yet.",
+        "telegram.location_off": "📍 Location received, but location is switched off in Jenny: she doesn't use it, and reminders for arriving at a place don't work either. Turn it on in Settings → Workshop → Hands → Location.",
         "telegram.media_too_big": "📦 That attachment is too big for me to download.",
         "telegram.media_failed": "⚠️ I couldn't download that attachment. Try again.",
         # Le righe d'attesa del retry del provider (``providers/retry_notice.py``).
@@ -834,6 +835,7 @@ _TEXT: dict[str, dict[str, str]] = {
         "telegram.start_prompt": "Per collegarti, inviami il codice a 6 cifre che vedi nella WebUI di Jenny.",
         "telegram.wrong_code": "Codice non valido. Controlla il codice a 6 cifre nella WebUI di Jenny e riprova.",
         "telegram.media_unsupported": "🤷 Questo tipo di messaggio non so ancora gestirlo.",
+        "telegram.location_off": "📍 Posizione ricevuta, ma in Jenny la posizione è spenta: non la usa, e non funzionano nemmeno i promemoria all'arrivo in un posto. Si accende in Impostazioni → Officina → Mani → Posizione.",
         "telegram.media_too_big": "📦 Allegato troppo grande: non riesco a scaricarlo.",
         "telegram.media_failed": "⚠️ Non sono riuscita a scaricare l'allegato. Riprova.",
         "retry.waiting": "Il modello non risponde: riprovo fra {seconds} s (tentativo {attempt}).",

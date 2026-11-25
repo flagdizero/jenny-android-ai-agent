@@ -465,7 +465,7 @@ class CronTool(Tool, ContextAware):
         except Exception:  # noqa: BLE001 — un config illeggibile non arma niente
             enabled = False
         if not enabled:
-            return ("Error: the position is switched off (Settings → Hands → Position), and a "
+            return ("Error: location is switched off (Settings → Workshop → Hands → Location), and a "
                     "zone needs it. Tell the user; do not arm it another way.")
         return None
 

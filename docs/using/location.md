@@ -52,7 +52,7 @@ If you share a location (or a venue) from inside the paired Telegram chat, Jenny
 - For up to `telegramTtlS` (default 3600 seconds = 1 hour, minimum 60), every reply sent through Telegram uses that shared position instead of the phone's GPS. The context line reads `User location (shared via Telegram): <place> (lat, lng)` instead of the usual "Device location" line.
 - Once the hour is up, Telegram falls back to the phone's live GPS, exactly like the WebUI already does. The WebUI is never affected by a Telegram location share.
 - The override is kept only in memory — it does not survive an app restart, and there is no per-chat persistence beyond that TTL.
-- If the location toggle is off, sharing a location in Telegram is not recorded at all, and the bot replies with the generic "🤷 I can't handle this kind of message yet." it uses for unsupported message types — which is misleading here (it's really about location being disabled, not about unsupported media), so don't read that reply as a media limitation in this specific case.
+- If the location toggle is off, sharing a location in Telegram is not recorded at all and starts no turn. The bot answers that the location arrived but location is switched off in Jenny, so she doesn't use it and reminders for arriving at a place don't work either, and says where to turn it on (Settings → Workshop → Hands → Location). Searching for a place by name (`find_place`) does not depend on the toggle and keeps working.
 
 See [Telegram bridge](telegram.md) for the rest of what Telegram can and cannot do.
 

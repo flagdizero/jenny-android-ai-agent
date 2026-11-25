@@ -140,7 +140,7 @@ Sending a location or venue in the Telegram chat (paperclip → Location) is han
 
 This override is **in-memory** — it's lost if the app restarts, even before the hour is up.
 
-If the location toggle (`tools.location.enable`, default on) is switched off, sharing a location from Telegram is **ignored entirely**, and — this is the one genuinely misleading part of the whole feature — the bot replies with the same "🤷 I can't handle this kind of message yet." used for unsupported message types, which has nothing to do with location being off. If your location share from Telegram seems to vanish, check the Location toggle (workshop, **Hands → Location**) first.
+If the location toggle (`tools.location.enable`, default on) is switched off, sharing a location from Telegram is **not recorded** and starts no turn. The bot says so: the location arrived, but location is off in Jenny, so she doesn't use it and reminders for arriving at a place don't work either — and it tells you where to turn it on (Settings → Workshop → **Hands → Location**).
 
 Sending your location also spends a real LLM turn (and therefore tokens) even if you didn't type anything.
 
