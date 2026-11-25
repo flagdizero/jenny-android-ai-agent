@@ -166,7 +166,9 @@ class Runner:
             if scenario.seed_session:
                 self._seed_session(scenario, nonces, session_file,
                                    f"project:{project}" if project else "unified:default")
-            replies, timed_out = [], False
+            # Il saluto in testa alle risposte: così finisce anche nel resoconto, e
+            # ``obs.reply`` resta l'ultima risposta di un turno quando ce n'è uno.
+            replies, timed_out = ([greeting] if greeting else []), False
             last_turn_start = 0
             for index, turn in enumerate(scenario.turns):
                 if index and scenario.wait_subagents:

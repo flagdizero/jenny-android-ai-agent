@@ -903,39 +903,62 @@ DIARY = [
 
 _ASK_MORE = re.compile(r"chied\w*|domand\w*", re.IGNORECASE)
 _INTERNALS = re.compile(r"\.md\b|\bwiki/|\bfile\b|\bcartell\w*|\bstrument\w*|\btool\b|"
-                        r"journal_append|board\b", re.IGNORECASE)
-_THINGS_TO_DO = {
-    "pages": re.compile(r"pagin\w*|annot\w*|appunt\w*|scriv\w*|segn\w*", re.IGNORECASE),
-    "board": re.compile(r"bachec\w*", re.IGNORECASE),
-    "reminder": re.compile(r"promemori\w*|ricord\w*|avvis\w*", re.IGNORECASE),
-    "app": re.compile(r"\bapp\b|applicazion\w*|\btabell\w*|\bcalcol\w*", re.IGNORECASE),
-    "plan": re.compile(r"\bpiano\b|\bpiani\b|a passi", re.IGNORECASE),
+                        r"journal_append", re.IGNORECASE)
+# Le cose da fare si dicono con le parole dell'argomento («salvare le ricette e
+# segnare il menu»), non coi nomi delle funzioni: si contano i verbi d'azione
+# distinti. Il primo giro (25/11/2026) contava le funzioni nominate e dava 0/3 a
+# saluti che ne nominavano due — un falso rosso letto nelle risposte.
+_ACTIONS = {
+    "annotare": re.compile(r"\bannot\w*|\bappunt\w*", re.IGNORECASE),
+    "segnare": re.compile(r"\bsegn[aio]\w*", re.IGNORECASE),
+    "scrivere": re.compile(r"\bscriv\w*", re.IGNORECASE),
+    "salvare": re.compile(r"\bsalv[aio]\w*", re.IGNORECASE),
+    "tenere": re.compile(r"\bten(ere|erci|ere|iamo|go|gli|ga|uto)\w*|\btien\w*", re.IGNORECASE),
+    "fissare": re.compile(r"\bfiss[aio]\w*", re.IGNORECASE),
+    "raccogliere": re.compile(r"\braccogl\w*", re.IGNORECASE),
+    "mettere": re.compile(r"\bmett\w*", re.IGNORECASE),
+    "ricordare": re.compile(r"\bricord\w*|\bpromemori\w*", re.IGNORECASE),
+    "bacheca": re.compile(r"\bbachec\w*", re.IGNORECASE),
+    "app": re.compile(r"\bapp\b|\bapplicazion\w*", re.IGNORECASE),
+    "lista": re.compile(r"\blist[ae]\b", re.IGNORECASE),
+    "piano": re.compile(r"\bpian[oi]\b|\bplan\b|\ba passi\b", re.IGNORECASE),
 }
+_PLAN_KEY = _ACTIONS["piano"]
+# «puoi salvare le ricette e organizzare i piatti»: due infiniti legati da «e» nella
+# frase che dice cosa si può fare. Regge un verbo che l'elenco sopra non ha (il
+# secondo giro del 25/11/2026 aveva «organizzare»).
+_INF = r"\w+(?:are|ere|ire)(?:ci|ne|la|le|li|lo)?"
+_TWO_INFINITIVES = re.compile(rf"\b(?:puoi|potrai|potete|si pu[oò])\s+(?:\w+\s+){{0,2}}?{_INF}\b"
+                              rf"[^.?!]*?\be\s+(?:\w+\s+)?{_INF}\b", re.IGNORECASE)
+_BULLET = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+\S", re.MULTILINE)
 _WRITES = ("write_file", "edit_file", "apply_patch", "journal_append", "spawn", "plan_propose",
            "cron", "app")
 
 
-def _things(text: str) -> list[str]:
-    return sorted(k for k, rx in _THINGS_TO_DO.items() if rx.search(text))
+def _actions(text: str) -> list[str]:
+    return sorted(k for k, rx in _ACTIONS.items() if rx.search(text))
 
 
 def _greets_with_two_things(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     greeting = str(obs.extra.get("greeting") or "")
-    things = _things(greeting)
+    things = _actions(greeting)
+    two = len(things) >= 2 or bool(_TWO_INFINITIVES.search(greeting))
     return [
-        Check("names_two_things", len(things) >= 2, f"{','.join(things)} | {greeting[:200]}"),
+        Check("names_two_things", two, f"{','.join(things)} | {greeting[:300]}"),
         Check("says_to_ask_more", bool(_ASK_MORE.search(greeting)), greeting[-160:]),
-        Check("no_internals", not _INTERNALS.search(greeting), greeting[:200]),
+        Check("no_internals", not _INTERNALS.search(greeting), greeting[:300]),
     ]
 
 
 def _answers_from_the_notebook(obs: Observation, n: Mapping[str, str]) -> list[Check]:
     reply = obs.reply
-    things = _things(reply)
+    things = _actions(reply)
+    bullets = len(_BULLET.findall(reply))
     wrote = [c.name for name in _WRITES for c in obs.last_turn_called(name)]
     return [
-        Check("several_things", len(things) >= 3, f"{','.join(things)} | {reply[:200]}"),
-        Check("names_the_plan_key", "plan" in things, reply[:200]),
+        Check("several_things", bullets >= 3 or len(things) >= 3,
+              f"{bullets} bullets, {','.join(things)} | {reply[:200]}"),
+        Check("names_the_plan_key", bool(_PLAN_KEY.search(reply)), reply[-200:]),
         Check("no_internals", not _INTERNALS.search(reply), reply[:200]),
         Check("writes_nothing", not wrote, ",".join(wrote)),
     ]

@@ -1124,6 +1124,56 @@
    },
    "runs": 3
   },
+  "notebook_greeting_offers_two_things|muse-spark-1.3-contributor|calibrated": {
+   "checks": {
+    "names_two_things": [
+     0,
+     3
+    ],
+    "no_internals": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "says_to_ask_more": [
+     0,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_greeting_offers_two_things|muse-spark-1.3-contributor|normal": {
+   "checks": {
+    "names_two_things": [
+     3,
+     3
+    ],
+    "no_internals": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "says_to_ask_more": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
   "notebook_topic_stays_out|claude-haiku-5-5|normal": {
    "checks": {
     "no_unknown_tool": [
@@ -1160,6 +1210,64 @@
      3
     ],
     "turn_finished": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_what_can_i_do|muse-spark-1.3-contributor|calibrated": {
+   "checks": {
+    "names_the_plan_key": [
+     0,
+     3
+    ],
+    "no_internals": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "several_things": [
+     0,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ],
+    "writes_nothing": [
+     3,
+     3
+    ]
+   },
+   "runs": 3
+  },
+  "notebook_what_can_i_do|muse-spark-1.3-contributor|normal": {
+   "checks": {
+    "names_the_plan_key": [
+     1,
+     3
+    ],
+    "no_internals": [
+     3,
+     3
+    ],
+    "no_unknown_tool": [
+     3,
+     3
+    ],
+    "several_things": [
+     3,
+     3
+    ],
+    "turn_finished": [
+     3,
+     3
+    ],
+    "writes_nothing": [
      3,
      3
     ]

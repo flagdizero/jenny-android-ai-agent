@@ -432,3 +432,28 @@ def test_what_can_i_do_answers_from_the_notebook_and_writes_nothing() -> None:
     assert not verdict["several_things"] and not verdict["names_the_plan_key"]
     wrote = _obs(good.reply, last_turn_calls=[ToolCall("journal_append", {"text": "x"})])
     assert not _ok("notebook_what_can_i_do", wrote, {})["writes_nothing"]
+
+
+def test_two_things_said_with_the_topics_own_words_count() -> None:
+    """Il falso rosso del primo giro: due cose dette coi verbi dell'argomento, non coi nomi."""
+    greeting = _obs(greeting="Ciao! Qui puoi salvare le ricette che contano e segnare il menu "
+                             "del weekend. Chiedimi pure cos'altro puoi farci.")
+    assert all(_ok("notebook_greeting_offers_two_things", greeting, {}).values())
+    one = _obs(greeting="Ciao! Qui raccogliamo le ricette di casa. Da quale piatto partiamo?")
+    assert not _ok("notebook_greeting_offers_two_things", one, {})["names_two_things"]
+
+
+def test_three_bullets_are_several_things_and_plan_counts_in_english() -> None:
+    reply = ("ecco cosa puoi farci:\n\n- le uscite del weekend\n- la manutenzione della catena\n"
+             "- i pezzi da cambiare\n\nper un lavoro lungo premi Plan")
+    verdict = _ok("notebook_what_can_i_do", _obs(reply, last_turn_calls=[]), {})
+    assert verdict["several_things"] and verdict["names_the_plan_key"]
+
+
+def test_two_infinitives_count_even_with_a_verb_the_list_lacks() -> None:
+    greeting = _obs(greeting="Ciao! Qui puoi catalogare le ricette che ti riescono e "
+                             "organizzare i piatti del weekend, chiedimi pure il resto.")
+    assert _ok("notebook_greeting_offers_two_things", greeting, {})["names_two_things"]
+    question = _obs(greeting="Ciao! Qui teniamo le ricette di casa. Da quale piatto vuoi "
+                             "partire e cominciare?")
+    assert not _ok("notebook_greeting_offers_two_things", question, {})["names_two_things"]
