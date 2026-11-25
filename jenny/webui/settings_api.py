@@ -1006,6 +1006,12 @@ def _worker_settings_sections(config: Any) -> dict[str, Any]:
         return {"memory": None, "workers": None}
 
 
+def _home_network(config: Any) -> dict[str, Any]:
+    from jenny.webui.home_network import home_network_payload
+
+    return home_network_payload(config)
+
+
 def settings_payload(
     *,
     requires_restart: bool = False,
@@ -1051,6 +1057,9 @@ def settings_payload(
         "location": {
             "enabled": config.tools.location.enable,
         },
+        # «Rete di casa» in officina (Mani): gli indirizzi che gli strumenti di
+        # Jenny possono raggiungere pur essendo privati, coi loro nomi.
+        "home_network": _home_network(config),
         # Il wakelock di servizio si prende una volta sola all'avvio: qui si
         # espone il valore scritto nel config, non lo stato del lock vivo. La UI
         # deve dire che il cambio vale dal prossimo riavvio.

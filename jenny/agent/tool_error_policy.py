@@ -27,8 +27,8 @@ SSRF_BOUNDARY_NOTE: str = (
     "private/internal URLs. Do not retry with alternative network methods, encoded IPs, "
     "alternate DNS, redirects, proxies, or another tool. Ask the user for "
     "local files, logs, screenshots, or an explicit safe public URL instead. "
-    "If the user explicitly trusts this private URL, ask them to whitelist "
-    "the exact IP/CIDR via security.ssrfWhitelist."
+    "If the user explicitly trusts this private address, tell them they can open it "
+    "in Settings → Workshop → Hands → Home network, one address at a time."
 )
 
 # Suffisso appeso agli errori tool per invitare il modello a cambiare approccio.

@@ -124,25 +124,25 @@ async def test_runner_returns_non_retryable_hint_on_ssrf_violation():
     assert tool_messages
     assert "non-bypassable security boundary" in tool_messages[0]["content"]
     assert "Do not retry" in tool_messages[0]["content"]
-    assert "security.ssrfWhitelist" in tool_messages[0]["content"]
+    assert "Home network" in tool_messages[0]["content"]
 
 
-def test_ssrf_note_names_a_whitelist_key_that_takes_effect():
-    """La chiave che la nota fa scrivere all'utente deve funzionare davanti.
+def test_ssrf_note_points_to_a_place_that_takes_effect():
+    """Il posto che la nota fa usare all'utente deve funzionare davvero.
 
-    Diceva ``tools.ssrfWhitelist``: in un config che ha gia' il blocco
-    ``security`` (cioe' ogni config salvato) quella chiave si perde in silenzio.
+    Diceva ``tools.ssrfWhitelist``, che in un config col blocco ``security`` si
+    perde in silenzio; poi ``security.ssrfWhitelist``, da scrivere a mano. Dal
+    25/11/2026 indica la «Rete di casa» dell'officina, che scrive la chiave che
+    il blocco legge davvero.
     """
-    import re
-
     from jenny.agent.tool_error_policy import SSRF_BOUNDARY_NOTE
     from jenny.config.schema import Config
+    from jenny.webui.home_network import add_entry, parse_home_address
 
-    match = re.search(r"via (\w+)\.(\w+)\.", SSRF_BOUNDARY_NOTE)
-    assert match, SSRF_BOUNDARY_NOTE
-    section, key = match.groups()
-    config = Config.model_validate({"security": {}, section: {key: ["10.0.0.0/8"]}})
-    assert config.security.ssrf_whitelist == ["10.0.0.0/8"]
+    assert "Hands → Home network" in SSRF_BOUNDARY_NOTE
+    config = Config.model_validate({"security": {}})
+    add_entry(config, parse_home_address("192.168.1.50"), "NAS")
+    assert config.security.ssrf_whitelist == ["192.168.1.50/32"]
 
 
 @pytest.mark.asyncio

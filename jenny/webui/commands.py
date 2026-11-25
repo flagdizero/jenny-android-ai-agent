@@ -1607,6 +1607,8 @@ _COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
     "memory": ("jenny.webui.memory_commands", "MEMORY_COMMANDS"),
     # L'«Annulla» dopo aver tolto un promemoria.
     "cron": ("jenny.webui.cron_commands", "CRON_COMMANDS"),
+    # La «Rete di casa» dell'officina: gli indirizzi privati raggiungibili.
+    "network": ("jenny.webui.network_commands", "NETWORK_COMMANDS"),
 }
 
 

@@ -94,7 +94,7 @@ export const DRAWERS = {
     sections: ['whoThinks', 'parameters', 'battery', 'system'],
   },
   hands: {
-    sections: ['webSearch', 'position', 'ssh', 'telegram', 'remote', 'peers', 'skill', 'scheduling'],
+    sections: ['webSearch', 'position', 'ssh', 'telegram', 'remote', 'peers', 'homeNet', 'skill', 'scheduling'],
   },
   /* In Memoria «file» e' l'**ultima**, e non e' un dettaglio d'ordine: da
      quando quella scheda contiene l'esploratore vero la sua altezza dipende da
@@ -395,6 +395,7 @@ export class SettingsController {
       telegram: () => this._group('telegram', i18n.t('settings.telegram.title'), this._renderTelegram()),
       remote: () => this._group('remote', i18n.t('settings.remote.title'), this._renderRemote()),
       peers: () => this._group('peers', i18n.t('settings.peers.title'), this._renderPeers()),
+      homeNet: () => this._group('homeNet', i18n.t('settings.homeNet.title'), this._renderHomeNet(d)),
       skill: () => this._group('skill', i18n.t('workshop.groups.skill'), this._renderSkill()),
       scheduling: () => this._group('scheduling', i18n.t('cron.byHerself'), this._renderScheduling()),
       // Memoria
@@ -868,6 +869,54 @@ export class SettingsController {
 
   /** Come «Da altri dispositivi»: in cassetto una riga («Lavoro collegata»),
    *  il pannello dietro il tocco (`mobile-peers.js`). */
+  /* «Rete di casa»: gli indirizzi privati che gli strumenti di Jenny possono
+     raggiungere (il NAS, Home Assistant). Uno per riga, con un nome; si
+     aggiunge un indirizzo alla volta, mai un intervallo (`home_network.py`).
+     Un intervallo scritto a mano in config.json si vede, e si puo' togliere. */
+  _renderHomeNet(d) {
+    const entries = d.home_network?.entries || [];
+    const rows = entries.length
+      ? entries.map((e) => `
+        <div class="settings-field home-net-row">
+          <div class="home-net-text">
+            <div class="settings-label">${escapeHtml(e.name || e.address)}</div>
+            <div class="settings-hint">${escapeHtml(e.name ? e.address : '')}${e.single ? '' : `${e.name ? ' · ' : ''}${escapeHtml(i18n.t('settings.homeNet.range'))}`}</div>
+          </div>
+          <button class="home-net-remove" type="button" data-net-remove="${escapeHtml(e.entry)}"
+                  aria-label="${escapeHtml(i18n.t('settings.homeNet.remove', { name: e.name || e.address }))}">
+            <i class="ti ti-trash" aria-hidden="true"></i>
+          </button>
+        </div>`).join('')
+      : `<div class="settings-empty-state">${i18n.t('settings.homeNet.empty')}</div>`;
+    return `
+      <p class="settings-hint" style="margin:0 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('settings.homeNet.hint', { name: botName.get() })}</p>
+      ${rows}
+      <div class="home-net-add">
+        <input class="settings-input" id="home-net-name" type="text" maxlength="40"
+               placeholder="${escapeHtml(i18n.t('settings.homeNet.namePlaceholder'))}"
+               aria-label="${escapeHtml(i18n.t('settings.homeNet.name'))}">
+        <input class="settings-input" id="home-net-address" type="text" inputmode="decimal" ${NO_AUTOCORRECT}
+               placeholder="192.168.1.20" aria-label="${escapeHtml(i18n.t('settings.homeNet.address'))}">
+        <button class="settings-btn-add" id="btn-home-net-add" type="button">
+          <i class="ti ti-plus" aria-hidden="true"></i> ${i18n.t('settings.homeNet.add')}
+        </button>
+      </div>`;
+  }
+
+  async _homeNet(method, params) {
+    try {
+      const res = await rpc.network(method, params);
+      if (this.data) this.data.home_network = res.home_network;
+      this.render();
+      showToast(i18n.t(method === 'add' ? 'settings.homeNet.added' : 'settings.homeNet.removed'));
+      return true;
+    } catch (e) {
+      const why = ['not_an_address', 'not_home', 'too_many'].includes(e?.message) ? e.message : null;
+      showToast(i18n.t(why ? `settings.homeNet.error.${why}` : 'settings.saveError'), 'error');
+      return false;
+    }
+  }
+
   _renderPeers() {
     return this._summary('peers', i18n.t('settings.peers.rowName'), i18n.t('settings.loading'));
   }
@@ -3142,6 +3191,16 @@ export class SettingsController {
         this._debounceTimers.web_search = setTimeout(() => this._saveWebSearch(), 600);
       });
     }
+
+    // Rete di casa: aggiungi e togli, subito.
+    this.contentEl.querySelector('#btn-home-net-add')?.addEventListener('click', () => {
+      const address = this.contentEl.querySelector('#home-net-address')?.value || '';
+      const name = this.contentEl.querySelector('#home-net-name')?.value || '';
+      if (address.trim()) this._homeNet('add', { address: address.trim(), name });
+    });
+    this.contentEl.querySelectorAll('[data-net-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => this._homeNet('remove', { entry: btn.dataset.netRemove }));
+    });
 
     // Posizione: toggle auto-applicato al cambio (nessun bottone salva).
     const locToggle = this.contentEl.querySelector('#location-enabled-toggle');
