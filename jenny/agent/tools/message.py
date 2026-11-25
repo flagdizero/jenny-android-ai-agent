@@ -291,6 +291,11 @@ class MessageTool(Tool, ContextAware):
             resolved.append(local)
         return resolved
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Un messaggio partito non torna indietro."""
+        content = params.get("content")
+        return {"what": "message", "label": content} if isinstance(content, str) else None
+
     async def execute(
         self,
         content: str,

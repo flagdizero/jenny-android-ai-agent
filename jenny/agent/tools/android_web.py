@@ -482,6 +482,11 @@ class AndroidWebSearchTool(AndroidWebGateMixin, Tool):
     def read_only(self) -> bool:
         return True
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Una ricerca è uscita dal telefono: si elenca, non si annulla."""
+        query = params.get("query")
+        return {"what": "web", "label": query} if isinstance(query, str) else None
+
     async def execute(
         self,
         query: str,
@@ -683,6 +688,11 @@ class AndroidWebFetchTool(AndroidWebGateMixin, Tool):
     @property
     def read_only(self) -> bool:
         return True
+
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Una pagina aperta è una richiesta partita: si elenca, non si annulla."""
+        url = params.get("url")
+        return {"what": "web", "label": url} if isinstance(url, str) else None
 
     async def execute(
         self,

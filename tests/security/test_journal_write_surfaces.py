@@ -83,6 +83,45 @@ _NOT_JOURNALED: dict[str, str] = {
     "config/store.py": "la configurazione, che nessun aiutante scrive (è SECRET)",
 }
 
+# Chi scrive fuori dal registro ed è raggiungibile da un turno di Jenny lo dice
+# all'utente: «Ho fatto» elenca quel che non torna indietro, e lo dichiara lo
+# strumento (``Tool.outside_undo``, annotato dal runner in ``agent.turn_work``).
+# Per ogni voce di ``_NOT_JOURNALED``: il modulo dello strumento che lo
+# dichiara e il suo nome, o la ragione per cui non serve.
+_OUTSIDE_UNDO: dict[str, tuple[str, str] | str] = {
+    "agent/tools/cron.py": (
+        "i promemoria non si dichiarano: il tool li annota con l'id nella riga del turno "
+        "(``turn_work.note_job``), e il ritorno al turno li toglie"
+    ),
+    "agent/tools/app_update.py": ("agent/tools/app_update.py", "install_update"),
+    "agent/tools/memory_entries.py": "lo usa solo Dream, che non è un turno con un id",
+    "agent/tools/ssh_jobs.py": ("agent/tools/ssh.py", "ssh_job"),
+    "agent/tools/ssh_transport.py": ("agent/tools/ssh.py", "ssh_exec, ssh_job, ssh_transfer"),
+    "apps/storage.py": ("agent/tools/app_actions.py", "use_app, le azioni che scrivono"),
+    "apps/executor.py": ("agent/tools/app_actions.py", "use_app, le azioni che scrivono"),
+    "session/manager.py": "il runtime, non un'azione del turno",
+    "webui/transcript_store.py": "il runtime, non un'azione del turno",
+    "agent/subagent_records.py": "il runtime, non un'azione del turno",
+    "config/store.py": ("agent/tools/self.py", "my set"),
+}
+
+# Gli strumenti che non scrivono file ma fanno uscire qualcosa dal telefono, o
+# lo cambiano fuori dal workspace: l'inventario degli scrittori non li vede, e
+# senza questa lista uno nuovo resterebbe muto in «Ho fatto».
+_OUTWARD_TOOLS = {
+    "agent/tools/message.py": "message",
+    "agent/tools/android_web.py": "web_search, web_fetch",
+    "agent/tools/browser.py": "browser_open, browser_do",
+    "agent/tools/phone.py": "phone_do",
+    "agent/tools/peer.py": "peer_ask, peer_line",
+    "agent/tools/ssh.py": "ssh_exec, ssh_job, ssh_transfer up",
+    "agent/tools/app_actions.py": "use_app",
+    "agent/tools/self.py": "my",
+    "agent/tools/app_update.py": "install_update",
+}
+
+_DECLARES = re.compile(r"^\s+def outside_undo\(self", re.M)
+
 _HOOK = re.compile(
     r"\bjournal_touch\(|\bcheck_subagent_write\(|\b_check_subagent_write\("
     r"|\b_refuse_guarded_write\(|\bjournal\.touch\("
@@ -132,3 +171,32 @@ def test_an_installed_draft_is_noted_in_its_writer_journal() -> None:
     src = _strip_prose((ROOT / "agent/staged_writes.py").read_text(encoding="utf-8"))
     body = _body(src, "install")
     assert "journal.touch(" in body and "journal.settle(" in body
+
+
+def test_every_writer_outside_the_journal_declares_it_or_says_why() -> None:
+    assert set(_OUTSIDE_UNDO) == set(_NOT_JOURNALED), (
+        "ogni modulo di _NOT_JOURNALED dice in _OUTSIDE_UNDO quale strumento dichiara "
+        "outside_undo per lui, o perché non serve"
+    )
+    missing = []
+    for name, how in _OUTSIDE_UNDO.items():
+        if isinstance(how, tuple):
+            src = _strip_prose((ROOT / how[0]).read_text(encoding="utf-8"))
+            if not _DECLARES.search(src):
+                missing.append(f"{name} (via {how[0]})")
+    assert not missing, f"dichiarazioni promesse ma assenti: {missing}"
+
+
+def test_every_outward_tool_declares_what_cannot_be_undone() -> None:
+    missing = [
+        name for name in _OUTWARD_TOOLS
+        if not _DECLARES.search(_strip_prose((ROOT / name).read_text(encoding="utf-8")))
+    ]
+    assert not missing, f"strumenti che escono dal telefono senza outside_undo: {missing}"
+
+
+def test_the_runner_notes_the_declaration() -> None:
+    """Il runner chiede la dichiarazione a ogni chiamata riuscita: se smette, i test
+    sopra restano verdi e «Ho fatto» non elenca più niente fuori dal registro."""
+    src = _strip_prose((ROOT / "agent/tool_execution.py").read_text(encoding="utf-8"))
+    assert "note_outside_undo(tool, params)" in src

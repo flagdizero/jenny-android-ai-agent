@@ -114,6 +114,11 @@ class PeerAskTool(Tool):
     def read_only(self) -> bool:
         return False
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Una domanda partita verso l'altra Jenny resta partita."""
+        question = params.get("question")
+        return {"what": "peer", "label": question} if isinstance(question, str) else None
+
     async def execute(
         self, peer: Any = None, question: Any = None, mode: Any = None, **kwargs: Any
     ) -> str:
@@ -363,6 +368,11 @@ class PeerLineTool(Tool):
     @property
     def read_only(self) -> bool:
         return False
+
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """La linea aperta verso l'altra Jenny: si chiude, non si annulla."""
+        peer = params.get("peer")
+        return {"what": "peer", "label": peer} if isinstance(peer, str) else None
 
     async def execute(self, peer: Any = None, notebook: Any = None, **kwargs: Any) -> str:
         from jenny.agent.tools.context import current_request_context

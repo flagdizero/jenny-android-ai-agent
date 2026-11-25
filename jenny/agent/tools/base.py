@@ -165,6 +165,18 @@ class Tool(ABC):
         """Whether this tool should run alone even if concurrency is enabled."""
         return False
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Cosa ha fatto questa chiamata che il registro dell'annulla non può rimettere.
+
+        Lo chiede il runner dopo una chiamata riuscita (``agent.turn_work``): un
+        messaggio partito, una pagina aperta, un tocco su un'altra app, un
+        comando su un server. ``{"what": <categoria>, "label": <cosa>}``, con
+        *label* un dato (la ricerca, l'indirizzo, il comando) e non una frase;
+        ``None`` (il default) se la chiamata non ha fatto niente del genere —
+        una lettura, o una scrittura che passa dal registro.
+        """
+        return None
+
     # --- Plugin metadata ---
 
     _scopes: set[str] = {"core"}

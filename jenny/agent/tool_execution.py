@@ -27,6 +27,7 @@ from jenny.agent.progress_events import (
 )
 from jenny.agent.tool_error_policy import TOOL_ERROR_RETRY_HINT
 from jenny.agent.tools.result import ToolResult, is_error_text, render_for_model
+from jenny.agent.turn_work import note_tool as note_outside_undo
 from jenny.config.runtime_env import tool_timeout_s
 from jenny.peers.gate import before_tool as peer_gate_before_tool
 from jenny.phone.consent import before_tool as phone_consent_before_tool
@@ -698,6 +699,9 @@ class ToolExecutionMixin:
         # fidato (web, browser) o privato (posizione, log): v.
         # ``security.subagent_policy``. Fuori da un subagent è una no-op.
         policy_after_tool(tool_call.name, params)
+        # Quel che lo strumento ha fatto e il registro non rimette (un messaggio,
+        # una ricerca, un comando su un server), nella riga del turno: «Ho fatto».
+        note_outside_undo(tool, params)
         if file_edit_trackers and progress_callback is not None:
             await invoke_file_edit_progress(
                 progress_callback,

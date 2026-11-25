@@ -322,6 +322,13 @@ class SshExecTool(_SshToolMixin, Tool):
         "There is no TTY and no stdin: an interactive command will time out, not prompt."
     )
 
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Un comando eseguito su un server: il registro vede solo questo telefono."""
+        host, command = params.get("host"), params.get("command")
+        if not isinstance(command, str):
+            return None
+        return {"what": "ssh", "label": f"{host}: {command}"}
+
     async def execute(
         self, host: str, command: str, timeout_s: int | None = None, **kwargs: Any
     ) -> str:
@@ -428,6 +435,14 @@ class SshJobTool(_SshToolMixin, Tool):
         "restarting and the screen going off; you do not have to keep the turn open. "
         "You never track the read position yourself: `poll` always resumes where it left off."
     )
+
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Un lavoro avviato o fermato su un server; guardarlo non tocca niente."""
+        action = str(params.get("action") or "").strip().lower()
+        if action not in ("start", "stop"):
+            return None
+        what = params.get("command") if action == "start" else params.get("job_id")
+        return {"what": "ssh", "label": f"{params.get('host')}: {action} {what or ''}".strip()}
 
     async def execute(
         self,
@@ -549,6 +564,12 @@ class SshTransferTool(_SshToolMixin, Tool):
     @classmethod
     def create(cls, ctx: Any) -> Tool:
         return cls(workspace=ctx.workspace)
+
+    def outside_undo(self, params: dict[str, Any]) -> dict[str, str] | None:
+        """Un file mandato a un server; uno scaricato qui passa dal registro."""
+        if str(params.get("direction") or "").strip().lower() != "up":
+            return None
+        return {"what": "ssh", "label": f"{params.get('host')}: {params.get('remote_path')}"}
 
     async def execute(
         self,
