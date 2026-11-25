@@ -219,6 +219,12 @@ class FactCatalogue:
         for chain in archive_chains(entries):
             if chain.latest.retracted:
                 continue
+            # Tolta dall'utente: la catena intera tace, anche se a portare la
+            # lapide è una versione sola. Una formulazione più vecchia della
+            # stessa frase che tornasse quando la si nomina sarebbe la voce tolta
+            # che rientra dalla finestra.
+            if any(v.forgotten for v in chain.versions):
+                continue
             versions = tuple(
                 _Version(v, extract(v.text, vocab, extra_stop=stop))
                 for v in chain.versions if not v.retracted

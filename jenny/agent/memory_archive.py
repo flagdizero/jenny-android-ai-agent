@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-from jenny.agent.anchors import Vocabulary, extract, words
+from jenny.agent.anchors import Vocabulary, extract, surface_forms, words
 from jenny.utils.path import atomic_write
 
 ARCHIVE_DIRNAME = "archive"
@@ -55,6 +55,9 @@ HISTORY_ARCHIVE_DIRNAME = "history-archive"
 _BULLET_PREFIX = re.compile(r"^[-*][ \t]+")
 
 _SEPARATOR = "---"
+
+# Un id come lo scrive ``entry_id``: niente che un ``glob`` legga come jolly.
+_PLAIN_ID = re.compile(r"[A-Za-z0-9]{1,64}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +76,11 @@ class ArchivedEntry:
     il 12/10/2026: 271 file su 479 erano versioni di 65 fatti). ``retracted``
     dice che il fatto non era mai stato vero, non solo che è cambiato: un fatto
     smentito, altrimenti, si rilegge in archivio identico a uno vero.
+
+    ``forgotten`` dice che l'ha tolta **l'utente**: non deve più tornare, né
+    col richiamo per nome (``agent/facts.py``) né con ``recall``. Il file resta
+    come lapide, e non per pigrizia: se Dream riaggiunge la stessa frase, la
+    lapide è ciò che la riconosce (stesso id, perché l'id è l'hash del testo).
     """
 
     id: str
@@ -83,6 +91,7 @@ class ArchivedEntry:
     demoted: str = ""
     superseded_by: str = ""
     retracted: bool = False
+    forgotten: bool = False
 
 
 def archive_dir(memory_dir: Path) -> Path:
@@ -114,6 +123,7 @@ def render_archived(entry: ArchivedEntry) -> str:
         ("demoted", entry.demoted),
         ("superseded_by", entry.superseded_by),
         ("retracted", "yes" if entry.retracted else ""),
+        ("forgotten", "yes" if entry.forgotten else ""),
     ]
     head = [f"{k}: {v}" for k, v in fields if v]
     body = _BULLET_PREFIX.sub("", entry.text.strip()).strip()
@@ -145,8 +155,8 @@ def archive_entry(
     e un fatto può benissimo essere riaggiunto e ritolto — l'archivio deve dire
     "questo fatto è passato di qui", non quante volte.
 
-    Con un'eccezione sola: ``superseded_by`` e ``retracted`` si **aggiungono** al
-    file esistente se lì mancano. Due percorsi archiviano la stessa voce nella
+    Con un'eccezione sola: ``superseded_by``, ``retracted`` e ``forgotten`` si
+    **aggiungono** al file esistente se lì mancano. Due percorsi archiviano la stessa voce nella
     stessa scrittura — ``memory replace`` col legame, poi la rete al confine del
     file senza — e quale arrivi primo non deve decidere se il legame resta. Un
     campo già pieno non si tocca: la prima sostituzione è quella che lo ha
@@ -167,6 +177,7 @@ def archive_entry(
         demoted=entry.demoted or day.isoformat(),
         superseded_by=entry.superseded_by,
         retracted=entry.retracted,
+        forgotten=entry.forgotten,
     )
     directory = archive_dir(memory_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -185,7 +196,13 @@ def _add_lineage(path: Path, entry: ArchivedEntry) -> None:
     file aperto e ritoccato a mano può portare chiavi che questo modulo non
     conosce, e riscriverlo da :class:`ArchivedEntry` le butterebbe.
     """
-    wanted = {"superseded_by": entry.superseded_by, "retracted": "yes" if entry.retracted else ""}
+    wanted = {
+        "superseded_by": entry.superseded_by,
+        "retracted": "yes" if entry.retracted else "",
+        # Una voce che Dream aveva già archiviato e che poi l'utente toglie: la
+        # lapide si aggiunge al file che c'è, che tiene la sua data di allora.
+        "forgotten": "yes" if entry.forgotten else "",
+    }
     if not any(wanted.values()):
         return
     try:
@@ -208,6 +225,32 @@ def _add_lineage(path: Path, entry: ArchivedEntry) -> None:
         # soli campi nuovi: il corpo resta com'è.
         updated = "\n".join([_SEPARATOR, *missing, _SEPARATOR, "", body, ""])
     atomic_write(path, updated)
+
+
+def unarchive(memory_dir: Path, entry_id: str) -> bool:
+    """Toglie dall'archivio il file di *entry_id*, quando quella frase torna viva.
+
+    Una formulazione viva e la sua copia in archivio direbbero la stessa cosa in
+    due posti, e l'archivio smetterebbe di voler dire «non è più nei file». Le
+    versioni più vecchie che puntano a questo id (``superseded_by``) non si
+    toccano: :func:`archive_chains` tratta già un legame che esce dall'archivio
+    come la fine della catena, e quella fine adesso è la voce viva.
+
+    Ritorna ``True`` se ha tolto qualcosa. Un id assente non è un errore.
+    """
+    directory = archive_dir(memory_dir)
+    # Solo lettere e cifre: l'id finisce in un ``glob``, e un ``*`` arrivato da
+    # chi chiama toglierebbe l'archivio intero invece di un file.
+    if not _PLAIN_ID.fullmatch(entry_id or "") or not directory.is_dir():
+        return False
+    removed = False
+    for path in directory.glob(f"*-{entry_id}.md"):
+        try:
+            path.unlink()
+            removed = True
+        except FileNotFoundError:
+            continue
+    return removed
 
 
 def archived_ids(memory_dir: Path) -> set[str]:
@@ -282,6 +325,7 @@ def read_archived(path: Path) -> ArchivedEntry | None:
         demoted=fields.get("demoted", ""),
         superseded_by=fields.get("superseded_by", ""),
         retracted=fields.get("retracted", "").lower() in {"yes", "true"},
+        forgotten=fields.get("forgotten", "").lower() in {"yes", "true"},
     )
 
 
@@ -380,3 +424,70 @@ def erosion(entries: list[ArchivedEntry], live_texts: Iterable[str],
         lost=frozenset(a for a in passed if a not in present),
         passed=frozenset(passed),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class LostDetail:
+    """Un nome o un numero che solo l'archivio ha ancora.
+
+    ``anchor`` è la chiave piegata con cui si confronta (``anchors.extract``),
+    ``shown`` la forma con cui il testo lo scriveva («Cremona», non «cremona»),
+    ``version`` la formulazione archiviata **più recente** che lo porta: è la
+    frase da rimettere se lo si vuole indietro, e la più recente perché fra le
+    formulazioni che lo dicevano è quella più vicina a come il fatto è oggi.
+    """
+
+    anchor: str
+    shown: str
+    version: ArchivedEntry
+
+
+def lost_details(
+    chains: list[ArchiveChain],
+    live_text: str,
+    *,
+    extra_stop: Iterable[str] = (),
+    only: Collection[int] | None = None,
+) -> dict[int, list[LostDetail]]:
+    """Per ogni catena, i nomi e i numeri che nessun file vivo nomina più.
+
+    La chiave è l'indice della catena in *chains*; una catena senza perdite non
+    compare. *live_text* è il testo dei file vivi, tutto insieme: un nome
+    spostato da una riga all'altra non è perso. *only* limita la misura ad
+    alcune catene (``recall`` la chiede per quelle trovate), ma il vocabolario
+    si fa sempre su tutte, perché è il confronto fra tutti i testi a dire se una
+    parola maiuscola è un nome o l'inizio di una frase.
+
+    Le formulazioni ``retracted`` e ``forgotten`` non portano dettagli: una
+    smentita non era vera, e una che l'utente ha tolto non deve tornare,
+    nemmeno come «rimetti questo nome». Ogni elenco è in ordine di chiave, così
+    la stessa domanda dà la stessa riga.
+
+    Il cuore viene da ``MemoryRecallTool._lost_details``, ora uno dei chiamanti:
+    l'altro sarà la stanza «Cosa ricorda di te», che mostra «Rimetti» accanto
+    alla voce viva.
+    """
+    stop = tuple(extra_stop)
+    texts = [e.text for chain in chains for e in chain.versions]
+    vocab = Vocabulary.from_texts([*texts, live_text], extra_stop=stop)
+    present = words(live_text)
+    forms = surface_forms(texts)
+    out: dict[int, list[LostDetail]] = {}
+    for index, chain in enumerate(chains):
+        if only is not None and index not in only:
+            continue
+        carrier: dict[str, ArchivedEntry] = {}
+        # Dalla più recente: la prima versione che porta un'ancora è quella che
+        # la tiene.
+        for version in chain.versions:
+            if version.retracted or version.forgotten:
+                continue
+            for anchor in extract(version.text, vocab, extra_stop=stop):
+                if anchor not in present:
+                    carrier.setdefault(anchor, version)
+        if carrier:
+            out[index] = [
+                LostDetail(anchor=a, shown=forms.get(a, a), version=carrier[a])
+                for a in sorted(carrier)
+            ]
+    return out

@@ -169,3 +169,30 @@ def test_blocks_in_history_counts_the_header():
     history = [{"role": "user", "content": f"a\n{HEADER}\n- x"},
                {"role": "user", "content": [{"type": "text", "text": HEADER}]}]
     assert blocks_in_history(history) == 2
+
+
+class TestForgottenChains:
+    def test_a_forgotten_wording_never_comes_back(self, tmp_path):
+        archive_entry(tmp_path / "memory", ArchivedEntry(
+            id="dddd0001", text=_LONG, source="USER.md", superseded_by="live0001",
+            forgotten=True, demoted="2026-10-10",
+        ))
+        assert _recall(_catalogue(tmp_path), tmp_path, "sono da oreste") == []
+
+    def test_an_older_forgotten_version_silences_the_whole_chain(self, tmp_path):
+        """La lapide su una versione sola basta: la catena è la stessa frase."""
+        archive_entry(tmp_path / "memory", ArchivedEntry(
+            id="eeee0001", text=_LONG, source="USER.md", superseded_by="eeee0002",
+            forgotten=True, demoted="2026-10-01",
+        ))
+        _archive(tmp_path, "Piano: Oreste a Cremona.", id="eeee0002",
+                 superseded_by="live0001")
+        assert _recall(_catalogue(tmp_path), tmp_path, "sono da oreste") == []
+
+    def test_without_the_tombstone_the_same_chain_does_come_back(self, tmp_path):
+        """Il controllo del test sopra: senza lapide, la stessa catena torna."""
+        _archive(tmp_path, _LONG, id="eeee0001", superseded_by="eeee0002",
+                 demoted="2026-10-01")
+        _archive(tmp_path, "Piano: Oreste a Cremona.", id="eeee0002",
+                 superseded_by="live0001")
+        assert _recall(_catalogue(tmp_path), tmp_path, "sono da oreste") != []

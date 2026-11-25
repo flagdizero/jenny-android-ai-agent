@@ -327,3 +327,59 @@ class TestASearchShowsWhatOnlyTheArchiveStillHolds:
         out = await tool.execute(query=["oreste"])
         assert "1b1b1b1b" in out
         assert "in no live file any more" not in out
+
+
+class TestAForgottenFactIsNotThere:
+    """Tolta dall'utente: né nell'elenco, né in una ricerca, né aperta per id."""
+
+    def _store(self, tmp_path: Path) -> MemoryStore:
+        store = _store(tmp_path)
+        _archive(store, "Il gatto si chiama Briciola", when=date(2026, 9, 1),
+                 ident="f0f0f0f0", forgotten=True)
+        _archive(store, "Il ficus sta sul balcone", when=date(2026, 9, 2), ident="c0c0c0c0")
+        return store
+
+    async def test_not_in_the_list(self, tmp_path):
+        self._store(tmp_path)
+        out = await MemoryRecallTool(tmp_path).execute()
+        assert "f0f0f0f0" not in out and "Briciola" not in out
+        assert "c0c0c0c0" in out
+        assert out.startswith("1 facts")
+
+    async def test_not_in_a_search(self, tmp_path):
+        self._store(tmp_path)
+        out = await MemoryRecallTool(tmp_path).execute(query=["gatto", "briciola"])
+        assert "f0f0f0f0" not in out
+        assert out.startswith("Nothing matched")
+
+    async def test_not_opened_by_id(self, tmp_path):
+        self._store(tmp_path)
+        out = await MemoryRecallTool(tmp_path).execute(ids=["f0f0f0f0"])
+        assert "Briciola" not in out
+        assert "No archived entry has id f0f0f0f0" in out
+
+    async def test_an_older_forgotten_wording_hides_the_chain(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Il gatto Briciola dorme sul divano", when=date(2026, 9, 1),
+                 ident="a0a0a0a0", superseded_by="b0b0b0b0", forgotten=True)
+        _archive(store, "Il gatto dorme sul divano", when=date(2026, 9, 3), ident="b0b0b0b0")
+        out = await MemoryRecallTool(tmp_path).execute(query=["gatto"])
+        assert "b0b0b0b0" not in out
+
+    async def test_an_archive_of_only_forgotten_facts_reads_empty(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Il gatto si chiama Briciola", when=date(2026, 9, 1),
+                 ident="f0f0f0f0", forgotten=True)
+        out = await MemoryRecallTool(tmp_path).execute()
+        assert out.startswith("The memory archive is empty")
+
+
+class TestALostDetailFromAWrongWordingIsNotNamed:
+    async def test_a_retracted_wording_names_nothing(self, tmp_path):
+        store = _store(tmp_path)
+        _archive(store, "Vive a Cremona con Oreste", when=date(2026, 9, 1),
+                 ident="d0d0d0d0", superseded_by="e0e0e0e0", retracted=True)
+        _archive(store, "Vive con Oreste", when=date(2026, 9, 3), ident="e0e0e0e0")
+        out = await MemoryRecallTool(tmp_path).execute(query=["oreste"])
+        assert "e0e0e0e0" in out
+        assert "Cremona" not in out

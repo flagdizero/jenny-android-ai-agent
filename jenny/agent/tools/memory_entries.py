@@ -49,7 +49,9 @@ from jenny.agent.memory_archive import (
     Erosion,
     archive_entry,
     erosion,
+    find_archived,
     list_archived,
+    read_archived,
 )
 from jenny.agent.memory_search import similarity
 from jenny.agent.tools.base import Tool
@@ -842,8 +844,17 @@ class MemoryEntryTool(Tool):
         present: list[str] = []
         refused: list[str] = []
         problems: list[str] = []
+        forgotten: list[str] = []
 
         for fact in facts:
+            if self._forgotten(fact):
+                # La lapide di ``memory_archive``: questa frase l'ha tolta
+                # l'utente. Contata come già presente, e non come rifiuto, perché
+                # il batch *è* consolidato — il fatto ha già una decisione, la
+                # sua — e trattenerlo lo rigiocherebbe contro la stessa lapide.
+                self.entries_already_present += 1
+                forgotten.append(_summarize(fact))
+                continue
             candidate, why = add_entry(current, fact, heading=heading)
             if why.startswith("already present"):
                 self.entries_already_present += 1
@@ -869,11 +880,16 @@ class MemoryEntryTool(Tool):
         headline = ", ".join(filter(None, [
             f"{len(added)} added" if added else "",
             f"{len(present)} already present" if present else "",
+            f"{len(forgotten)} removed by the user" if forgotten else "",
             f"{len(refused)} refused" if refused else "",
             f"{len(problems)} rejected" if problems else "",
         ])) or "nothing to do"
         detail = [f"  + {a}" for a in added]
         detail += [f"  = {p} (already there)" for p in present]
+        detail += [
+            f"  = {f} (the user removed this from memory: do not add it again)"
+            for f in forgotten
+        ]
         detail += [f"  ! {r}" for r in refused]
         detail += [f"  ! {q}" for q in problems]
         return self._report(file, path, "\n".join([f"{headline}.", *detail]))
@@ -976,6 +992,19 @@ class MemoryEntryTool(Tool):
             )
 
         return f"unknown action {action!r}: pass add, replace, remove or list"
+
+    def _forgotten(self, fact: str) -> bool:
+        """La frase ha una lapide in archivio: l'ha tolta l'utente.
+
+        L'id è quello della voce come finirebbe nel file (col trattino), lo
+        stesso con cui l'archivio l'ha salvata. Un archivio illeggibile non
+        ferma niente: la frase si aggiunge come sempre.
+        """
+        found = find_archived(self._workspace / "memory", entry_id(_as_bullet(fact)))
+        if found is None:
+            return False
+        archived = read_archived(found)
+        return archived is not None and archived.forgotten
 
     def _write(self, path: Path, text: str) -> str | None:
         """Scrive, o ritorna il messaggio di rifiuto del budget.

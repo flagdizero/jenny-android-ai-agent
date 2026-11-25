@@ -1200,3 +1200,41 @@ class TestCreateRefusesToBuildUnprotected:
         )
 
         assert tool.name == "memory"
+
+
+class TestARemovedFactDoesNotComeBack:
+    """La lapide: una frase che l'utente ha tolto non si riaggiunge."""
+
+    @pytest.fixture
+    def tool(self, tmp_path: Path):
+        from jenny.agent.memory_archive import ArchivedEntry, archive_entry
+
+        (tmp_path / "USER.md").write_text(_REAL_SHAPE, encoding="utf-8")
+        archive_entry(tmp_path / "memory", ArchivedEntry(
+            id=entry_id("- Plays chess"), text="- Plays chess", source="USER.md",
+            forgotten=True,
+        ))
+        return MemoryEntryTool(tmp_path, file_states=FileStates())
+
+    async def test_it_is_not_written(self, tool, tmp_path):
+        before = (tmp_path / "USER.md").read_bytes()
+        out = await tool.execute(action="add", file="user", texts=["Plays chess"])
+        assert (tmp_path / "USER.md").read_bytes() == before
+        assert "the user removed this" in out
+        assert out.startswith("1 removed by the user.")
+
+    async def test_it_counts_as_already_present(self, tool):
+        await tool.execute(action="add", file="user", texts=["Plays chess", "Drinks tea"])
+        assert tool.entries_already_present == 1
+        assert tool.entries_added == 1
+
+    async def test_an_archived_but_not_forgotten_fact_comes_back(self, tmp_path):
+        from jenny.agent.memory_archive import ArchivedEntry, archive_entry
+
+        (tmp_path / "USER.md").write_text(_REAL_SHAPE, encoding="utf-8")
+        archive_entry(tmp_path / "memory", ArchivedEntry(
+            id=entry_id("- Plays chess"), text="- Plays chess", source="USER.md",
+        ))
+        tool = MemoryEntryTool(tmp_path, file_states=FileStates())
+        await tool.execute(action="add", file="user", texts=["Plays chess"])
+        assert tool.entries_added == 1

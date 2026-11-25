@@ -34,13 +34,13 @@ from typing import Any
 
 from loguru import logger
 
-from jenny.agent.anchors import Vocabulary, extract, surface_forms, words
 from jenny.agent.memory_archive import (
     ArchiveChain,
     ArchivedEntry,
     archive_chains,
     history_archive_dir,
     list_archived,
+    lost_details,
 )
 from jenny.agent.memory_search import query_terms, search
 from jenny.agent.tools.base import Tool, tool_parameters
@@ -200,13 +200,20 @@ class MemoryRecallTool(_RecallTool):
         page: int | None = None,
         **kwargs: Any,
     ) -> str:
-        entries = list_archived(self._memory_dir)
-        if not entries:
+        # Una catena che l'utente ha tolto (``forgotten`` su una qualunque delle
+        # sue versioni) non c'è per questo tool: né nell'elenco, né in una
+        # ricerca, né aperta per id. È la stessa regola del richiamo per nome
+        # (``agent/facts.py``), e per la stessa ragione: tolta vuol dire che non
+        # torna.
+        chains = [
+            chain for chain in archive_chains(list_archived(self._memory_dir))
+            if not any(v.forgotten for v in chain.versions)
+        ]
+        if not chains:
             return (
                 "The memory archive is empty: no fact has been demoted yet. "
                 "Nothing was lost — there is simply nothing here to recall."
             )
-        chains = archive_chains(entries)
         if ids:
             return self._open(chains, ids)
         if query:
@@ -284,26 +291,25 @@ class MemoryRecallTool(_RecallTool):
         di riscritture sempre più corte la più recente è la più povera: «mesi da
         Oreste» nasconde il «a Cremona» di tre versioni prima. Qui si dice cosa
         le versioni vecchie nominano che nessun file vivo nomina più, così il
-        dettaglio si vede senza aprire la voce. Una misura che non riesce toglie
+        dettaglio si vede senza aprire la voce. La misura è
+        :func:`memory_archive.lost_details`; una misura che non riesce toglie
         solo l'aggiunta.
         """
+        wanted = {id(chain) for chain in hits}
         try:
             live = "\n".join(text for _, text in self._live_entries().values())
-            texts = [e.text for chain in chains for e in chain.versions]
-            vocab = Vocabulary.from_texts([*texts, live])
-            present = words(live)
-            forms = surface_forms(texts)
+            found = lost_details(
+                chains, live, only={i for i, c in enumerate(chains) if id(c) in wanted},
+            )
         except Exception:  # noqa: BLE001 — v. la docstring
             logger.opt(exception=True).warning("recall: could not compare with the live files")
             return {}
         out: dict[int, str] = {}
-        for chain in hits:
-            older = set().union(*(extract(e.text, vocab) for e in chain.versions))
-            gone = sorted(a for a in older if a not in present)
-            if gone:
-                names = ", ".join(forms.get(a, a) for a in gone[:_LOST_NAMED])
-                more = f" and {len(gone) - _LOST_NAMED} more" if len(gone) > _LOST_NAMED else ""
-                out[id(chain)] = f" — in no live file any more: {names}{more}"
+        for index, details in found.items():
+            names = ", ".join(d.shown for d in details[:_LOST_NAMED])
+            extra = len(details) - _LOST_NAMED
+            more = f" and {extra} more" if extra > 0 else ""
+            out[id(chains[index])] = f" — in no live file any more: {names}{more}"
         return out
 
     def _list(self, chains: list[ArchiveChain], page: int) -> str:
