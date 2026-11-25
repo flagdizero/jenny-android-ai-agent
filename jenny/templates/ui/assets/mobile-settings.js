@@ -881,6 +881,7 @@ export class SettingsController {
           <div class="home-net-text">
             <div class="settings-label">${escapeHtml(e.name || e.address)}</div>
             <div class="settings-hint">${escapeHtml(e.name ? e.address : '')}${e.single ? '' : `${e.name ? ' · ' : ''}${escapeHtml(i18n.t('settings.homeNet.range'))}`}</div>
+            ${e.phone ? `<div class="settings-hint home-net-phone">${escapeHtml(i18n.t('settings.homeNet.phoneClosed'))}</div>` : ''}
           </div>
           <button class="home-net-remove" type="button" data-net-remove="${escapeHtml(e.entry)}"
                   aria-label="${escapeHtml(i18n.t('settings.homeNet.remove', { name: e.name || e.address }))}">

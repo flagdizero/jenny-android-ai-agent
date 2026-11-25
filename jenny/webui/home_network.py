@@ -70,16 +70,30 @@ def home_network_payload(config: Any) -> dict[str, Any]:
     names = dict(getattr(config.security, "ssrf_names", {}) or {})
     entries = []
     for cidr in list(config.security.ssrf_whitelist or []):
-        shown, single = cidr, False
+        shown, single, phone = cidr, False, False
         try:
             net = ipaddress.ip_network(cidr, strict=False)
             single = net.num_addresses == 1
             shown = str(net.network_address) if single else str(net)
+            phone = _covers_the_phone(net)
         except ValueError:
             pass
         entries.append({"entry": cidr, "address": shown, "name": names.get(cidr, ""),
-                        "single": single})
+                        "single": single, "phone": phone})
     return {"entries": entries}
+
+
+def _covers_the_phone(net: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bool:
+    """Una voce scritta a mano che tocca il telefono stesso.
+
+    Su quella parte non vale: il pavimento di ``security/network.py`` viene
+    prima della whitelist. L'officina lo dice accanto alla voce, invece di
+    lasciar credere che l'abbia aperto.
+    """
+    from jenny.security.network import _THE_PHONE_ITSELF
+
+    return any(net.version == floor.version and net.overlaps(floor)
+               for floor in _THE_PHONE_ITSELF)
 
 
 def add_entry(config: Any, entry: str, name: str) -> None:

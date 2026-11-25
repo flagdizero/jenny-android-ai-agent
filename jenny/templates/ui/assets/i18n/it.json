@@ -502,6 +502,7 @@
       "hint": "Gli strumenti di {name} non raggiungono gli indirizzi della tua rete, per sicurezza. Qui ne apri uno alla volta: il NAS, Home Assistant, un altro computer.",
       "empty": "Nessun indirizzo: Jenny non raggiunge niente in casa.",
       "range": "un intervallo intero, scritto a mano",
+      "phoneClosed": "Il telefono stesso resta chiuso: questa voce non lo apre.",
       "remove": "Togli {name}",
       "name": "Nome",
       "namePlaceholder": "NAS",

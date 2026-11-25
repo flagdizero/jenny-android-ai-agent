@@ -26,7 +26,6 @@ from jenny.agent.tools.python_exec_builtins import _register_builtin_functions
 from jenny.bus.queue import MessageBus
 from jenny.config.tool_schemas import PythonExecConfig
 from jenny.providers.base import LLMProvider
-from jenny.security.network import configure_ssrf_whitelist
 from jenny.security.subagent_policy import (
     SubagentRunPolicy,
     check_read,
@@ -34,6 +33,7 @@ from jenny.security.subagent_policy import (
     enter_subagent_policy,
     policy_after_tool,
 )
+from tests.support.net import loopback_as_a_server
 
 
 @pytest.fixture
@@ -116,9 +116,8 @@ def page_server():
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     thread = threading.Thread(target=srv.serve_forever, daemon=True)
     thread.start()
-    configure_ssrf_whitelist(["127.0.0.0/8"])
-    yield srv.server_address[1]
-    configure_ssrf_whitelist([])
+    with loopback_as_a_server():
+        yield srv.server_address[1]
     srv.shutdown()
 
 

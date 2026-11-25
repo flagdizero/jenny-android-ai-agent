@@ -23,7 +23,6 @@ from jenny.agent.tools.python_exec import PythonExecTool
 from jenny.agent.tools.python_exec_builtins import _register_builtin_functions
 from jenny.config.tool_schemas import PythonExecConfig
 from jenny.providers.base import ToolCallRequest
-from jenny.security.network import configure_ssrf_whitelist
 from jenny.security.subagent_policy import (
     SubagentRunPolicy,
     egress_refusal,
@@ -31,6 +30,7 @@ from jenny.security.subagent_policy import (
     hosts_named_in,
     policy_before_tool,
 )
+from tests.support.net import loopback_as_a_server
 
 
 def _junction(task: str = "riassumi https://docs.example.org/guida", **kw) -> SubagentRunPolicy:
@@ -146,8 +146,7 @@ async def test_http_helpers_are_refused_before_dns(tmp_path: Path, no_dns, helpe
 
 
 async def test_a_raw_socket_is_refused_at_the_junction(tmp_path: Path) -> None:
-    configure_ssrf_whitelist(["127.0.0.0/8"])
-    try:
+    with loopback_as_a_server():
         srv = socket.socket()
         srv.bind(("127.0.0.1", 0))
         srv.listen(1)
@@ -162,15 +161,13 @@ async def test_a_raw_socket_is_refused_at_the_junction(tmp_path: Path) -> None:
             out = await _exec_tool(tmp_path).execute(code=code)
         assert "CONNECTED" not in out
         assert "no direct network connection" in out
-        # Fuori dall'incrocio, la stessa connessione passa (il loopback è aperto
-        # dalla whitelist di questo test).
+        # Fuori dall'incrocio, la stessa connessione passa (il loopback qui fa da
+        # server di fuori, ``loopback_as_a_server``).
         policy = SubagentRunPolicy.for_run("t", tmp_path, task="")
         with enter_subagent_policy(policy):
             out = await _exec_tool(tmp_path).execute(code=code)
         assert "CONNECTED" in out
         srv.close()
-    finally:
-        configure_ssrf_whitelist([])
 
 
 async def test_http_get_to_a_task_host_still_works(tmp_path: Path) -> None:
@@ -190,14 +187,12 @@ async def test_http_get_to_a_task_host_still_works(tmp_path: Path) -> None:
 
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    configure_ssrf_whitelist(["127.0.0.0/8"])
     try:
         port = srv.server_address[1]
         policy = _junction(task=f"scarica http://127.0.0.1:{port}/dati")
-        with enter_subagent_policy(policy):
+        with loopback_as_a_server(), enter_subagent_policy(policy):
             out = await _exec_tool(tmp_path).execute(
                 code=f"print(http_get('http://127.0.0.1:{port}/dati'))")
         assert out.strip().endswith("ok"), out
     finally:
-        configure_ssrf_whitelist([])
         srv.shutdown()

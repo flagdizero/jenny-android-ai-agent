@@ -130,3 +130,48 @@ def test_a_public_ipv4_behind_nat64_or_6to4_still_passes(host: str) -> None:
     """Su una rete mobile solo-IPv6 il DNS64 dà 64:ff9b:: anche ai siti pubblici."""
     assert validate_url_target(_url(host)) == (True, "")
     assert validate_ssh_target(host) == (True, "")
+
+
+_THE_PHONE = [
+    "127.0.0.1",
+    "127.1.2.3",
+    "0.0.0.0",
+    "::1",
+    "::",
+    "::127.0.0.1",
+    "::ffff:127.0.0.1",
+    *_EMBEDDED_PHONE,
+]
+
+
+@pytest.mark.parametrize("host", _THE_PHONE)
+def test_no_whitelist_opens_the_phone_to_any_policy(host: str) -> None:
+    """Il pavimento vale per tutte e tre le policy e per i socket di ``python_exec``.
+
+    Prima del 25/11/2026 lo aveva solo l'SSH: una voce scritta a mano che
+    copriva il loopback apriva ``web_fetch``, ``http_get``, i socket grezzi e le
+    Jenny App all'API del gateway dall'interno.
+    """
+    from jenny.security import network
+
+    network.configure_ssrf_whitelist(["::/0", "0.0.0.0/0", "127.0.0.0/8", "::1/128"])
+    try:
+        assert not validate_url_target(_url(host))[0], host
+        assert not validate_app_server_target(_url(host))[0], host
+        assert not validate_ssh_target(host)[0], host
+        assert network.is_blocked_ip(host), host
+    finally:
+        network.configure_ssrf_whitelist([])
+
+
+def test_the_whitelist_still_opens_a_lan_range() -> None:
+    """Il pavimento riguarda il telefono, non la whitelist in sé."""
+    from jenny.security import network
+
+    network.configure_ssrf_whitelist(["192.168.1.0/24"])
+    try:
+        assert validate_url_target("http://192.168.1.20/") == (True, "")
+        assert not network.is_blocked_ip("192.168.1.20")
+    finally:
+        network.configure_ssrf_whitelist([])
+    assert not validate_url_target("http://192.168.1.20/")[0]
