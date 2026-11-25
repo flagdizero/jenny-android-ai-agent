@@ -115,6 +115,10 @@ class Scenario:
     #: osservata.
     notebook_prelude: list[str] = field(default_factory=list)
     notebook_seed: str = "Le piante del terrazzo."
+    #: Con ``chat="notebook"``: dopo la creazione si chiede il saluto del
+    #: quaderno (``project.greet``, quel che fa la casa aprendolo), e il testo va
+    #: in ``extra["greeting"]``. Un saluto di ripiego (modello assente) annulla il giro.
+    capture_greeting: bool = False
     #: File da leggere dopo il giro; un percorso che finisce in ``/`` legge
     #: tutta la cartella.
     read_after: tuple[str, ...] = ()

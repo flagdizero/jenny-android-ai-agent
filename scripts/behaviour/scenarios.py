@@ -894,6 +894,96 @@ DIARY = [
     ),
 ]
 
+# -- quaderni: si imparano usandoli ------------------------------------------------
+#
+# Dal 25/11/2026 il saluto di un quaderno nuovo nomina due cose da fare lì e dice
+# di chiedere il resto (``agent/notebook_greeting.md``), e alla domanda «cosa
+# posso fare qui?» Jenny risponde da quel quaderno com'è (``agent/project.md``,
+# «When they ask what they can do here»). Argomenti inventati: il repo è pubblico.
+
+_ASK_MORE = re.compile(r"chied\w*|domand\w*", re.IGNORECASE)
+_INTERNALS = re.compile(r"\.md\b|\bwiki/|\bfile\b|\bcartell\w*|\bstrument\w*|\btool\b|"
+                        r"journal_append|board\b", re.IGNORECASE)
+_THINGS_TO_DO = {
+    "pages": re.compile(r"pagin\w*|annot\w*|appunt\w*|scriv\w*|segn\w*", re.IGNORECASE),
+    "board": re.compile(r"bachec\w*", re.IGNORECASE),
+    "reminder": re.compile(r"promemori\w*|ricord\w*|avvis\w*", re.IGNORECASE),
+    "app": re.compile(r"\bapp\b|applicazion\w*|\btabell\w*|\bcalcol\w*", re.IGNORECASE),
+    "plan": re.compile(r"\bpiano\b|\bpiani\b|a passi", re.IGNORECASE),
+}
+_WRITES = ("write_file", "edit_file", "apply_patch", "journal_append", "spawn", "plan_propose",
+           "cron", "app")
+
+
+def _things(text: str) -> list[str]:
+    return sorted(k for k, rx in _THINGS_TO_DO.items() if rx.search(text))
+
+
+def _greets_with_two_things(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    greeting = str(obs.extra.get("greeting") or "")
+    things = _things(greeting)
+    return [
+        Check("names_two_things", len(things) >= 2, f"{','.join(things)} | {greeting[:200]}"),
+        Check("says_to_ask_more", bool(_ASK_MORE.search(greeting)), greeting[-160:]),
+        Check("no_internals", not _INTERNALS.search(greeting), greeting[:200]),
+    ]
+
+
+def _answers_from_the_notebook(obs: Observation, n: Mapping[str, str]) -> list[Check]:
+    reply = obs.reply
+    things = _things(reply)
+    wrote = [c.name for name in _WRITES for c in obs.last_turn_called(name)]
+    return [
+        Check("several_things", len(things) >= 3, f"{','.join(things)} | {reply[:200]}"),
+        Check("names_the_plan_key", "plan" in things, reply[:200]),
+        Check("no_internals", not _INTERNALS.search(reply), reply[:200]),
+        Check("writes_nothing", not wrote, ",".join(wrote)),
+    ]
+
+
+NOTEBOOK_LEARNING = [
+    Scenario(
+        name="notebook_greeting_offers_two_things",
+        stage=4, area="notebook", chat="notebook", capture_greeting=True,
+        promise="il saluto di un quaderno nuovo nomina due cose da fare lì e dice di chiedere il resto",
+        notebook_seed="Le ricette di casa e cosa cucino nel fine settimana.",
+        turns=[],
+        check=_greets_with_two_things,
+        # Taratura per inversione: il saluto di prima del 25/11/2026, che chiudeva
+        # con una domanda e vietava di dire come funziona un quaderno.
+        calibration=[
+            Edit("agent/notebook_greeting.md",
+                 "- name two things they can do here, picked for this notebook's topic, a few "
+                 "words each: for example\n  writing down what they learn so it becomes pages, "
+                 "keeping what matters on its board, a reminder,\n  a small app for it;\n"
+                 "- end by saying they can ask you what else this notebook can do.\n",
+                 "- end with a short question that invites them to start.\n"),
+            Edit("agent/notebook_greeting.md",
+                 "- Say what they can do, not how it works inside: never name files, folders or "
+                 "tools.\n",
+                 "- Do not mention files, folders, tools, boards or how notebooks work.\n"),
+        ],
+    ),
+    Scenario(
+        name="notebook_what_can_i_do",
+        stage=4, area="notebook", chat="notebook", capture_greeting=True,
+        promise="«cosa posso fare qui?» in un quaderno: risponde da quel quaderno, Piano compreso, "
+                "senza scrivere niente",
+        notebook_seed="La bici: uscite, manutenzione e pezzi da cambiare.",
+        turns=["Cosa posso fare qui?"],
+        check=_answers_from_the_notebook,
+        calibration=[Edit(
+            "agent/project.md",
+            "Answer from this notebook as it is now, not a general list: its pages, its board (or "
+            "why it has\nnone), its reminders, its apps, and the **Plan** button for long jobs. "
+            "Three or four things, each\nwith an example from its topic, in plain words, never "
+            "naming files or tools.\n",
+            "Answer in one short sentence that they can just tell you what they need, and name "
+            "nothing else.\n",
+        )],
+    ),
+]
+
 # -- stadio 4, tappe 3 e 4: i cassetti -----------------------------------------------
 #
 # Dalla chat personale un fatto finisce nel quaderno a cui appartiene, senza che
@@ -1288,7 +1378,7 @@ NAMES = [
 ]
 
 SCENARIOS = {s.name: s for s in [*STAGE_1, *LATER, *STAGE_2, *RECALL, *COMPACTION, *STAGE_3, *DIARY,
-                                 *DRAWERS, *NAMES]}
+                                 *DRAWERS, *NAMES, *NOTEBOOK_LEARNING]}
 
 #: Le proprieta' che valgono per ogni giro di ogni scenario.
 CROSS_CUTTING = (no_unknown_tool, finished)

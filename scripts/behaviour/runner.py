@@ -148,6 +148,12 @@ class Runner:
             if scenario.chat == "notebook" or scenario.notebook_prelude:
                 project = f"bh-{nonces[scenario.nonces[0]]}"
                 dev.rpc("project.create", {"name": project, "seed": scenario.notebook_seed})
+            greeting: str | None = None
+            if scenario.capture_greeting and scenario.chat == "notebook":
+                said = dev.rpc("project.greet", {"name": project, "lang": "it"})
+                if said.get("fallback"):
+                    raise ProviderDownError("notebook greeting fell back to the fixed sentence")
+                greeting = str(said.get("text") or "")
             prelude_calls: list[Any] = []
             if scenario.notebook_prelude:
                 prelude_calls = self._prelude(scenario, nonces, project)
@@ -186,6 +192,8 @@ class Runner:
                 "last_turn_calls": observation_from_rows(rows[last_turn_start:], []).tool_calls,
                 "prelude_calls": prelude_calls,
             }
+            if greeting is not None:
+                extra["greeting"] = greeting
             if scenario.archive_after:
                 extra["archive_entry"] = self._archive_now()
             if scenario.monitor_after:
