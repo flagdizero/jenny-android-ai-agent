@@ -157,3 +157,17 @@ class TestOnlyTheUserTurnAsks:
 
     def test_a_message_from_another_jenny_on_a_line_does_not(self):
         assert self._flag(metadata={"_line_peer": "p1"}) is False
+
+
+class TestAFreshArchiveIsSeenAtOnce:
+    def test_a_wording_archived_just_now_is_recalled_by_the_next_turn(self, builder):
+        # Dream ha appena spostato una formulazione: il turno dopo aspetta la
+        # ricostruzione (al più ``WAIT_FOR_REBUILD_S``) invece di usare il
+        # catalogo di prima.
+        archive_entry(builder.workspace / "memory", ArchivedEntry(
+            id="bbbb0002", text="Amica Tiziana, vive a Lodi con due gatti.", source="USER.md",
+            demoted="2026-11-20",
+        ))
+        assert builder.facts.stale()
+        text = _user_text(_build(builder, message="domani ceno da tiziana"))
+        assert "Lodi" in text

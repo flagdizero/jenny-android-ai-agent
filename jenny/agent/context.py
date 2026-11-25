@@ -19,6 +19,7 @@ from jenny.agent.facts import (
     MEMORY_SOURCE,
     NOTEBOOK_NOTE,
     USER_SOURCE,
+    WAIT_FOR_REBUILD_S,
     FactCatalogue,
     blocks_in_history,
 )
@@ -1697,7 +1698,9 @@ class ContextBuilder:
         if not personal and not is_project_session_key(session_key):
             return []
         try:
-            self.facts.refresh_async()
+            if self.facts.stale():
+                self.facts.refresh_async()
+                self.facts.wait(WAIT_FOR_REBUILD_S)
             if not self.facts.ready or blocks_in_history(history) >= MAX_BLOCKS_IN_HISTORY:
                 return []
             files = [self.memory.read_file(self.memory.user_file),

@@ -285,3 +285,45 @@ class TestThePromptStopsPointingAtGrep:
 
     def test_the_line_still_disappears_on_an_empty_archive(self, tmp_path):
         assert _store(tmp_path).get_archive_context() == ""
+
+
+class TestASearchShowsWhatOnlyTheArchiveStillHolds:
+    """«Fatti fermi», passo 3: la riga trovata dice i nomi che nessun file vivo ha più.
+
+    In una catena di riscritture sempre più corte la formulazione più recente,
+    quella che l'indice mostra, è la più povera. Nomi inventati.
+    """
+
+    def _chain(self, tmp_path: Path) -> MemoryStore:
+        store = _store(tmp_path)
+        _archive(store, "Piano di vita: mesi da Oreste a Cremona o in Islanda.",
+                 when=date(2026, 10, 10), ident="1a1a1a1a", superseded_by="1b1b1b1b")
+        _archive(store, "Piano: mesi da Oreste o in Islanda.",
+                 when=date(2026, 11, 4), ident="1b1b1b1b", superseded_by="live")
+        return store
+
+    async def test_the_lost_city_is_named_next_to_the_found_fact(self, tmp_path):
+        store = self._chain(tmp_path)
+        store.user_file.write_text("# User\n\n- Piano: mesi da Oreste.\n", encoding="utf-8")
+        out = await MemoryRecallTool(tmp_path).execute(query=["oreste"])
+        line = next(ln for ln in out.splitlines() if "1b1b1b1b" in ln)
+        assert "in no live file any more: Cremona, Islanda" in line
+
+    async def test_nothing_is_added_when_the_live_file_still_says_it(self, tmp_path):
+        store = self._chain(tmp_path)
+        store.user_file.write_text(
+            "# User\n\n- Piano: mesi da Oreste a Cremona o in Islanda.\n", encoding="utf-8")
+        out = await MemoryRecallTool(tmp_path).execute(query=["oreste"])
+        assert "in no live file any more" not in out
+
+    async def test_a_failing_comparison_costs_only_the_addition(self, tmp_path, monkeypatch):
+        self._chain(tmp_path)
+        tool = MemoryRecallTool(tmp_path)
+
+        def boom():
+            raise OSError("disk gone")
+
+        monkeypatch.setattr(tool, "_live_entries", boom)
+        out = await tool.execute(query=["oreste"])
+        assert "1b1b1b1b" in out
+        assert "in no live file any more" not in out

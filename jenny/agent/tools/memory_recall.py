@@ -34,6 +34,7 @@ from typing import Any
 
 from loguru import logger
 
+from jenny.agent.anchors import Vocabulary, extract, surface_forms, words
 from jenny.agent.memory_archive import (
     ArchiveChain,
     ArchivedEntry,
@@ -61,6 +62,9 @@ _INDEX_MAX_CHARS = 12_000
 
 # Quante voci trovate si mostrano al più: le altre si dicono, non si tacciono.
 _SEARCH_MAX_RESULTS = 40
+
+# Quanti nomi persi si elencano accanto a una voce trovata: gli altri si contano.
+_LOST_NAMED = 6
 
 _QUERY_DESCRIPTION = (
     "Words to search for. Give them in both Italian and English, with synonyms "
@@ -183,7 +187,8 @@ class MemoryRecallTool(_RecallTool):
             "whenever a question is about the past — what was decided, what "
             "something used to be, why a thing was set up that way. "
             "A fact marked RETRACTED was never true; one marked as replaced has a "
-            "newer wording. "
+            "newer wording, and a found line also names what its older wordings say that "
+            "no live file says any more. "
             "This holds facts that were kept and later demoted; for details of a "
             "past conversation that Dream did not keep, use recall_history."
         )
@@ -260,7 +265,9 @@ class MemoryRecallTool(_RecallTool):
         ranked = search(docs, terms)
         if not ranked:
             return _NO_MATCH.format(terms=", ".join(terms))
-        shown = [_index_line(chains[i]) for i, _, _ in ranked[:_SEARCH_MAX_RESULTS]]
+        hits = [chains[i] for i, _, _ in ranked[:_SEARCH_MAX_RESULTS]]
+        lost = self._lost_details(chains, hits)
+        shown = [_index_line(chain) + lost.get(id(chain), "") for chain in hits]
         header = (
             f"{len(ranked)} of {len(chains)} archived facts match {', '.join(terms)}, "
             "best match first. Call recall again with the ids you want in full."
@@ -268,6 +275,36 @@ class MemoryRecallTool(_RecallTool):
         if len(ranked) > len(shown):
             header += f" Only the first {len(shown)} are listed."
         return header + "\n\n" + "\n".join(shown)
+
+    def _lost_details(self, chains: list[ArchiveChain],
+                      hits: list[ArchiveChain]) -> dict[int, str]:
+        """Per ogni catena trovata, i nomi e i numeri che solo l'archivio ha ancora.
+
+        La riga dell'indice mostra la formulazione più recente, e in una catena
+        di riscritture sempre più corte la più recente è la più povera: «mesi da
+        Oreste» nasconde il «a Cremona» di tre versioni prima. Qui si dice cosa
+        le versioni vecchie nominano che nessun file vivo nomina più, così il
+        dettaglio si vede senza aprire la voce. Una misura che non riesce toglie
+        solo l'aggiunta.
+        """
+        try:
+            live = "\n".join(text for _, text in self._live_entries().values())
+            texts = [e.text for chain in chains for e in chain.versions]
+            vocab = Vocabulary.from_texts([*texts, live])
+            present = words(live)
+            forms = surface_forms(texts)
+        except Exception:  # noqa: BLE001 — v. la docstring
+            logger.opt(exception=True).warning("recall: could not compare with the live files")
+            return {}
+        out: dict[int, str] = {}
+        for chain in hits:
+            older = set().union(*(extract(e.text, vocab) for e in chain.versions))
+            gone = sorted(a for a in older if a not in present)
+            if gone:
+                names = ", ".join(forms.get(a, a) for a in gone[:_LOST_NAMED])
+                more = f" and {len(gone) - _LOST_NAMED} more" if len(gone) > _LOST_NAMED else ""
+                out[id(chain)] = f" — in no live file any more: {names}{more}"
+        return out
 
     def _list(self, chains: list[ArchiveChain], page: int) -> str:
         pages = _pages([_index_line(c) for c in chains])

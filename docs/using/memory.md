@@ -90,7 +90,7 @@ What decides it, all in code, with no model call:
 
 The lines sit in the turn's runtime context, never in the system prompt: the cached part of the prompt is the same whether or not a name was recalled. Jenny is told they are older wordings: what her memory files say now, a later line, or what you say now wins.
 
-The archive is read into memory once, in the background, when the app starts, and again whenever it changes. Until that first read finishes, a message recalls nothing. A name that is never written with a capital, an indirect reference ("my sister"), or a fact that never made it into `USER.md` is not recalled this way: for those Jenny still searches with `recall`, `recall_history` and `recall_chat`.
+The archive is read into memory once, in the background, when the app starts, and again whenever it changes. Until that first read finishes, a message recalls nothing. A name that is never written with a capital, an indirect reference ("my sister"), or a fact that never made it into `USER.md` is not recalled this way: for those Jenny still searches with `recall`, `recall_history` and `recall_chat`. When she searches with `recall`, each fact it finds is shown by its newest wording, and the line also names what its older wordings say that no live file says any more (`— in no live file any more: …`): in a chain of shorter and shorter rewrites the newest is the poorest, and the lost detail is visible without opening the entry.
 
 ## Why Dream can say "nothing to process"
 
