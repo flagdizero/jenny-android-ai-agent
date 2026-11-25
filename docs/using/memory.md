@@ -65,6 +65,18 @@ A run reads a *window* of unprocessed entries — at most 20, and at most 16,000
 
 "Wrote something" is not the same as "saved the batch", and the difference is worth stating because it cost real entries. A run can obey the first half of an over-budget refusal — free some space by rewriting an existing line shorter — and then stop without adding the new fact. Every counter reads healthy: a write succeeded, no refusal is outstanding. So Dream also checks, at the end of each run, whether **any** memory file grew. If a memory file was already near its budget when the run started, the batch carried facts tagged for retention, and nothing grew, the cursor is held and those entries come back next run, which is also what pulls in the review pass that frees room. The "near its budget" part is what keeps this quiet: without it the check fires on every batch of facts Jenny already knows, which is most of them — the consolidator re-extracts the same facts each pass. Below that mark, a run that adds nothing is believed. This is a size heuristic, not a proof: a run that legitimately replaces a line with a shorter one carrying the new fact reads as "nothing landed" and gets replayed a few times. That is the cheap direction to be wrong in — the expensive one is losing the fact — and the replay is bounded: after four held runs Dream gives up on the batch, advances, and the stuck alarm has already fired.
 
+### Names and numbers are the fact
+
+Shortening a line is how Dream makes room, and a shorter line can lose a detail on the way. Measured on a real phone after three months of use: the entries still in `USER.md` and `memory/MEMORY.md` had been rewritten about seven times each, and 67 of the 151 names and numbers that had passed through them were no longer in either file. One entry went from "months at a friend's in a given city" to "months at a friend's", and the city was gone from every prompt. The older wording was kept in `memory/archive/`, but nothing read it back, and the code linked the shorter line to it as "a newer wording of the same fact".
+
+Three things now work against that:
+
+- Dream's instructions, and the message it gets when a write is over budget, say that a shorter wording keeps every name, place, date and number.
+- When a rewrite leaves one out anyway, the gateway log says which one, and in which file.
+- `/dream` ends with a line counting how many names and numbers the entries have lost this way (see [Slash commands](./slash-commands.md#dream--run-memory-consolidation-now)). It counts only entries that are still in the files: an entry Dream removed whole is a decision, not erosion. It is a measure, not an alarm: the older wordings are all still in `memory/archive/`.
+
+Names and numbers are found by code, not by a model: a capitalised word that does not open a sentence, a number with three or more digits, a date, or a number with letters attached such as `42k`. A name never written with a capital letter is not seen.
+
 ## Why Dream can say "nothing to process"
 
 If you run `/dream` on a chat that just started, or one that's still short, Jenny will reply that there's no conversation history to process yet. This is expected, not a bug: Dream only reads from `memory/history.jsonl`, and fresh conversations only reach that file *after* the Consolidator has compacted them (see Stage 1 above). A short, still-active chat simply hasn't produced any compacted history for Dream to read yet.

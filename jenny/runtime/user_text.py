@@ -211,6 +211,11 @@ _TEXT: dict[str, dict[str, str]] = {
             "ask me to recall {ids}{more} to read them back."
         ),
         "cmd.dream.demoted_more": ", and {more} more",
+        "cmd.dream.eroded": (
+            "Of the {passed} names and numbers your profile's entries have held, {lost} are "
+            "no longer in it: shorter rewrites left them out. The older wordings are still "
+            "in `memory/archive/`."
+        ),
         "cmd.gardener.moved": (
             "A pass runs on the notebook you are in: open it and send `/gardener` there."
         ),
@@ -625,6 +630,11 @@ _TEXT: dict[str, dict[str, str]] = {
             "chiedimi di richiamare {ids}{more} per rileggerli."
         ),
         "cmd.dream.demoted_more": " e altri {more}",
+        "cmd.dream.eroded": (
+            "Dei {passed} nomi e numeri passati per le voci del tuo profilo, {lost} non ci "
+            "sono più: le riscritture più corte li hanno lasciati fuori. Le formulazioni "
+            "vecchie sono ancora in `memory/archive/`."
+        ),
         "cmd.gardener.moved": (
             "Una passata lavora sul quaderno in cui sei: aprilo e manda `/gardener` da lì."
         ),

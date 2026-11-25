@@ -458,6 +458,10 @@ async def cmd_dream(ctx: CommandContext) -> OutboundMessage:
             pruned_keys = prune_dream_sessions(loop.sessions)
             if pruned_keys:
                 loop.evict_pruned_sessions(pruned_keys)
+        # ``getattr``: i doppi dello store nei test non hanno un workspace.
+        erosion_note = await _format_erosion_note(getattr(store, "workspace", None))
+        if erosion_note:
+            content = f"{content}\n\n{erosion_note}"
         await loop.bus.publish_outbound(OutboundMessage(
             channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=work_meta,
         ))
@@ -606,6 +610,29 @@ def _format_dream_demotions(outcome: "ReviewOutcome") -> str:
 
 def _format_dream_no_input_message() -> str:
     return say("cmd.dream.no_input")
+
+
+async def _format_erosion_note(workspace: "Path | None") -> str:
+    """Quanti nomi e numeri le riscritture hanno tolto dalle voci ancora vive.
+
+    È il numero da guardare dopo «fatti fermi» (25/11/2026): le voci di
+    ``USER.md`` venivano riscritte sempre più corte, e una città spariva da
+    una riga sul piano di vita senza che nessun numero lo dicesse. Una misura e non un
+    allarme: le formulazioni vecchie sono in archivio, e la frase lo dice. Se il
+    conto non riesce, la risposta di `/dream` esce senza.
+    """
+    from jenny.agent.tools import memory_entries
+
+    if workspace is None:
+        return ""
+    try:
+        measured = await asyncio.to_thread(memory_entries.memory_erosion, workspace)
+    except Exception:  # noqa: BLE001 — una misura non deve costare la risposta
+        logger.exception("Could not measure memory erosion")
+        return ""
+    if not measured.lost:
+        return ""
+    return say("cmd.dream.eroded", lost=len(measured.lost), passed=len(measured.passed))
 
 
 async def cmd_gardener(ctx: CommandContext) -> OutboundMessage:

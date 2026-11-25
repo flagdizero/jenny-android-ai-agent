@@ -43,7 +43,14 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from jenny.agent.memory_archive import ArchivedEntry, archive_entry
+from jenny.agent.anchors import delta
+from jenny.agent.memory_archive import (
+    ArchivedEntry,
+    Erosion,
+    archive_entry,
+    erosion,
+    list_archived,
+)
 from jenny.agent.memory_search import similarity
 from jenny.agent.tools.base import Tool
 from jenny.agent.tools.file_state import FileStates
@@ -487,6 +494,50 @@ def pair_successors(gone: list[Entry], arrived: list[Entry]) -> dict[str, str]:
     return pairs
 
 
+def _log_dropped_anchors(source: str, gone: list[Entry], arrived: list[Entry],
+                         successors: dict[str, str]) -> None:
+    """Dice nel log quali nomi e numeri una riscrittura ha lasciato per strada.
+
+    Una voce riscritta più corta finisce in archivio legata alla nuova come «la
+    stessa cosa detta meglio» (:func:`pair_successors` la lega già a metà delle
+    parole). Spesso lo è; a volte la versione corta ha perso una città o «1.250»,
+    e nessun numero se ne accorgeva (misurato il 25/11/2026: 67 ancore su 151).
+    Qui lo si dice, e basta: mai un rifiuto, che fermerebbe il giro intero di
+    Dream per una riga, e mai un'eccezione, come per tutto l'archiviatore.
+    """
+    by_id = {entry.id: entry for entry in arrived}
+    for entry in gone:
+        successor = by_id.get(successors.get(entry.id, ""))
+        if successor is None:
+            continue
+        try:
+            dropped, _ = delta(entry.text, successor.text)
+        except Exception:  # noqa: BLE001 — una misura non deve costare la scrittura
+            logger.exception("Could not compare entry {} with its successor", entry.id)
+            continue
+        if dropped:
+            logger.info(
+                "Memory rewrite in {} dropped {}: {!r} -> {!r}",
+                source, ", ".join(sorted(dropped)), clip(entry.text, 120),
+                clip(successor.text, 120),
+            )
+
+
+def memory_erosion(workspace: Path) -> Erosion:
+    """L'erosione delle voci vive di ``USER.md`` e ``memory/MEMORY.md`` (v. :class:`Erosion`).
+
+    Legge l'archivio intero: qualche centinaio di file piccoli, circa 160 ms sul
+    Mac per 1.100 voci. Chi la chiama da un ciclo asincrono la mette in un thread.
+    """
+    root = Path(workspace)
+    texts: list[str] = []
+    for rel in MEMORY_TARGETS.values():
+        with suppress(OSError):
+            texts.append((root / rel).read_text(encoding="utf-8"))
+    live_ids = {entry.id for text in texts for entry in parse_entries(text)}
+    return erosion(list_archived(root / "memory"), texts, live_ids)
+
+
 def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
     """Gancio pre-scrittura che degrada le voci in uscita da un file di memoria.
 
@@ -562,6 +613,7 @@ def make_entry_archiver(workspace: Path) -> Callable[[Path, str], None]:
         successors = pair_successors(gone, arrived)
         for entry in gone:
             save(entry.text, entry.heading, successors.get(entry.id, ""))
+        _log_dropped_anchors(source, gone, arrived, successors)
         # E poi tutto il resto che se ne va. Le voci hanno il loro giro sopra, con
         # id e deduplica intatti; qui passa ciò che ``parse_entries`` non vede —
         # prosa, elenchi numerati, righe sciolte — che fino a oggi lasciava il

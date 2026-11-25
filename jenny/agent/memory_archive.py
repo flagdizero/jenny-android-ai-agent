@@ -33,10 +33,12 @@ prompt di Dream è già costato run interi.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections.abc import Collection, Iterable
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
+from jenny.agent.anchors import Vocabulary, extract, words
 from jenny.utils.path import atomic_write
 
 ARCHIVE_DIRNAME = "archive"
@@ -299,3 +301,82 @@ def list_archived(memory_dir: Path) -> list[ArchivedEntry]:
         return []
     entries = [read_archived(p) for p in paths]
     return [e for e in entries if e is not None]
+
+
+@dataclass
+class ArchiveChain:
+    """Le formulazioni archiviate di uno stesso fatto, dalla più recente."""
+
+    versions: list[ArchivedEntry] = field(default_factory=list)
+
+    @property
+    def latest(self) -> ArchivedEntry:
+        return self.versions[0]
+
+
+def archive_chains(entries: list[ArchivedEntry]) -> list[ArchiveChain]:
+    """Raggruppa le voci per catena di ``superseded_by``, nell'ordine dell'archivio.
+
+    Ogni voce segue i legami finché restano in archivio; dove escono (la voce
+    nuova è viva, o non c'è più) quella è la testa della catena. Un ciclo — la
+    stessa formulazione tolta, rimessa e ritolta — si ferma alla prima voce già
+    vista. La catena prende il posto della sua voce più recente nell'elenco.
+    """
+    by_id = {e.id: e for e in entries}
+
+    def head(entry: ArchivedEntry) -> str:
+        seen = {entry.id}
+        current = entry
+        while current.superseded_by in by_id and current.superseded_by not in seen:
+            current = by_id[current.superseded_by]
+            seen.add(current.id)
+        return current.id
+
+    # ``entries`` arriva già dalla più recente, e un dict tiene l'ordine
+    # d'inserimento: ogni catena prende il posto della sua prima voce vista.
+    groups: dict[str, ArchiveChain] = {}
+    for entry in entries:
+        groups.setdefault(head(entry), ArchiveChain()).versions.append(entry)
+    return list(groups.values())
+
+
+@dataclass(frozen=True, slots=True)
+class Erosion:
+    """Quanto le riscritture hanno consumato le voci ancora vive.
+
+    ``passed`` sono i nomi e i numeri passati per una voce che esiste ancora;
+    ``lost`` quelli fra loro che non sono più in nessun file vivo. Le voci tolte
+    del tutto non contano: lì è Dream che ha deciso di togliere un fatto, qui una
+    riscrittura che ne ha perso un pezzo per strada.
+    """
+
+    lost: frozenset[str]
+    passed: frozenset[str]
+
+
+def erosion(entries: list[ArchivedEntry], live_texts: Iterable[str],
+            live_ids: Collection[str], *, extra_stop: Iterable[str] = ()) -> Erosion:
+    """L'erosione delle voci vive: v. :class:`Erosion`.
+
+    Una catena è viva quando una delle sue formulazioni è stata sostituita da
+    una voce che c'è ancora (*live_ids*), o quando una sua formulazione è tornata
+    identica nel file. Le ancore si contano su tutte le versioni della catena,
+    e una è persa quando la sua parola non compare più in nessun file vivo, in
+    qualunque voce: un nome spostato da una riga all'altra non è perso.
+
+    Misurato sul telefono il 25/11/2026: 67 ancore perse su 151.
+    """
+    live = list(live_texts)
+    stop = tuple(extra_stop)
+    vocab = Vocabulary.from_texts([e.text for e in entries] + live, extra_stop=stop)
+    present = words("\n".join(live))
+    passed: set[str] = set()
+    for chain in archive_chains(entries):
+        if not any(v.superseded_by in live_ids or v.id in live_ids for v in chain.versions):
+            continue
+        for version in chain.versions:
+            passed |= extract(version.text, vocab, extra_stop=stop)
+    return Erosion(
+        lost=frozenset(a for a in passed if a not in present),
+        passed=frozenset(passed),
+    )
