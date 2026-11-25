@@ -102,6 +102,13 @@
               aria-pressed="false" hidden>
         <i class="ti ti-list" aria-hidden="true"></i>
       </button>
+      <!-- La porta della chat quando Jenny e' nascosta (25/11/2026): fa quel che
+           fa il tocco su di lei, la chat sale sopra la stanza. Nelle pagine la
+           testa non c'e', e la chat e' una pagina della fila. -->
+      <button class="home-board-tool home-chat-key" id="home-chat-key" type="button" hidden>
+        <i class="ti ti-message-circle" aria-hidden="true"></i>
+        <span class="home-chat-key-dot" id="home-chat-key-dot" aria-hidden="true" hidden></span>
+      </button>
       <!-- Dal lettore: correggi tu, adesso. Compare solo li', e sparisce
            mentre l'editor e' aperto — da quel momento i comandi sono Salva e
            Annulla, e stanno in basso. -->
@@ -467,6 +474,17 @@
       </div>
 
       <div class="home-rows">
+        <!-- Mostrarla o no, in casa (25/11/2026). Da nascosta la chat si apre
+             dalla chiave in testa (`#home-chat-key`), e la nota lo dice. La
+             taglia resta scelta anche da nascosta: vale per la flottante. -->
+        <div class="home-row" id="home-jenny-visible-row">
+          <span class="home-row-label" id="home-jenny-visible-label"></span>
+          <button class="home-switch" id="home-jenny-visible" type="button" role="switch"
+                  aria-labelledby="home-jenny-visible-label">
+            <span class="home-switch-knob"></span>
+          </button>
+        </div>
+        <div class="home-card-note" id="home-jenny-visible-note" hidden></div>
         <div class="home-row home-row-stack">
           <span class="home-row-label" id="home-jenny-size-label"></span>
           <div class="home-seg" id="home-jenny-size" role="radiogroup"></div>

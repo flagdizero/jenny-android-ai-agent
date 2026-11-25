@@ -514,7 +514,8 @@ body.home {
    assoluta e finiva sopra il testo di quella dopo. La WebView del telefono
    (Chromium) lo ricalcolava. */
 .home-msg-jenny.home-at-band { position: relative; }
-.home-msg-jenny.home-at-band > .home-tail {
+/* Da nascosta la fascia non c'e', e la coda resta sotto il suo testo. */
+:root:not([data-jenny-hidden]) .home-msg-jenny.home-at-band > .home-tail {
   position: absolute;
   left: 0;
   top: calc(100% + var(--home-thread-gap));
@@ -2410,8 +2411,8 @@ button.home-wakes-act:active { background: var(--active); }
    Il numero non e' a occhio: l'arte e' un quadrato con margini trasparenti, e
    sotto i piedi ce n'e' il 12,24% del lato (bbox alpha dei webp impacchettati,
    identico nelle tre pose frontali — misurato, non stimato). La posa del
-   bordo ha il 12,50%: 0,26 punti di differenza, cioe' 0,3 px a 120 e 0,5 a
-   210 — sotto il pixel, quindi mettendola via non saltella. Quindi il bordo
+   bordo ha il 12,50%: 0,26 punti di differenza, cioe' 0,3 px a 120 e 0,4 a
+   160 — sotto il pixel, quindi mettendola via non saltella. Quindi il bordo
    basso del quadrato va messo *sotto* il pavimento di quella stessa quota, e i
    piedi ci finiscono sopra esatti.
    `--home-composer-h` e non il bordo del filo: il composer e' l'unica linea
@@ -2433,6 +2434,43 @@ button.home-wakes-act:active { background: var(--active); }
 .home-shell {
   --jenny-floor: calc(var(--home-composer-h, 64px) - var(--jenny-size) * 0.1224);
 }
+
+/* ── Jenny nascosta (25/11/2026) ──
+   La stanza «Jenny» la nasconde (`data-jenny-hidden` su <html>, scritto da
+   `shared/mascot.js` e al primo fotogramma da `bootstrap.js`). Vale solo per
+   la casa: l'officina non carica questo foglio.
+
+   Lo spazio che le si lascia in fondo — la fascia del filo, il fondo dei
+   Quaderni e delle Impostazioni — e' scritto come `--jenny-size *
+   --jenny-art-h`: con l'altezza a zero tutti quei conti la lasciano fuori da
+   soli, anche quelli che arriveranno. Il resto e' detto a mano: la fascia
+   sparisce (la coda dell'ultima risposta torna sotto il suo testo, v. sopra),
+   le scatole in fondo non si scansano e la riga del piano arriva al bordo.
+   La porta della chat diventa la chiave in testa (`#home-chat-key`). */
+:root[data-jenny-hidden] .home-shell { --jenny-art-h: 0; }
+:root[data-jenny-hidden] .home-shell > .jenny-duo { display: none; }
+:root[data-jenny-hidden] .home-band { display: none; }
+:root[data-jenny-hidden] .home-thread {
+  padding-bottom: 10px;
+  --jenny-dodge: 0px;
+}
+:root[data-jenny-hidden] .home-shell .home-plan-hint { padding-right: 0; }
+
+/* La chiave della chat: c'e' solo con Jenny nascosta, e solo dove la chat non
+   e' gia' a schermo (`HomeApp._applyChatKey`). Il pallino e' quello che
+   starebbe su di lei: una risposta che non hai ancora visto. */
+.home-chat-key { position: relative; }
+.home-chat-key-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.home-chat-key-dot[hidden] { display: none; }
 
 /* Una cosa che non è andata, detta nel filo. Sobria come il separatore: in casa
    un guasto si dice come si direbbe a voce, non con un pannello rosso. Sta nel

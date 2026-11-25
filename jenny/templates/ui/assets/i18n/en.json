@@ -201,6 +201,7 @@
     "configRecoveredBackup": "Settings were restored from the last good backup: config.json could not be read at startup.",
     "configRecoveredDefaults": "config.json could not be read and there was no usable backup, so Jenny started on defaults — your API key needs setting up again. The unreadable file was kept aside:",
     "themeLabel": "Theme",
+    "mascotVisible": "Show her at home",
     "mascotSize": "Mascot size",
     "mascotSizeSmall": "Small",
     "mascotSizeMedium": "Medium",
@@ -1555,7 +1556,8 @@
     "over": {
       "label": "The chat, over the page",
       "close": "close the chat",
-      "toBoard": "go to the {name} board"
+      "toBoard": "go to the {name} board",
+      "open": "open the chat"
     },
     "door": {
       "open": "Open the board"
@@ -1566,6 +1568,8 @@
     "jenny": {
       "title": "{name}",
       "floatingShort": "floating",
+      "hidden": "hidden",
+      "hiddenHint": "While she is hidden, the chat opens from the button at the top right. The floating mascot does not change, and the size below is hers.",
       "name": "Her name",
       "nameHint": "The name she introduces herself with, and the one you call her by. Changing it erases nothing she remembers.",
       "nameFailed": "I couldn't save the name.",

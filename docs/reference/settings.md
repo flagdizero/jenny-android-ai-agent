@@ -7,7 +7,7 @@ Settings lives in two places:
 - The home's **Settings** page, for the everyday choices: the theme, **Who answers**, **Jenny**, **Updates** and **Backup**. At the bottom of that page a **Workshop** row ("watch, tune, repair") opens the second place.
 - The **workshop**, whose dock has four entries: **Console** and three drawers, **Brain**, **Hands** and **Memory**. Each drawer is a list of named groups, always open, and a few rows in them open a panel of their own when tapped (a provider, an SSH host, Telegram, Skills, Local history, the memory budgets).
 
-There is no global Save button. Most controls save as soon as you change them and confirm with a toast. The theme and the mascot's size live entirely on the device and never touch `config.json`: those are called out below.
+There is no global Save button. Most controls save as soon as you change them and confirm with a toast. The theme and the mascot's size and visibility live entirely on the device and never touch `config.json`: those are called out below.
 
 ## How saving works
 
@@ -42,7 +42,7 @@ Most controls take effect the moment you use them. These ask you to confirm firs
 
 There is no language setting. The interface follows the phone's language (Italian or English, English for anything else).
 
-The theme, and the mascot's size, live in the WebView's `localStorage` on this device. They are **not** part of `config.json` and are **not** included in encrypted backups. Reinstalling the app, or clearing its data, resets them to their defaults.
+The theme, and the mascot's size and visibility, live in the WebView's `localStorage` on this device. They are **not** part of `config.json` and are **not** included in encrypted backups. Reinstalling the app, or clearing its data, resets them to their defaults.
 
 ### Who answers
 
@@ -59,7 +59,8 @@ There is no field for typing a model ID by hand on this page. You pick an ID fro
 | Control | Effect | Default |
 |---|---|---|
 | **Her name** | The name she introduces herself with (up to 40 characters). Saved with its own **Save** button. See the silent restart note above. | "Jenny" |
-| **Mascot size** | Small / Medium / Large: the side of her square, 120 / 160 / 210 px. | Small |
+| **Show her at home** | Hides the mascot in the home (the workshop keeps her). While she is hidden, a chat button at the top right of each room opens the chat, the way tapping her does. The floating mascot is not affected. Stored on the device, like the size. | On |
+| **Mascot size** | Small / Medium / Large: the side of her square, 120 / 140 / 160 px. It also sizes the floating mascot. | Small |
 | **Floating mascot** | Only on Android. Puts her in a window above other apps, where tapping her lets you talk and the answer comes in a bubble, in the same conversation. It needs Android's "Display over other apps" permission: if that is missing, the switch stays on and a note explains what to allow. Stored in `config.json` (`floating.enabled`). | Off |
 | **The rules you gave her** | Free text (up to 2,000 characters) that she reads every turn and never rewrites. Saved with its own **Save** button. | empty |
 

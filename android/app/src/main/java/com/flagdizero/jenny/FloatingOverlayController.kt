@@ -778,7 +778,7 @@ object FloatingOverlayController {
      * La taglia della mascotte, in px, spinta dalla **WebUI**.
      *
      * Non è un'impostazione a sé: è *la* taglia, quella scelta in Impostazioni
-     * → Personalizzazione (`sm`/`md`/`lg` → 120/160/210 px CSS in
+     * → Personalizzazione (`sm`/`md`/`lg` → 120/140/160 px CSS in
      * `shared/mascot.js`), già moltiplicata per il `devicePixelRatio` della
      * WebView da chi chiama. Due mascotte della stessa persona non possono
      * essere grandi in due modi, e l'unico modo perché non lo siano è che il

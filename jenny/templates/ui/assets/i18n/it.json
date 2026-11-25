@@ -201,6 +201,7 @@
     "configRecoveredBackup": "Le impostazioni sono state recuperate dall'ultimo backup valido: all'avvio config.json non era leggibile.",
     "configRecoveredDefaults": "config.json non era leggibile e non c'era un backup utilizzabile, quindi Jenny è partita dai valori predefiniti — la chiave API va rimessa. Il file illeggibile è stato messo da parte qui:",
     "themeLabel": "Tema",
+    "mascotVisible": "Mostrala in casa",
     "mascotSize": "Dimensione mascotte",
     "mascotSizeSmall": "Piccola",
     "mascotSizeMedium": "Media",
@@ -1555,7 +1556,8 @@
     "over": {
       "label": "La chat, sopra la pagina",
       "close": "chiudi la chat",
-      "toBoard": "vai alla bacheca di {name}"
+      "toBoard": "vai alla bacheca di {name}",
+      "open": "apri la chat"
     },
     "door": {
       "open": "Apri la bacheca"
@@ -1566,6 +1568,8 @@
     "jenny": {
       "title": "{name}",
       "floatingShort": "flottante",
+      "hidden": "nascosta",
+      "hiddenHint": "Nascosta, la chat si apre dal tasto in alto a destra. La mascotte flottante non cambia, e la taglia qui sotto vale per lei.",
       "name": "Come si chiama",
       "nameHint": "Il nome con cui si presenta e con cui la chiami. Cambiarlo non cancella niente di quel che ricorda.",
       "nameFailed": "Non sono riuscita a salvare il nome.",

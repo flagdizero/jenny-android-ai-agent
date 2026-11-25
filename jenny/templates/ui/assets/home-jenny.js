@@ -26,7 +26,9 @@ import { i18n } from './shared/i18n.js';
 import { botName } from './shared/bot-name.js';
 import { rpc } from './shared/rpc-client.js';
 import { showToast } from './shared/utils.js';
-import { MASCOT_SIZES, mascotSize, setMascotSize } from './shared/mascot.js';
+import {
+  MASCOT_SIZES, mascotHidden, mascotSize, setMascotHidden, setMascotSize,
+} from './shared/mascot.js';
 
 /* Dove stanno le parole dell'utente. La stessa costante di
    `jenny/agent/soul_rules.py`, e l'unico posto da cui la casa le legge: la
@@ -35,7 +37,8 @@ import { MASCOT_SIZES, mascotSize, setMascotSize } from './shared/mascot.js';
 export const RULES_PATH = '.jenny/soul_rules.md';
 
 /* Le tre taglie, nell'ordine in cui crescono, e le parole che l'officina usa
-   gia' per chiamarle. */
+   gia' per chiamarle. Dal 25/11/2026 la grande e' la media di prima, e la
+   media sta in mezzo (v. `MASCOT_SIZES`). */
 export const SIZES = ['sm', 'md', 'lg'];
 export const SIZE_KEYS = {
   sm: 'settings.mascotSizeSmall',
@@ -45,13 +48,14 @@ export const SIZE_KEYS = {
 
 /** La riga che si legge senza entrare: «piccola · flottante».
  *
- *  La taglia, e la finestra flottante se c'e': sono due posti diversi, e lei
- *  puo' stare anche sopra le altre app. «Nascosta» non c'e' piu' dal
- *  05/10/2026: in casa Jenny e' la porta della chat, e c'e' sempre.
+ *  Nascosta vince sulla taglia — dire «media» di una Jenny che non si vede e'
+ *  vero e inutile. La finestra flottante invece si aggiunge anche a quella:
+ *  sono due posti diversi, e lei puo' stare sopra le altre app mentre dentro la
+ *  casa non c'e'.
  */
-export function jennyValue({ size, floating }) {
+export function jennyValue({ hidden = false, size, floating }) {
   const parts = [];
-  parts.push(i18n.t(SIZE_KEYS[size] || SIZE_KEYS.sm));
+  parts.push(hidden ? i18n.t('home.jenny.hidden') : i18n.t(SIZE_KEYS[size] || SIZE_KEYS.sm));
   if (floating) parts.push(i18n.t('home.jenny.floatingShort'));
   return parts.join(' · ').toLowerCase();
 }
@@ -67,6 +71,9 @@ export class HomeJenny {
    *    impostazioni, perche' l'interruttore e' di Android. */
   constructor({ onChange, onFloating, onName, onSettingsBack } = {}) {
     this.el = document.getElementById('home-jenny-room');
+    this.visibleBtn = document.getElementById('home-jenny-visible');
+    this.visibleLabel = document.getElementById('home-jenny-visible-label');
+    this.visibleNote = document.getElementById('home-jenny-visible-note');
     this.sizeEl = document.getElementById('home-jenny-size');
     this.sizeLabel = document.getElementById('home-jenny-size-label');
     this.floatingRow = document.getElementById('home-jenny-floating-row');
@@ -97,6 +104,7 @@ export class HomeJenny {
     this.floating = null;
     this._painted = false;
 
+    this.visibleBtn?.addEventListener('click', () => this.toggleVisible());
     this.floatingBtn?.addEventListener('click', () => this.toggleFloating());
     this.screenBtn?.addEventListener('click', () => this.openScreenSettings());
     this.floatingAllow?.addEventListener('click', () => this.openFloatingPermission());
@@ -184,6 +192,8 @@ export class HomeJenny {
   }
 
   applyTranslations() {
+    if (this.visibleLabel) this.visibleLabel.textContent = i18n.t('settings.mascotVisible');
+    if (this.visibleNote) this.visibleNote.textContent = i18n.t('home.jenny.hiddenHint');
     if (this.sizeLabel) this.sizeLabel.textContent = i18n.t('settings.mascotSize');
     if (this.floatingLabel) this.floatingLabel.textContent = i18n.t('settings.floatingEnabled');
     if (this.screenLabel) this.screenLabel.textContent = i18n.t('settings.screenEnabled');
@@ -207,9 +217,18 @@ export class HomeJenny {
   /** Il valore da scrivere sulla riga di «Tu e Jenny». */
   value() {
     return jennyValue({
+      hidden: mascotHidden(),
       size: mascotSize(),
       floating: !!this.floating?.enabled,
     });
+  }
+
+  /** Mostra o nasconde Jenny in casa. La chiave della chat in testa la
+   *  accende la casa, che ascolta `mascotchange`. */
+  toggleVisible() {
+    setMascotHidden(!mascotHidden());
+    this._mark();
+    this._onChange?.();
   }
 
   pickSize(size) {
@@ -334,9 +353,12 @@ export class HomeJenny {
     this._painted = true;
   }
 
-  /* Lo stato di tutti e tre i comandi, in un posto solo: si muovono insieme
+  /* Lo stato di tutti i comandi, in un posto solo: si muovono insieme
      perche' descrivono la stessa persona. */
   _mark() {
+    const hidden = mascotHidden();
+    this._switch(this.visibleBtn, !hidden);
+    if (this.visibleNote) this.visibleNote.hidden = !hidden;
     const size = mascotSize();
     if (this.sizeEl) {
       for (const btn of this.sizeEl.children) {

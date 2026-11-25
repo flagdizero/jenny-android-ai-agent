@@ -2,7 +2,8 @@
  *
  * Stato puramente client-side (localStorage), come il tema: non passa mai
  * dal backend. Visibilità e taglia sono scelte dell'utente, nella stanza
- * «Jenny» della casa (`home-jenny.js`).
+ * «Jenny» della casa (`home-jenny.js`). Nasconderla vale solo per la casa: le
+ * regole stanno in `home-style.css`, e l'officina non le carica.
  *
  * Il lato non c'è più (24/09/2026): Jenny sta **sempre a destra**, in casa e in
  * officina, e dopo un lancio ci torna a piedi da dovunque l'hai lasciata. A
@@ -34,20 +35,29 @@ function writeStorage(key, value) {
   }
 }
 
-const SIZE_KEY = 'jenny-mascot-size';
-/* La taglia si chiamava `jenny-mascotte-size` fino al rinomino in inglese del
-   25/09/2026. Il valore scelto dall'utente passa al nome nuovo (se quello non
-   c'e' gia'), e il nome vecchio finisce fra le chiavi morte qui sotto. */
-const RENAMED_KEYS = [
-  ['jenny-mascotte-size', SIZE_KEY],
-];
-for (const [before, after] of RENAMED_KEYS) {
-  try {
-    const value = localStorage.getItem(before);
-    if (value !== null && localStorage.getItem(after) === null) localStorage.setItem(after, value);
-  } catch (_) {
-    /* storage non disponibile */
+const SIZE_KEY = 'jenny-mascot-scale';
+const HIDDEN_KEY = 'jenny-mascot-hidden';
+/* La taglia ha cambiato scala il 25/11/2026. Prima era `jenny-mascot-size`
+   (e fino al 25/09/2026 `jenny-mascotte-size`) con 120/160/210 px; ora va da
+   piccola a quella che era la media, con una nuova in mezzo: 120/140/160. Il
+   valore cambia nome con lei, perche' `md` non vuol piu' dire la stessa cosa:
+   chi l'aveva media la ritrova uguale, che adesso si chiama grande, e chi
+   l'aveva grande scende alla grande nuova. Se la chiave nuova c'e' gia', vince
+   lei: e' la scelta piu' recente. Le vecchie finiscono fra le chiavi morte. */
+const OLD_SIZE_KEYS = ['jenny-mascot-size', 'jenny-mascotte-size'];
+export const RESCALED_SIZES = { sm: 'sm', md: 'lg', lg: 'lg' };
+try {
+  if (localStorage.getItem(SIZE_KEY) === null) {
+    for (const key of OLD_SIZE_KEYS) {
+      const now = RESCALED_SIZES[localStorage.getItem(key)];
+      if (now) {
+        localStorage.setItem(SIZE_KEY, now);
+        break;
+      }
+    }
   }
+} catch (_) {
+  /* storage non disponibile */
 }
 /* Chiavi di preferenze ritirate. Si ripuliscono una volta per caricamento e
    non una per lettura: non hanno più un getter in cui nascondersi. Stanno qui
@@ -55,11 +65,12 @@ for (const [before, after] of RENAMED_KEYS) {
    tutti e due i gusci:
    - `jenny-mascotte-color`: il bianco/nero (08/09/2026);
    - `jenny-mascotte-dock-side`, `jenny-mascotte-side`: il lato (5961d22);
-   - `jenny-mascotte-size`: il nome di prima di `SIZE_KEY`, copiato qui
-     sopra (25/09/2026);
+   - `jenny-mascot-size` e `jenny-mascotte-size`: la taglia nella scala di
+     prima, portata in `SIZE_KEY` qui sopra (25/11/2026);
    - `jenny-mascot-visible` e il suo nome di prima `jenny-mascotte-visible`:
-     «Mostra la mascotte», tolta il 05/10/2026 — Jenny e' la porta della
-     chat, e una porta che si spegne lascia la chat senza strada;
+     «Mostra la mascotte», tolta il 05/10/2026 quando Jenny era l'unica porta
+     della chat. E' tornata il 25/11/2026 come `HIDDEN_KEY`, con una chiave
+     nuova: un «0» rimasto da allora non deve nasconderla di sorpresa;
    - `jenny-advanced-mode`: la modalità sviluppatore (78ff330);
    - `jenny-home-view`: la vista di Home scelta dall'utente (3d57980);
    - `locale`: il selettore di lingua dell'officina (v. shared/i18n.js). */
@@ -67,7 +78,7 @@ const DEAD_KEYS = [
   'jenny-mascotte-color',
   'jenny-mascotte-dock-side',
   'jenny-mascotte-side',
-  ...RENAMED_KEYS.map(([before]) => before),
+  ...OLD_SIZE_KEYS,
   'jenny-mascot-visible',
   'jenny-mascotte-visible',
   'jenny-advanced-mode',
@@ -84,8 +95,35 @@ for (const key of DEAD_KEYS) {
 
 /** Lato del canvas quadrato per ogni taglia. Il default è 'sm'; la geometria
  *  in mobile-style.css deriva tutta da --jenny-size, quindi qui basta
- *  scrivere il pixel. */
-export const MASCOT_SIZES = { sm: 120, md: 160, lg: 210 };
+ *  scrivere il pixel. La grande e' la media di prima del 25/11/2026: a 210
+ *  copriva troppo (v. `RESCALED_SIZES`). */
+export const MASCOT_SIZES = { sm: 120, md: 140, lg: 160 };
+
+/** Nascosta in casa? Il default e' no. */
+export function mascotHidden() {
+  return readStorage(HIDDEN_KEY) === '1';
+}
+
+/** Da nascosta la chat ha un'altra porta, la chiave in testa alla casa
+ *  (`HomeApp._applyChatKey`): Jenny non e' piu' l'unica. */
+export function setMascotHidden(hidden) {
+  const on = Boolean(hidden);
+  writeStorage(HIDDEN_KEY, on ? '1' : '0');
+  applyMascotHidden();
+  window.dispatchEvent(new CustomEvent('mascotchange', {
+    detail: { hidden: on, size: mascotSize() },
+  }));
+  return on;
+}
+
+/** Scrive la preferenza su <html> come `data-jenny-hidden`, che legge solo
+ *  `home-style.css`. Lo stesso attributo lo mette `bootstrap.js` al primo
+ *  fotogramma, perche' non compaia per un istante. */
+export function applyMascotHidden() {
+  const root = document.documentElement;
+  if (mascotHidden()) root.setAttribute('data-jenny-hidden', '');
+  else root.removeAttribute?.('data-jenny-hidden');
+}
 
 export function mascotSize() {
   const s = readStorage(SIZE_KEY);
@@ -97,7 +135,7 @@ export function setMascotSize(size) {
   writeStorage(SIZE_KEY, normalized);
   applyMascotSize();
   window.dispatchEvent(new CustomEvent('mascotchange', {
-    detail: { size: normalized },
+    detail: { hidden: mascotHidden(), size: normalized },
   }));
   return normalized;
 }

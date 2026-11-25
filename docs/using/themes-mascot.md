@@ -54,6 +54,7 @@ Her preferences are on the home's **Settings** page, in the row named after her 
 
 | Setting | Options | Default |
 |---|---|---|
+| Show her at home | on / off | On |
 | Mascot size | Small / Medium / Large | Small |
 | Floating mascot | on / off (Android only) | Off |
 | Reads the screen | on / off, in Android's Accessibility settings (Android 14+, with the floating mascot on) | Off |
@@ -64,13 +65,15 @@ The same screen holds **Her name** (up to 40 characters). The Settings row, the 
 
 **Reads the screen** lets her see what you were looking at when you tapped her: say "save this" over a recipe page, or "keep this picture", and she reads the app underneath — once, at the tap — and decides where it goes. She can't look by herself, and she skips apps that block screenshots. Android lets only you switch an accessibility service on, so the switch takes you to Accessibility; if Android calls it a restricted setting, allow it from Jenny's app info first.
 
-Size is the side of the square she occupies — 120, 160 or 210 px; she starts small. The rest of her geometry follows from it, so she stays coherent at every size.
+Size is the side of the square she occupies — 120, 140 or 160 px; she starts small. The rest of her geometry follows from it, so she stays coherent at every size. Until November 2026 the sizes were 120, 160 and 210: a phone that had her at Medium finds her the same size, now called Large, and one that had her at Large finds her at the new Large.
+
+**Show her at home** off hides her in the home only; the workshop keeps her. She is the door to the chat — tap her and the chat comes up over the page — so while she is hidden a chat button appears at the top right of every room, carrying her "unread reply" dot, and the chat that comes up always shows a back arrow to close it. On the pages the chat is a page of its own, one swipe away. The space the home leaves for her at the bottom of the chat and of the pages goes too. The floating mascot is not affected, and the size still applies to it.
 
 Which edge she docks on is not a setting: she always docks on the right, and after a throw she walks back there.
 
 She comes in one look, in color. There used to be a black-and-white switch here, drawn from a second set of line-art artwork; it was retired when her expressions were drawn, because keeping both meant drawing every expression twice.
 
-Like the theme, **Mascot size** is stored in this device's local storage, not in `config.json` and not in your encrypted backup. A reinstall brings her back small. **Floating mascot** is the exception: it lives in `config.json` (`floating.enabled`), because the window is started by the app's background service, which can't read the WebView's storage.
+Like the theme, **Show her at home** and **Mascot size** are stored in this device's local storage, not in `config.json` and not in your encrypted backup. A reinstall brings her back, small. **Floating mascot** is the exception: it lives in `config.json` (`floating.enabled`), because the window is started by the app's background service, which can't read the WebView's storage.
 
 If your phone has "reduce motion" turned on at the OS level, Jenny respects it: the animated mouth-flap while she talks is skipped in favor of a static pose, and her gestures stand still: no hops, sways or squashes, and the wave shows as a raised arm for the length of a wave. The drag-to-fly gesture itself is a direct manipulation you control with your finger, so it still works if you choose to use it, without the squash and stretch.
 
