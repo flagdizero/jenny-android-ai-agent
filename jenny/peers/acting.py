@@ -370,22 +370,10 @@ class PeerActs:
         return await asyncio.to_thread(self._done_list_sync, qid, row)
 
     def _done_list_sync(self, qid: str, row: dict[str, Any] | None) -> list[dict[str, Any]]:
-        from jenny.agent.write_journal import journal_for
+        from jenny.agent.work_done import journal_file_items
         from jenny.cron.types import job_display_name
 
-        items: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for key in self._journal_keys(qid, row):
-            try:
-                entries = journal_for(self._root, key).entries()
-            except Exception:  # noqa: BLE001
-                continue
-            for entry in entries:
-                path = str(entry.get("path") or "")
-                if not path or path.endswith("/") or path in seen:
-                    continue
-                seen.add(path)
-                items.append({"kind": "file", "label": path, "undoable": True})
+        items = journal_file_items(self._root, self._journal_keys(qid, row))
         for job in self._jobs_of(qid):
             items.append({"kind": "job", "label": job_display_name(job)[:120], "undoable": True})
         for note in self._notes.get(qid, []):
@@ -439,17 +427,11 @@ class PeerActs:
         return result
 
     def _undo_sync(self, qid: str, row: dict[str, Any]) -> Any:
-        from jenny.agent.write_journal import journal_for, journal_key, undo_set
+        from jenny.agent.work_done import undo_journals
+        from jenny.agent.write_journal import journal_key
 
-        journals = []
-        for key in self._journal_keys(qid, row):
-            journal = journal_for(self._root, key)
-            if journal.entries():
-                journals.append(journal)
-        if not journals:
-            return None
-        into = journal_for(self._root, journal_key("undo-peer", qid))
-        return undo_set(journals, by="user", into=into)
+        return undo_journals(
+            self._root, self._journal_keys(qid, row), journal_key("undo-peer", qid))
 
     def undo_from_notice(self, qid: str) -> None:
         """Il tasto «Annulla» della notifica: la richiesta *qid* arrivata qui."""
