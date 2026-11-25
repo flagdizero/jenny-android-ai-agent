@@ -1477,6 +1477,10 @@
       "peer_lineNamed": "from {device}"
     },
     "retry": "Try again",
+    "retryWithPhoto": "Try again, with the photo",
+    "retryWithPhotos": "Try again, with the photos",
+    "retryWithFiles": "Try again, with the attachments",
+    "openModel": "Open Who answers",
     "stop": "Stop",
     "verbs": {
       "think": [

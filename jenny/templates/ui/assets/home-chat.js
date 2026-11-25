@@ -124,6 +124,31 @@ export function moveOffers(events) {
   return out;
 }
 
+/* Cosa offrire sotto un errore del modello, per tipo (`meta.error.kind`,
+   classificato in `providers/retry_policy.py::classify_user_error`).
+   `retry` = «Riprova», `model` = «Apri Chi risponde». Una chiave rifiutata o
+   il credito finito non si risolvono riprovando: si risolvono la', cambiando
+   chiave o marca. Una connessione caduta puo' essere la rete (riprova) o un
+   indirizzo sbagliato (Chi risponde). Il resto — troppe richieste, server
+   occupato, un turno finito vuoto — si riprova e basta. */
+export const ERROR_ACTIONS = Object.freeze({
+  auth: Object.freeze(['model']),
+  credit: Object.freeze(['model']),
+  connection: Object.freeze(['retry', 'model']),
+  timeout: Object.freeze(['retry', 'model']),
+  default: Object.freeze(['retry']),
+});
+
+/** L'etichetta di «Riprova»: dice se con la domanda tornano gli allegati. */
+export function retryLabel(again) {
+  const media = Array.isArray(again?.media) ? again.media : [];
+  const entries = Array.isArray(again?.entries) ? again.entries : [];
+  if (!media.length && !entries.length) return i18n.t('home.retry');
+  const files = entries.filter((e) => e?.kind !== 'image').length;
+  if (files) return i18n.t('home.retryWithFiles');
+  return i18n.t(media.length > 1 ? 'home.retryWithPhotos' : 'home.retryWithPhoto');
+}
+
 export class HomeChat {
   constructor(threadEl) {
     this.el = threadEl;
@@ -206,10 +231,16 @@ export class HomeChat {
        bolla (`WorkBubbles.claims`): quel testo non si disegna due volte. */
     this.claimsWork = null;
     /* Chi rimanda un messaggio dopo un errore del modello (il «Riprova» sotto
-       la risposta che non e' arrivata): riceve il testo da rimandare. */
+       la risposta che non e' arrivata): riceve `{text, media, entries}`, cioe'
+       la domanda intera, allegati compresi. */
     this.onRetry = null;
-    /* Il testo di ogni bolla dell'utente, e se aveva allegati: e' quel che
-       «Riprova» rimanda. */
+    /* Chi apre «Chi risponde» da un errore che si ripara li' (chiave
+       rifiutata, credito finito, modello irraggiungibile). */
+    this.onOpenModel = null;
+    /* Ogni bolla dell'utente: il suo testo, se aveva allegati e — solo per
+       quelle partite da questa finestra — gli allegati stessi (`resend`). E'
+       quel che «Riprova» rimanda. Dopo una rilettura della storia gli
+       allegati sono indirizzi del server, non dati: li' `resend` manca. */
     this._userSent = new WeakMap();
 
     /* **Il posto vivo**, sempre sotto i messaggi e sopra la fascia: le bolle di chi sta
@@ -668,7 +699,7 @@ export class HomeChat {
       // `blockNode` resta null: il delta dopo apre il proprio.
     }
     if (msg.media_urls?.length) this._appendMedia(this._ensureTurn(), msg.media_urls);
-    if (msg.error && this.turnNode) this._offerRetry(this.turnNode);
+    if (msg.error && this.turnNode) this._offerRetry(this.turnNode, msg.error.kind);
     if (msg.text || msg.media_urls?.length) this.band?.refresh();
     this._follow();
   }
@@ -680,9 +711,12 @@ export class HomeChat {
    *  `_handle_session_turn_started` esce subito, quindi se non lo disegnassimo
    *  qui la propria domanda comparirebbe solo dopo un ricaricamento.
    */
-  appendOwn(text, media = []) {
+  appendOwn(text, media = [], resend = null) {
     this._resetTurn();
     const node = this._appendUser(text, null, media, false, Date.now());
+    if (resend && node) {
+      this._userSent.set(node, { text, media: Boolean(media?.length), resend });
+    }
     this.scrollToBottom();
     /* Partito non vuol dire entrato: il gateway può ancora rifiutarlo (un
        allegato che non riesce ad aprire). Finché non arriva niente che dimostri
@@ -905,37 +939,68 @@ export class HomeChat {
     this._append(node, toTop);
     /* Dopo: `_append` toglie i «Riprova» di prima, e la storia piu' vecchia
        (`toTop`) non ne ha — il presente e' in fondo. */
-    if (error && !toTop) this._offerRetry(node);
+    if (error && !toTop) this._offerRetry(node, error.kind);
   }
 
-  /** «Riprova» sotto una risposta finita in un errore del modello.
+  /** I bottoni sotto una risposta finita in un errore del modello.
    *
-   *  Rimanda il messaggio dell'utente a cui rispondeva — prima andava
-   *  riscritto a mano. Solo per l'ultima cosa detta: qualunque bolla nuova lo
-   *  toglie (`_append`), perche' riprovare una domanda di tre messaggi fa
-   *  vorrebbe dire rispondere fuori posto. Niente «Riprova» se quel messaggio
-   *  aveva allegati: il testo da solo non sarebbe la stessa domanda. */
-  _offerRetry(node) {
+   *  Quali, lo dice il tipo d'errore (`ERROR_ACTIONS`): con la chiave
+   *  rifiutata o il credito finito riprovare non serve, serve «Chi
+   *  risponde»; con la connessione caduta servono tutti e due; per il resto
+   *  basta riprovare. Le frasi del server non cambiano, ed e' giusto: su
+   *  Telegram dicono gia' dove andare, e li' un bottone non c'e'.
+   *
+   *  «Riprova» rimanda il messaggio dell'utente a cui rispondeva, intero:
+   *  gli allegati partiti da questa finestra tornano con lui. Solo per
+   *  l'ultima cosa detta: qualunque bolla nuova lo toglie (`_append`),
+   *  perche' riprovare una domanda di tre messaggi fa vorrebbe dire
+   *  rispondere fuori posto. Niente «Riprova» se gli allegati non si possono
+   *  rimandare (una risposta riletta dalla storia): il testo da solo non
+   *  sarebbe la stessa domanda. */
+  _offerRetry(node, kind = null) {
     if (!node || node.querySelector('.home-retry')) return;
-    let prev = node.previousElementSibling;
-    while (prev && !String(prev.className).includes('home-msg-user')) {
-      if (String(prev.className).includes('home-msg-jenny')) return;
-      prev = prev.previousElementSibling;
+    const actions = ERROR_ACTIONS[kind] || ERROR_ACTIONS.default;
+    const row = [];
+    if (actions.includes('retry')) {
+      let prev = node.previousElementSibling;
+      while (prev && !String(prev.className).includes('home-msg-user')) {
+        if (String(prev.className).includes('home-msg-jenny')) {
+          prev = null;
+          break;
+        }
+        prev = prev.previousElementSibling;
+      }
+      const sent = prev && this._userSent.get(prev);
+      const again = sent && (sent.resend || (!sent.media ? { text: sent.text } : null));
+      if (again) {
+        row.push(this._errorButton('again', 'ti-refresh', retryLabel(again), () => this.onRetry?.(again)));
+      }
     }
-    const sent = prev && this._userSent.get(prev);
-    if (!sent || sent.media) return;
+    if (actions.includes('model') && this.onOpenModel) {
+      row.push(this._errorButton('model', 'ti-plug', i18n.t('home.openModel'), () => this.onOpenModel?.()));
+    }
+    if (!row.length) return;
+    const bar = document.createElement('div');
+    bar.className = 'home-retry-row';
+    for (const btn of row) bar.appendChild(btn);
+    node.appendChild(bar);
+  }
+
+  /* Un bottone sotto l'errore. Toccato, se ne vanno tutti e due: la scelta
+     e' fatta. */
+  _errorButton(what, icon, text, onTap) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'home-retry';
-    btn.innerHTML = '<i class="ti ti-refresh" aria-hidden="true"></i>';
+    btn.className = `home-retry home-retry-${what}`;
+    btn.innerHTML = `<i class="ti ${icon}" aria-hidden="true"></i>`;
     const label = document.createElement('span');
-    label.textContent = i18n.t('home.retry');
+    label.textContent = text;
     btn.appendChild(label);
     btn.addEventListener('click', () => {
-      btn.remove();
-      this.onRetry?.(sent.text);
+      (btn.closest('.home-retry-row') || btn).remove();
+      onTap();
     });
-    node.appendChild(btn);
+    return btn;
   }
 
   /** La riga in coda a una risposta: il Copia, l'ora e i secondi che ci ha
@@ -1162,7 +1227,7 @@ export class HomeChat {
   _append(node, toTop = false) {
     /* Una cosa nuova in fondo: il «Riprova» di prima non e' piu' dell'ultima
        risposta (v. `_offerRetry`). */
-    if (!toTop) for (const old of this.el.querySelectorAll('.home-retry')) old.remove();
+    if (!toTop) for (const old of this.el.querySelectorAll('.home-retry-row')) old.remove();
     if (toTop) this.el.insertBefore(node, this.el.firstChild);
     else if (this._anchor?.parentNode === this.el) this.el.insertBefore(node, this._anchor);
     else if (this.live?.parentNode === this.el) this.el.insertBefore(node, this.live);

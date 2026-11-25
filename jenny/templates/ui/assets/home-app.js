@@ -703,9 +703,15 @@ class HomeApp {
       this.input.value = text;
       this._autosize();
     };
-    /* «Riprova» sotto una risposta finita in errore: rimanda lo stesso testo,
-       e quel che hai nel campo resta li'. */
-    this.chat.onRetry = (text) => { if (text) this._sendText(text); };
+    /* «Riprova» sotto una risposta finita in errore: rimanda la stessa
+       domanda, allegati compresi, e quel che hai nel campo resta li'. Non il
+       tasto Piano di allora: quella pianificazione puo' essere finita. */
+    this.chat.onRetry = (again) => {
+      if (!again?.text && !again?.media?.length) return;
+      this._sendText(again.text || '', again.media || [], again.entries || []);
+    };
+    /* «Apri Chi risponde» sotto un errore che si ripara li'. */
+    this.chat.onOpenModel = () => this.openModelFromChat();
     /* I due comandi della bacheca in testa: la lente, l'unica porta verso
        tutto, e l'elenco al posto della bacheca. */
     this.boardSearchBtn = document.getElementById('home-board-search-open');
@@ -1216,6 +1222,7 @@ class HomeApp {
   _backTarget(view = this.view) {
     if (view === 'reader' && this._pageTrail?.length) return 'page';
     if (view === 'reader' && (this._searchReturn != null || !this._readerCard)) return 'board';
+    if (view === 'model' && this._modelFromChat) return 'chat';
     return BACK_TO[view];
   }
 
@@ -1409,6 +1416,22 @@ class HomeApp {
   /** «Chi risponde»: le marche configurate e i loro modelli. Ci si arriva da
    *  «Tu e Jenny», che ha gia' chiesto `/api/settings`. */
   openModel() {
+    this._modelFromChat = false;
+    this._setView('model');
+    this.modelRoom.open();
+  }
+
+  /** «Chi risponde» aperta da un errore in chat. Due differenze dalla riga
+   *  di Impostazioni: i dati della stanza li mette `_paintSettings`, che di
+   *  solito ha gia' girato aprendo Impostazioni — qui non e' detto, e senza
+   *  si aprirebbe vuota; e Indietro torna alla chat da cui sei venuto, non a
+   *  una pagina che non hai mai visto (v. `_backTarget`). */
+  async openModelFromChat() {
+    const data = await this._askSettings();
+    if (data) this._paintSettings(data);
+    /* Prima di `_setView`: l'intestazione si scrive li', e la freccia deve
+       gia' dire «Chat». */
+    this._modelFromChat = true;
     this._setView('model');
     this.modelRoom.open();
   }
@@ -1932,6 +1955,7 @@ class HomeApp {
        intanto e' andata avanti per conto suo. */
     if (view !== 'updates') this.updatesRoom?.close();
     if (view !== 'peers') this.peersRoom?.close();
+    if (view !== 'model') this._modelFromChat = false;
 
     if (view !== 'board' && view !== 'drawer') this.boardSheet?.close();
     if (view === 'chat') {
@@ -2833,7 +2857,9 @@ class HomeApp {
     /* La bolla la disegna il client: il gateway rimanda l'eco solo dei messaggi
        entrati da *altri* canali (v. webui_turns._handle_session_turn_started,
        che per il canale websocket esce subito). */
-    this.chat.appendOwn(text, entries);
+    /* La domanda intera resta sulla bolla: e' quel che «Riprova» rimanda se
+       la risposta finisce in un errore. */
+    this.chat.appendOwn(text, entries, { text, media, entries });
     return true;
   }
 
