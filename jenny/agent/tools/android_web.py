@@ -66,10 +66,9 @@ class AndroidWebGateMixin:
             return None
         web = getattr(ctx.config, "android_web", None)
         if web is not None and not web.enable:
-            # Non "Settings > ...": il gruppo Web Search dell'officina (Mani)
-            # regola motore, risultati e timeout, ma questo interruttore non ce
-            # l'ha. Vive solo in config.json, come quello dei tool sui file.
-            return "web access is off (tools.androidWeb.enable in config.json)"
+            # L'interruttore sta in officina dal 25/11/2026 (Mani → Ricerca
+            # web, ``network.web_access``), e vale dal prossimo avvio.
+            return "web access is off (Settings → Workshop → Hands → Web search)"
         return None
 
 

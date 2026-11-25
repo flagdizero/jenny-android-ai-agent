@@ -703,7 +703,7 @@ Reads and checks a notebook in bulk, from its chat, so that verifying fifty page
 
 ## 10. Interactive browser
 
-Five tools that drive a **real second WebView** with persistent cookies, for pages `web_fetch` cannot handle — anything behind a cookie banner, a login, or a click. All five are **subagent-only** (scope `core` + `subagent`) and share one gate: an Android context plus `tools.androidWeb.enable`, the same switch as web search and fetch. With it off, the disabled reason names `tools.androidWeb.enable in config.json`, because the switch is config-only: the workshop's Web Search group has no toggle for it.
+Five tools that drive a **real second WebView** with persistent cookies, for pages `web_fetch` cannot handle — anything behind a cookie banner, a login, or a click. All five are **subagent-only** (scope `core` + `subagent`) and share one gate: an Android context plus `tools.androidWeb.enable`, the same switch as web search and fetch. With it off, the disabled reason points to the workshop: **Hands → Web search** has the switch, and it takes effect from the next start for the chat (new helpers follow it at once).
 
 A session is exclusive and expensive: about **100 MB of RAM** while open, so `browser_close` is not optional politeness.
 

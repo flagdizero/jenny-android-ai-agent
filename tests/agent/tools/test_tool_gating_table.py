@@ -29,7 +29,7 @@ WEB_TOOLS = [
 ]
 PY_TOOLS = [PythonExecTool, WriteStdinTool, ListExecSessionsTool]
 
-_OFF = "web access is off (tools.androidWeb.enable in config.json)"
+_OFF = "web access is off (Settings → Workshop → Hands → Web search)"
 
 WEB_CASES = {
     # (android_context, android_web config) -> (enabled, disabled_reason)

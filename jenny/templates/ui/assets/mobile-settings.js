@@ -1431,6 +1431,14 @@ export class SettingsController {
   _renderWebSearch(d) {
     const ws = d.web_search || {};
     return `
+      <div class="settings-field settings-toggle-row">
+        <label class="settings-label" for="web-access-toggle">${i18n.t('settings.webAccess.enable', { name: botName.get() })}</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="web-access-toggle" ${ws.enabled === false ? '' : 'checked'}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <p class="settings-hint" style="margin:6px 0 10px;font-size:12px;color:var(--text-faint)">${i18n.t('settings.webAccess.hint', { name: botName.get() })}</p>
       ${this._field(i18n.t('settings.maxResults'), 'number', 'ws_max', ws.max_results ?? 8, i18n.t('settings.maxResultsPlaceholder'))}
       ${this._field(i18n.t('settings.timeoutSec'), 'number', 'ws_timeout', ws.timeout ?? 30, i18n.t('settings.timeoutPlaceholder'))}
       ${this._field(i18n.t('settings.fetchMaxChars'), 'number', 'ws_fetch_max', ws.fetch_max_chars ?? 12000, i18n.t('settings.fetchMaxCharsPlaceholder'))}`;
@@ -3202,6 +3210,24 @@ export class SettingsController {
     this.contentEl.querySelectorAll('[data-net-remove]').forEach((btn) => {
       btn.addEventListener('click', () => this._homeNet('remove', { entry: btn.dataset.netRemove }));
     });
+
+    /* Il web di Jenny: si salva al cambio. Il toast dice quando vale, perché
+       la chat lo vede solo dal prossimo avvio (`network.web_access`). */
+    const webToggle = this.contentEl.querySelector('#web-access-toggle');
+    if (webToggle) {
+      webToggle.addEventListener('change', () => {
+        const enabled = webToggle.checked;
+        rpc.network('web_access', { enabled })
+          .then((res) => {
+            if (this.data && res?.web_search) this.data.web_search = res.web_search;
+            showToast(i18n.t(res?.requires_restart ? 'settings.webAccess.saved' : 'settings.saved'));
+          })
+          .catch(() => {
+            webToggle.checked = !enabled;  // rollback sull'errore
+            showToast(i18n.t('settings.saveError'), 'error');
+          });
+      });
+    }
 
     // Posizione: toggle auto-applicato al cambio (nessun bottone salva).
     const locToggle = this.contentEl.querySelector('#location-enabled-toggle');
