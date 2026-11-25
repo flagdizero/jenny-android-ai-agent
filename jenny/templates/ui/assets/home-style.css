@@ -7135,3 +7135,30 @@ div.home-memory-text { cursor: default; }
   color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
 }
 .home-plan-offer-go:active { background: var(--hover); }
+
+/* I suggerimenti di partenza sotto il saluto (`HomeChat.offerStarts`): quattro
+   righe che riempiono il campo, non mandano niente. */
+.home-starts { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.home-starts-title { color: var(--text-muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+.home-start {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 10px 12px;
+  border: 1px dashed var(--border-strong); border-radius: 14px; background: transparent;
+  color: var(--text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+}
+.home-start .ti { color: var(--accent); font-size: 18px; margin-top: 1px; }
+.home-start span { display: flex; flex-direction: column; gap: 2px; line-height: 1.35; }
+.home-start b { font-weight: 600; }
+.home-start:active { background: var(--hover); }
+
+/* «Chiedi a Jenny un'app», in cima alla pagina App. */
+.home-ask-app {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) 16px; gap: 10px; align-items: center;
+  margin: 4px 0 10px; padding: 12px 14px; border: 1px dashed var(--border-strong); border-radius: 14px;
+  background: transparent; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+}
+.home-ask-app[hidden] { display: none; }
+.home-ask-app > .ti:first-child { color: var(--accent); font-size: 19px; }
+.home-ask-app > .ti:last-child { color: var(--text-faint); font-size: 16px; }
+.home-ask-app span { display: flex; flex-direction: column; gap: 2px; }
+.home-ask-app small { color: var(--text-muted); font-size: 12px; line-height: 1.35; }
+.home-ask-app:active { background: var(--hover); }

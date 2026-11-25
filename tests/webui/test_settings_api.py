@@ -458,6 +458,37 @@ async def test_save_onboarding_welcome_lands_in_unified_session(
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("onboarding_probe_ok")
+async def test_save_onboarding_welcome_stays_in_the_chat_after_the_first_message(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Il saluto sta anche nel verbale della chat, non solo nella sessione.
+
+    Prima la casa lo vedeva solo a verbale vuoto (ricostruito dalla sessione):
+    al primo messaggio dell'utente il verbale non era piu' vuoto, e il saluto
+    spariva — proprio quello sotto cui stanno i suggerimenti di partenza.
+    """
+    import asyncio
+
+    from jenny.session.manager import SessionManager
+    from jenny.webui.transcript_store import append_transcript_object, read_transcript_lines
+
+    config_path = tmp_path / "config.json"
+    monkeypatch.setattr(get_runtime_context(), "config_path", config_path)
+    result = await save_onboarding(
+        {"provider_name": "openai", "format": "openai_compat", "model": "gpt-x",
+         "api_key": "sk-test-123", "locale": "it"},
+        session_manager=SessionManager(tmp_path),
+        onboarding_event=asyncio.Event(),
+    )
+    append_transcript_object("websocket:default", {
+        "event": "user", "chat_id": "default", "text": "ciao", "turn_id": "u1", "turn_phase": "user"})
+    texts = [line.get("text") for line in read_transcript_lines("websocket:default")]
+    assert result["welcome_message"] in texts
+    assert texts.index(result["welcome_message"]) < texts.index("ciao")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("onboarding_probe_ok")
 async def test_save_onboarding_welcome_is_localized_to_english(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

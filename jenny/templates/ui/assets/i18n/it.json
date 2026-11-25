@@ -1894,6 +1894,29 @@
       "removed": "Promemoria tolto: {name}",
       "howToAdd": "Un promemoria nuovo si chiede in chat. Quelli dei quaderni stanno sulle loro bacheche."
     },
+    "starts": {
+      "title": "Da dove cominciare",
+      "reminder": {
+        "label": "Un promemoria",
+        "text": "Ricordami di bere un bicchiere d'acqua alle 16"
+      },
+      "notebook": {
+        "label": "Un quaderno",
+        "text": "Apriamo un quaderno per le ricette di casa"
+      },
+      "app": {
+        "label": "Un'app",
+        "text": "Fammi un'app per segnare le spese di casa"
+      },
+      "arrival": {
+        "label": "Quando arrivi in un posto",
+        "text": "Quando arrivo a casa, ricordami di annaffiare le piante"
+      }
+    },
+    "askApp": {
+      "title": "Chiedi a {name} un'app",
+      "example": "Fammi un'app per segnare quante ore dormo"
+    },
     "peers": {
       "title": "Altre Jenny",
       "none": "nessuna",
