@@ -26,6 +26,10 @@ import { wsManager } from './ws-manager.js';
 // Quanto aspettare che il socket si apra prima di lasciar rispondere `request`
 // (che, a socket chiuso, rifiuta con «gateway offline»).
 const OPEN_TIMEOUT_MS = 8000;
+// Il salvataggio del primo avvio aspetta la domanda di prova al provider: 15 s
+// lato server, piu' la costruzione del provider e il viaggio. Con i 20 s di
+// base un provider lento faceva scadere la richiesta a prova ancora in corso.
+const ONBOARDING_SAVE_TIMEOUT_MS = 45000;
 // `WebSocket.OPEN`, scritto come numero: fuori dal browser (i banchi node)
 // `WebSocket` non esiste.
 const WS_OPEN = 1;
@@ -257,7 +261,11 @@ export const rpc = {
 
   /** Il primo avvio: provider con la sua chiave, modello, nome di Jenny. Stava
    *  nella query di `/api/onboarding/save`; a salvataggio riuscito il server
-   *  sveglia l'agente e risponde col saluto (`chat_id`, `welcome_message`). */
+   *  sveglia l'agente e risponde col saluto (`ok: true`, `chat_id`,
+   *  `welcome_message`). Prima di salvare il server fa una domanda di prova al
+   *  provider (fino a 15 s, con i suoi tentativi): se non risponde, non salva e
+   *  torna `{ ok: false, probe: <tipo> }`. Per questo il tempo e' piu' lungo
+   *  dei 20 s di base. `skip_probe` e' «Salva lo stesso». */
   saveOnboarding(params) {
     return send('onboarding.save', {
       provider_name: params.provider_name || params.provider || '',
@@ -268,7 +276,8 @@ export const rpc = {
       bot_name: params.bot_name || '',
       bot_icon: params.bot_icon || '',
       locale: params.locale || '',
-    });
+      skip_probe: params.skip_probe ? '1' : '',
+    }, { timeoutMs: ONBOARDING_SAVE_TIMEOUT_MS });
   },
 
 };

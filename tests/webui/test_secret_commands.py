@@ -285,6 +285,7 @@ _ONBOARDING = {
 }
 
 
+@pytest.mark.usefixtures("onboarding_probe_ok")
 async def test_onboarding_save_writes_the_key_and_wakes_the_agent(
     tmp_path: Path, config_path: Path
 ) -> None:
@@ -308,6 +309,37 @@ async def test_onboarding_save_writes_the_key_and_wakes_the_agent(
     assert config.agents.defaults.model == "gpt-x"
     greeting = sessions.get_or_create(UNIFIED_SESSION_KEY).messages[-1]
     assert greeting["content"] == payload["welcome_message"]
+
+
+async def test_onboarding_save_answers_a_failed_probe_as_a_result(
+    tmp_path: Path, config_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Una chiave che non risponde alla domanda di prova non è un errore del
+    comando: torna come risultato col tipo, che il wizard traduce, e non salva.
+    ``skip_probe`` («Salva lo stesso») arriva fino a ``save_onboarding``."""
+    import asyncio
+
+    seen: list[bool] = []
+
+    async def probe(provider, model):
+        seen.append(True)
+        return "auth"
+
+    monkeypatch.setattr("jenny.webui.settings_api._probe_provider", probe)
+    event = asyncio.Event()
+    ctx = _ctx(tmp_path, onboarding_event=event)
+
+    payload = await dispatch_command(ctx, "onboarding.save", dict(_ONBOARDING))
+    assert payload == {"ok": False, "probe": "auth"}
+    assert not event.is_set()
+    assert load_config(config_path).providers.providers == []
+
+    payload = await dispatch_command(
+        ctx, "onboarding.save", {**_ONBOARDING, "skip_probe": True},
+    )
+    assert payload["ok"] is True
+    assert seen == [True], "con skip_probe la domanda non parte"
+    assert event.is_set()
 
 
 async def test_onboarding_save_refuses_a_missing_model(

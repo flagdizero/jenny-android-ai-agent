@@ -17,6 +17,18 @@ import { getProviderBrand } from './shared/provider-brand.js';
 import { DEFAULT_API_BASE, NO_AUTOCORRECT, normalizeApiBase } from './shared/api-base.js';
 import { MOTIONS, MotionChannels } from './shared/mascot-motion.js';
 import { DEFAULT_BOT_NAME } from './shared/bot-name.js';
+import { CATALOG_NOTE_KEYS } from './shared/model-catalog.js';
+
+/* I guasti della domanda di prova dopo cui la chiave può essere giusta: la rete,
+   il tempo, il server, il limite di richieste, o un errore che non si sa dire
+   (un 400 per un parametro che quel provider non accetta non dice niente della
+   chiave, e senza «Salva lo stesso» il primo avvio non avrebbe un'uscita). Con
+   la chiave rifiutata, il credito finito o il modello che non c'è, salvare
+   vorrebbe dire una Jenny che non risponde. */
+const PROBE_SAVE_ANYWAY = new Set(['connection', 'timeout', 'server', 'rate_limit', 'generic']);
+const PROBE_KINDS = new Set([
+  'auth', 'credit', 'model', 'config', ...PROBE_SAVE_ANYWAY,
+]);
 
 /* ── Mini Jenny sul footer ──
    Decorativa, fuori da #onboarding-content (che viene ri-renderizzato a ogni
@@ -65,6 +77,12 @@ export class OnboardingController {
     // provider e non vale piu'.
     this._modelsFor = null;
     this._showCustomModel = false;
+    // Lo stato del server quando la lista dei modelli è vuota (`rejected`,
+    // `not_configured`, ...): dice quale frase mostrare.
+    this._modelsStatus = '';
+    // Il tipo dell'ultima domanda di prova fallita (`onboarding.probe.<tipo>`),
+    // o null: niente è stato salvato e lo step 2 mostra l'avviso.
+    this._probeFailure = null;
     this.saving = false;
     // Token della fetch modelli: la risposta che torna dopo un cambio di step
     // scriverebbe nel form nuovo (o riaprirebbe il campo custom su uno step che
@@ -339,16 +357,26 @@ export class OnboardingController {
       if (token !== this._modelsToken) return;
       this.models = (resp.models || []).map(m => m.id || m);
       // Il backend risponde 200 anche quando la lista è vuota (credenziale
-      // rifiutata, errore di rete, base URL mancante, ...) e spiega il perché in
-      // `message`: senza propagarlo l'utente vedrebbe solo "nessun modello".
-      this._modelsMessage = resp.models && resp.models.length ? '' : (resp.message || '');
+      // rifiutata, errore di rete, base URL mancante, ...) e dice il perché in
+      // `status`. Si dice con la frase della casa e dell'officina, non col
+      // `message` del server, che è inglese.
+      this._modelsStatus = this.models.length ? '' : (resp.status || '');
       this._renderModelList();
     } catch (e) {
       if (token !== this._modelsToken) return;
-      const detail = e && e.message ? `: ${escapeHtml(e.message)}` : '';
-      listEl.innerHTML = `<div class="onboarding-hint" style="padding:12px">${i18n.t('onboarding.couldNotFetch')}${detail}</div>`;
+      listEl.innerHTML = `<div class="onboarding-hint" style="padding:12px">${i18n.t('onboarding.couldNotFetch')}</div>`;
       this._showCustomModelField();
     }
+  }
+
+  /** Perché la lista è vuota, nella lingua dell'utente. */
+  _modelsNote() {
+    const keys = {
+      ...CATALOG_NOTE_KEYS,
+      missing_api_base: 'onboarding.modelsNeedBase',
+      error: 'onboarding.couldNotFetch',
+    };
+    return i18n.t(keys[this._modelsStatus] || 'onboarding.noModels');
   }
 
   _renderStep2() {
@@ -379,6 +407,7 @@ export class OnboardingController {
           <input type="text" class="onboarding-input" id="bot-name" value="${escapeHtml(this.botName)}">
         </div>
         <div class="onboarding-summary" id="summary-display" style="display:none"></div>
+        <div class="onboarding-probe" id="probe-notice" role="alert" hidden></div>
         <div class="onboarding-nav">
           <button class="onboarding-btn onboarding-btn-secondary" id="btn-back-2">${i18n.t('header.back')}</button>
           <button class="onboarding-btn onboarding-btn-primary" id="btn-launch" ${this.model ? '' : 'disabled'}>${i18n.t('onboarding.launch')}</button>
@@ -396,6 +425,7 @@ export class OnboardingController {
     if (customInput) {
       customInput.addEventListener('input', () => {
         this.model = customInput.value.trim();
+        this._clearProbeFailure();
         this.contentEl.querySelectorAll('.onboarding-model-item').forEach(el => el.classList.remove('selected'));
         this._updateSelectedDisplay();
         this._validateLaunch();
@@ -406,16 +436,61 @@ export class OnboardingController {
     }
     this.contentEl.querySelector('#btn-back-2').addEventListener('click', () => this._goBackToStep1());
     this.contentEl.querySelector('#btn-launch').addEventListener('click', () => this._save());
+    // Un ridisegno dello step (la lista dei modelli che arriva) non perde
+    // l'avviso della prova: resta finché non si riprova o si cambia qualcosa.
+    if (this._probeFailure) this._showProbeFailure(this._probeFailure);
+  }
+
+  /** La domanda di prova non è andata: cosa dire e cosa si può fare.
+   *  Niente è stato salvato; i bottoni portano dove si ripara. */
+  _showProbeFailure(kind) {
+    this._probeFailure = kind;
+    const box = this.contentEl?.querySelector('#probe-notice');
+    if (!box) return;
+    const fixesModel = kind === 'model';
+    const actions = [
+      fixesModel
+        ? `<button class="onboarding-btn onboarding-btn-secondary" type="button" data-probe-action="model">${i18n.t('onboarding.probe.changeModel')}</button>`
+        : `<button class="onboarding-btn onboarding-btn-secondary" type="button" data-probe-action="key">${i18n.t('onboarding.probe.changeKey')}</button>`,
+      `<button class="onboarding-btn onboarding-btn-secondary" type="button" data-probe-action="retry">${i18n.t('onboarding.probe.retry')}</button>`,
+    ];
+    const anyway = PROBE_SAVE_ANYWAY.has(kind);
+    if (anyway) {
+      actions.push(`<button class="onboarding-btn onboarding-btn-primary" type="button" data-probe-action="anyway">${i18n.t('onboarding.probe.saveAnyway')}</button>`);
+    }
+    box.innerHTML = `
+      <p class="onboarding-probe-text">${escapeHtml(i18n.t(`onboarding.probe.${kind}`))}</p>
+      ${anyway ? `<p class="onboarding-hint">${escapeHtml(i18n.t('onboarding.probe.mayBeRight'))}</p>` : ''}
+      <div class="onboarding-probe-actions">${actions.join('')}</div>`;
+    box.hidden = false;
+    box.querySelector('[data-probe-action="key"]')?.addEventListener('click', () => {
+      this._goBackToStep1();
+      const key = this.contentEl?.querySelector('#api-key');
+      if (key) { key.focus(); key.select?.(); }
+    });
+    box.querySelector('[data-probe-action="model"]')?.addEventListener('click', () => {
+      this._clearProbeFailure();
+      this._showCustomModelField();
+      this.contentEl?.querySelector('#custom-model')?.focus();
+    });
+    box.querySelector('[data-probe-action="retry"]')?.addEventListener('click', () => this._save());
+    box.querySelector('[data-probe-action="anyway"]')?.addEventListener(
+      'click', () => this._save({ skipProbe: true }),
+    );
+    box.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  _clearProbeFailure() {
+    this._probeFailure = null;
+    const box = this.contentEl?.querySelector('#probe-notice');
+    if (box) { box.hidden = true; box.innerHTML = ''; }
   }
 
   _renderModelList() {
     const listEl = this.contentEl.querySelector('#model-list');
     if (!listEl) return;
     if (!this.models.length) {
-      const hint = this._modelsMessage
-        ? escapeHtml(this._modelsMessage)
-        : i18n.t('onboarding.noModels');
-      listEl.innerHTML = `<div class="onboarding-hint" style="padding:12px">${hint}</div>`;
+      listEl.innerHTML = `<div class="onboarding-hint" style="padding:12px">${escapeHtml(this._modelsNote())}</div>`;
       this._showCustomModelField();
       return;
     }
@@ -428,6 +503,7 @@ export class OnboardingController {
     listEl.querySelectorAll('.onboarding-model-item').forEach(item => {
       item.addEventListener('click', () => {
         this.model = item.dataset.model;
+        this._clearProbeFailure();
         this.contentEl.querySelector('#custom-model').value = '';
         listEl.querySelectorAll('.onboarding-model-item').forEach(el => el.classList.remove('selected'));
         item.classList.add('selected');
@@ -486,6 +562,9 @@ export class OnboardingController {
   }
 
   _goBackToStep1() {
+    // Si torna a cambiare la chiave o l'indirizzo: l'esito della prova era
+    // della chiave di prima.
+    this._probeFailure = null;
     const nameEl = this.contentEl?.querySelector('#bot-name');
     if (nameEl) this.botName = nameEl.value.trim() || DEFAULT_BOT_NAME;
     this._modelsToken++;
@@ -495,7 +574,10 @@ export class OnboardingController {
 
   // ── Save ────────────────────────────────────────────────────────────
 
-  async _save() {
+  /** «Avvia»: il server prova la chiave con una domanda vera e solo se il
+   *  provider risponde salva. *skipProbe* è «Salva lo stesso», offerto solo
+   *  dopo un guasto che non dice niente della chiave (`PROBE_SAVE_ANYWAY`). */
+  async _save({ skipProbe = false } = {}) {
     if (this.saving) return;
     this.saving = true;
 
@@ -507,7 +589,8 @@ export class OnboardingController {
       return;
     }
 
-    this._showLoadingOverlay();
+    this._clearProbeFailure();
+    this._showLoadingOverlay(skipProbe);
     try {
       const { rpc } = await import('./shared/rpc-client.js');
       const result = await rpc.saveOnboarding({
@@ -518,16 +601,29 @@ export class OnboardingController {
         model,
         bot_name: this.botName,
         locale: i18n.locale,
+        skip_probe: skipProbe,
       });
-      // Config salvata e agente in avvio: lo step Telegram è opzionale e
-      // saltabile, il completamento vero avviene in _complete().
       this._hideLoadingOverlay();
       this.saving = false;
+      if (result && result.ok === false) {
+        // Non salvato: si resta qui, con l'avviso e i bottoni per ripararlo.
+        // Un tipo che questo client non conosce si dice come un errore qualsiasi.
+        this._showProbeFailure(PROBE_KINDS.has(result.probe) ? result.probe : 'generic');
+        return;
+      }
+      // Config salvata e agente in avvio: lo step Telegram è opzionale e
+      // saltabile, il completamento vero avviene in _complete().
       this.step = 3;
       this.render();
     } catch (err) {
       this._hideLoadingOverlay();
-      showToast(err.message || i18n.t('onboarding.failedToSave'), 'error');
+      // Un rifiuto del server (`err.code`) porta una ragione in inglese: si
+      // dice la frase generica. Quelli del client (gateway spento, tempo
+      // scaduto) sono già nella lingua dell'utente.
+      showToast(
+        (!err?.code && err?.message) || i18n.t('onboarding.failedToSave'),
+        'error',
+      );
       this.saving = false;
     }
   }
@@ -591,7 +687,9 @@ export class OnboardingController {
     api.navigate('/html-mobile/', { replace: true });
   }
 
-  _showLoadingOverlay() {
+  /** *skipProbe*: si salva senza domanda di prova, e la riga sotto il titolo
+   *  non la promette. */
+  _showLoadingOverlay(skipProbe = false) {
     let overlay = document.getElementById('onboarding-loading-overlay');
     if (!overlay) {
       overlay = document.createElement('div');
@@ -601,9 +699,13 @@ export class OnboardingController {
         <div class="onboarding-loading-content">
           <div class="onboarding-spinner"></div>
           <h2>${i18n.t('onboarding.configuring')}</h2>
-          <p>${i18n.t('onboarding.configuringDesc')}</p>
+          <p data-overlay-desc></p>
         </div>`;
       document.body.appendChild(overlay);
+    }
+    const desc = overlay.querySelector('[data-overlay-desc]');
+    if (desc) {
+      desc.textContent = i18n.t(skipProbe ? 'onboarding.configuringDesc' : 'onboarding.probe.trying');
     }
     overlay.style.display = 'flex';
   }

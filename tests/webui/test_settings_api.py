@@ -373,25 +373,27 @@ async def test_save_onboarding_rejects_invalid_provider_and_does_not_signal(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Una config di onboarding senza api_key non produce un provider valido:
-    deve sollevare WebUISettingsError, NON accendere onboarding_event, e NON
-    persistere la config rotta (prima falliva async e silenzioso nel container)."""
+    deve rispondere ``probe: "config"`` (un codice che il wizard traduce, non
+    una frase inglese), NON accendere onboarding_event, e NON persistere la
+    config rotta (prima falliva async e silenzioso nel container)."""
     import asyncio
 
     config_path = tmp_path / "config.json"
     monkeypatch.setattr(get_runtime_context(), "config_path", config_path)
     event = asyncio.Event()
 
-    with pytest.raises(WebUISettingsError, match="Provider configuration is invalid"):
-        await save_onboarding(
-            {"provider_name": "openai", "format": "openai_compat", "model": "gpt-x"},
-            onboarding_event=event,
-        )
+    result = await save_onboarding(
+        {"provider_name": "openai", "format": "openai_compat", "model": "gpt-x"},
+        onboarding_event=event,
+    )
 
+    assert result == {"ok": False, "probe": "config"}
     assert not event.is_set()
     assert not config_path.exists()
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("onboarding_probe_ok")
 async def test_save_onboarding_signals_when_provider_valid(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -418,6 +420,7 @@ async def test_save_onboarding_signals_when_provider_valid(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("onboarding_probe_ok")
 async def test_save_onboarding_welcome_lands_in_unified_session(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -454,6 +457,7 @@ async def test_save_onboarding_welcome_lands_in_unified_session(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("onboarding_probe_ok")
 async def test_save_onboarding_welcome_is_localized_to_english(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -488,6 +492,7 @@ async def test_save_onboarding_welcome_is_localized_to_english(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("onboarding_probe_ok")
 @pytest.mark.parametrize(
     ("locale", "greeting", "saved_language"),
     [("it", "Ciao sono Jenny", "it"), ("fr", "Hi, I'm Jenny", "en")],
@@ -613,3 +618,255 @@ async def test_the_onboarding_refuses_a_bad_base_url_too(
             "api_base": "Http:/10.0.2.2", "model": "m",
         })
     assert load_config(config_path).providers.providers == []
+
+
+# ---------------------------------------------------------------------------
+# Il primo avvio prova la chiave prima di salvarla
+# ---------------------------------------------------------------------------
+#
+# ``save_onboarding`` costruisce il provider e gli fa una domanda vera, fuori dal
+# lucchetto della config; se non risponde non scrive niente e torna il tipo del
+# guasto, che il wizard traduce. Qui il provider è finto (``make_provider``), la
+# logica della prova è quella vera.
+
+
+_ONBOARDING_DATA = {
+    "provider_name": "openai",
+    "format": "openai_compat",
+    "model": "gpt-x",
+    "api_key": "not-a-real-credential",
+    "locale": "it",
+}
+
+
+class _FakeProvider:
+    """Un provider che risponde *response* (o si blocca, con ``hang``)."""
+
+    def __init__(self, response=None, *, hang: bool = False, calls: list | None = None):
+        from jenny.providers.base import LLMResponse
+
+        self.response = response if response is not None else LLMResponse(content="ok")
+        self.hang = hang
+        self.calls: list = calls if calls is not None else []
+        self.closed = False
+
+    async def chat_with_retry(self, **kwargs):
+        import asyncio
+
+        self.calls.append(("probe", kwargs))
+        if self.hang:
+            # Un provider che non risponde mai: solo il timeout della prova lo ferma.
+            await asyncio.Event().wait()
+        return self.response
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def _use_provider(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> None:
+    monkeypatch.setattr("jenny.providers.factory.make_provider", lambda config: provider)
+
+
+def _error(**fields):
+    from jenny.providers.base import LLMResponse
+
+    return LLMResponse(content=fields.pop("content", "Error: boom"), finish_reason="error", **fields)
+
+
+@pytest.mark.asyncio
+async def test_onboarding_probe_that_answers_saves(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    provider = _FakeProvider()
+    _use_provider(monkeypatch, provider)
+    event = asyncio.Event()
+
+    result = await save_onboarding(dict(_ONBOARDING_DATA), onboarding_event=event)
+
+    assert result["ok"] is True and result["status"] == "ok"
+    assert event.is_set()
+    saved = load_config(config_path)
+    assert saved.providers.providers[0].api_key == "not-a-real-credential"
+    assert saved.agents.defaults.model == "gpt-x"
+    # Una domanda sola, minima, al modello scelto e senza ragionamento.
+    [(_, kwargs)] = provider.calls
+    assert kwargs["model"] == "gpt-x"
+    assert kwargs["max_tokens"] == 16
+    assert kwargs["reasoning_effort"] is None
+    assert kwargs["tools"] is None
+    assert provider.closed, "il client di prova non resta aperto"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("response", "kind"),
+    [
+        ({"error_status_code": 401}, "auth"),
+        ({"error_status_code": 403}, "auth"),
+        ({"error_status_code": 402}, "credit"),
+        ({"error_status_code": 429}, "rate_limit"),
+        ({"error_status_code": 503}, "server"),
+        ({"error_kind": "connection"}, "connection"),
+        ({"error_kind": "timeout"}, "timeout"),
+        ({"error_status_code": 404, "error_code": "model_not_found"}, "model"),
+        (
+            {"error_status_code": 404, "error_type": "not_found_error",
+             "content": "Error: not_found_error: model: claude-nope"},
+            "model",
+        ),
+        ({"error_status_code": 400, "content": "Error: Model Not Exist"}, "model"),
+        # Un 404 che non parla di modelli è più spesso un indirizzo sbagliato.
+        ({"error_status_code": 404, "content": "Error: <html>Not Found</html>"}, "generic"),
+        ({"error_status_code": 400, "content": "Error: max_tokens is too small"}, "generic"),
+    ],
+)
+async def test_onboarding_probe_failure_saves_nothing(
+    config_path, monkeypatch: pytest.MonkeyPatch, response: dict, kind: str
+) -> None:
+    """Chiave rifiutata, credito finito, modello che non c'è, rete: il file resta
+    quello di prima, l'agente non nasce, e il wizard riceve il tipo."""
+    import asyncio
+
+    before = config_path.read_bytes()
+    provider = _FakeProvider(_error(**response))
+    _use_provider(monkeypatch, provider)
+    event = asyncio.Event()
+
+    result = await save_onboarding(dict(_ONBOARDING_DATA), onboarding_event=event)
+
+    assert result == {"ok": False, "probe": kind}
+    assert config_path.read_bytes() == before
+    assert not event.is_set()
+    assert provider.closed
+
+
+@pytest.mark.asyncio
+async def test_onboarding_probe_that_never_answers_is_a_timeout(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    before = config_path.read_bytes()
+    monkeypatch.setattr("jenny.webui.settings_api.ONBOARDING_PROBE_TIMEOUT_S", 0.05)
+    _use_provider(monkeypatch, _FakeProvider(hang=True))
+
+    result = await save_onboarding(dict(_ONBOARDING_DATA))
+
+    assert result == {"ok": False, "probe": "timeout"}
+    assert config_path.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_onboarding_probe_that_raises_is_generic(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Raising(_FakeProvider):
+        async def chat_with_retry(self, **kwargs):
+            raise RuntimeError("unexpected")
+
+    before = config_path.read_bytes()
+    _use_provider(monkeypatch, _Raising())
+
+    assert await save_onboarding(dict(_ONBOARDING_DATA)) == {"ok": False, "probe": "generic"}
+    assert config_path.read_bytes() == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("flag", ["1", "true", True])
+async def test_onboarding_save_anyway_skips_the_probe(
+    config_path, monkeypatch: pytest.MonkeyPatch, flag
+) -> None:
+    """«Salva lo stesso»: nessuna domanda, si salva e l'agente nasce."""
+    import asyncio
+
+    provider = _FakeProvider(_error(error_kind="connection"))
+    _use_provider(monkeypatch, provider)
+    event = asyncio.Event()
+
+    result = await save_onboarding(
+        {**_ONBOARDING_DATA, "skip_probe": flag}, onboarding_event=event,
+    )
+
+    assert result["ok"] is True
+    assert provider.calls == []
+    assert event.is_set()
+    assert load_config(config_path).agents.defaults.model == "gpt-x"
+
+
+@pytest.mark.asyncio
+async def test_onboarding_save_anyway_still_refuses_a_broken_configuration(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Saltare la domanda non salta la costruzione: senza chiave non c'è provider."""
+    before = config_path.read_bytes()
+    result = await save_onboarding(
+        {"provider_name": "openai", "format": "openai_compat", "model": "gpt-x",
+         "skip_probe": "1"},
+    )
+    assert result == {"ok": False, "probe": "config"}
+    assert config_path.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_onboarding_probe_runs_before_the_config_lock(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La domanda dura secondi: dentro ``store.mutate`` terrebbe preso il
+    lucchetto della config per tutto quel tempo."""
+    from jenny.config import store
+
+    order: list = []
+    _use_provider(monkeypatch, _FakeProvider(calls=order))
+    real_mutate = store.mutate
+
+    async def recording_mutate(apply, **kwargs):
+        order.append(("mutate", None))
+        return await real_mutate(apply, **kwargs)
+
+    monkeypatch.setattr(store, "mutate", recording_mutate)
+
+    result = await save_onboarding(dict(_ONBOARDING_DATA))
+
+    assert result["ok"] is True
+    assert [step for step, _ in order] == ["probe", "mutate"]
+
+
+@pytest.mark.asyncio
+async def test_onboarding_probe_failure_never_enters_the_config_lock(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jenny.config import store
+
+    async def no_mutate(apply, **kwargs):
+        raise AssertionError("a failed probe must not write the config")
+
+    monkeypatch.setattr(store, "mutate", no_mutate)
+    _use_provider(monkeypatch, _FakeProvider(_error(error_status_code=401)))
+
+    assert await save_onboarding(dict(_ONBOARDING_DATA)) == {"ok": False, "probe": "auth"}
+
+
+def test_provider_models_payload_tells_a_rejected_key_from_a_missing_one(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Senza chiave è ``not_configured``; con una chiave che il provider rifiuta
+    (401/403) è ``rejected``: erano lo stesso stato, e la WebUI diceva «serve una
+    chiave» a chi l'aveva appena scritta."""
+
+    def refuse(url: str, **kwargs):
+        request = httpx.Request("GET", url)
+        return httpx.Response(401, json={"error": "nope"}, request=request)
+
+    monkeypatch.setattr("jenny.webui.settings_api.httpx.get", refuse)
+
+    rejected = provider_models_payload({
+        "provider": ["openai"], "api_key": ["not-a-real-credential"],
+        "format": ["openai_compat"], "api_base": ["https://api.example.test/v1"],
+    })
+    assert rejected["status"] == "rejected"
+    assert rejected["models"] == []
+
+    save_config(_add_provider(Config(), "openrouter", api_base="https://openrouter.ai/api/v1"),
+                config_path)
+    missing = provider_models_payload({"provider": ["openrouter"]})
+    assert missing["status"] == "not_configured"

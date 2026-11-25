@@ -23,10 +23,12 @@ pytestmark = requires_node
 
 _FAKE_WS = """
 export const requests = [];
+export const options = [];
 export const wsManager = {
   outcome: null,
-  request(method, params) {
+  request(method, params, opts) {
     requests.push([method, params]);
+    if (opts) options.push([method, opts]);
     return this.outcome(method, params);
   },
 };
@@ -35,7 +37,7 @@ export const wsManager = {
 _ENTRY = """
 import assert from 'node:assert/strict';
 import { rpc } from './rpc-client.js';
-import { wsManager, requests } from './ws-manager.js';
+import { wsManager, requests, options } from './ws-manager.js';
 
 const fetched = [];
 globalThis.fetch = async (url) => { fetched.push(String(url)); throw new Error('niente HTTP'); };
@@ -53,6 +55,8 @@ await rpc.saveSshHost({ alias: 'nas', host: 'h', username: 'u', description: nul
 await rpc.saveSshHost({ alias: 'nas', host: 'h', username: 'u', auth: 'password' });
 await rpc.saveOnboarding({ provider: 'openai', format: 'openai_compat', api_key: 'sk-prima',
   model: 'gpt-x', bot_name: 'Jenny', locale: 'it' });
+await rpc.saveOnboarding({ provider: 'openai', format: 'openai_compat', api_key: 'sk-prima',
+  model: 'gpt-x', bot_name: 'Jenny', locale: 'it', skip_probe: true });
 
 assert.deepEqual(requests, [
   ['settings.provider.models',
@@ -63,7 +67,17 @@ assert.deepEqual(requests, [
     auth: 'password', password: 'segreta' }],
   ['ssh.host.save', { alias: 'nas', host: 'h', username: 'u', auth: 'password' }],
   ['onboarding.save', { provider_name: 'openai', format: 'openai_compat', api_key: 'sk-prima',
-    api_base: '', model: 'gpt-x', bot_name: 'Jenny', bot_icon: '', locale: 'it' }],
+    api_base: '', model: 'gpt-x', bot_name: 'Jenny', bot_icon: '', locale: 'it',
+    skip_probe: '' }],
+  ['onboarding.save', { provider_name: 'openai', format: 'openai_compat', api_key: 'sk-prima',
+    api_base: '', model: 'gpt-x', bot_name: 'Jenny', bot_icon: '', locale: 'it',
+    skip_probe: '1' }],
+]);
+// Il primo avvio aspetta la domanda di prova al provider (15 s lato server):
+// i 20 s di base la facevano scadere a prova ancora in corso.
+assert.deepEqual(options.filter(([m]) => m === 'onboarding.save'), [
+  ['onboarding.save', { timeoutMs: 45000 }],
+  ['onboarding.save', { timeoutMs: 45000 }],
 ]);
 assert.deepEqual(fetched, [], 'nessun segreto in un URL');
 

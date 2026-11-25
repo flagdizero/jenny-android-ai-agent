@@ -1395,8 +1395,10 @@ async def ssh_host_save(ctx: CommandContext, params: Mapping[str, Any]) -> dict[
 
 
 # I campi dell'onboarding, come li legge ``settings_api.save_onboarding``.
+# ``skip_probe`` è «Salva lo stesso»: salta la domanda di prova (v. ``save_onboarding``).
 _ONBOARDING_KEYS = (
     "provider_name", "format", "api_key", "api_base", "model", "bot_name", "bot_icon", "locale",
+    "skip_probe",
 )
 
 
@@ -1407,7 +1409,9 @@ async def onboarding_save(ctx: CommandContext, params: Mapping[str, Any]) -> dic
 
     Un campo assente vale la stringa vuota, come nella query di prima; i default
     (formato, nome, icona, lingua) li decide ``save_onboarding``. A salvataggio
-    riuscito l'evento sveglia l'agente differito.
+    riuscito l'evento sveglia l'agente differito. Una chiave che non risponde
+    alla domanda di prova non è un errore del comando: torna come risultato
+    (``{"ok": false, "probe": <tipo>}``), che il wizard traduce.
     """
     from jenny.webui import settings_api
 
@@ -1416,12 +1420,13 @@ async def onboarding_save(ctx: CommandContext, params: Mapping[str, Any]) -> dic
     # La chiave non si logga: solo la sua lunghezza, come faceva la rotta.
     logger.info(
         "[onboarding] received: provider_name={!r} format={!r} model={!r} api_key_len={} "
-        "bot_name={!r}",
+        "bot_name={!r} skip_probe={}",
         data["provider_name"],
         data["format"],
         data["model"],
         len(data["api_key"]),
         data["bot_name"],
+        bool(data["skip_probe"]),
     )
     try:
         payload = await settings_api.save_onboarding(
@@ -1432,6 +1437,8 @@ async def onboarding_save(ctx: CommandContext, params: Mapping[str, Any]) -> dic
     except settings_api.WebUISettingsError as exc:
         logger.warning("[onboarding] settings error: {}", exc.message)
         raise
+    if payload.get("ok") is False:
+        return payload
     logger.info("[onboarding] success: chat_id={}", payload.get("chat_id"))
     return payload
 

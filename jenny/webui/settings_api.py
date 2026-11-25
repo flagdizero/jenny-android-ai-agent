@@ -598,9 +598,12 @@ def provider_models_payload(query: QueryParams) -> dict[str, Any]:
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status in {401, 403}:
+            # ``rejected``, non ``not_configured``: la chiave c'è ed è sbagliata.
+            # Con lo stesso stato la WebUI diceva «serve una chiave» a chi
+            # l'aveva appena scritta.
             return {
                 **base_payload,
-                "status": "not_configured",
+                "status": "rejected",
                 "message": "The provider rejected the configured credential.",
             }
         return {
@@ -756,13 +759,107 @@ def _provider_list_simple(config: Any = None) -> list[dict[str, Any]]:
     return result
 
 
+# La domanda di prova del primo avvio: quanto aspettarla e quanto può rispondere.
+# 15 s come il saluto di un quaderno (``project_greet``); 16 token perché è il
+# minimo che l'API Responses accetta, e la risposta non la legge nessuno.
+ONBOARDING_PROBE_TIMEOUT_S = 15.0
+ONBOARDING_PROBE_MAX_TOKENS = 16
+
+# Come un provider dice «questo modello non c'è» quando lo status da solo non
+# basta: OpenAI risponde 404 ``model_not_found``, Anthropic 404
+# ``not_found_error`` con «model: …», altri un 400 con la frase nel testo.
+_MISSING_MODEL_TOKENS = frozenset({"model_not_found", "model_not_exist", "not_found_error"})
+_MISSING_MODEL_PHRASES = (
+    "not found", "does not exist", "not exist", "not a valid model", "unknown model",
+    "no such model", "invalid model",
+)
+
+
+def _probe_failure_kind(response: Any) -> str:
+    """Il tipo di una prova fallita: quelli di ``classify_user_error`` più ``model``.
+
+    ``model`` solo quando l'errore parla di un modello che non c'è: un 404
+    senza la parola «model» è più spesso un indirizzo sbagliato, e lì «il
+    modello non esiste» manderebbe l'utente a cercare nel posto sbagliato.
+    """
+    from jenny.providers.retry_policy import classify_user_error, normalize_error_token
+
+    kind = classify_user_error(response)
+    if kind != "generic":
+        return kind
+    tokens = {
+        normalize_error_token(getattr(response, "error_type", None)),
+        normalize_error_token(getattr(response, "error_code", None)),
+    }
+    text = (getattr(response, "content", None) or "").lower()
+    if tokens & _MISSING_MODEL_TOKENS or (
+        "model" in text and any(phrase in text for phrase in _MISSING_MODEL_PHRASES)
+    ):
+        return "model"
+    return "generic"
+
+
+async def _probe_provider(provider: Any, model: str) -> str | None:
+    """Una domanda vera, e minima, al provider che il primo avvio sta per salvare.
+
+    ``None`` se ha risposto, altrimenti il tipo del guasto: ``credit``,
+    ``auth``, ``rate_limit``, ``server``, ``timeout``, ``connection``,
+    ``model`` o ``generic``. Va chiamata **fuori** da ``store.mutate``.
+    """
+    from jenny.providers.opencode import conversation_scope
+
+    try:
+        with conversation_scope("onboarding-probe"):
+            response = await asyncio.wait_for(
+                provider.chat_with_retry(
+                    model=model,
+                    messages=[{"role": "user", "content": "Reply with: ok"}],
+                    tools=None,
+                    tool_choice=None,
+                    max_tokens=ONBOARDING_PROBE_MAX_TOKENS,
+                    # Senza ragionamento: il default è «medium», e un modello che
+                    # pensa prima di dire «ok» può passare i 15 s da solo.
+                    reasoning_effort=None,
+                ),
+                timeout=ONBOARDING_PROBE_TIMEOUT_S,
+            )
+    except asyncio.TimeoutError:
+        return "timeout"
+    except Exception as exc:  # noqa: BLE001 - la prova dice «non è andata», non solleva
+        logger.warning("[onboarding] probe raised {}", type(exc).__name__)
+        return "generic"
+    if getattr(response, "finish_reason", None) == "error":
+        return _probe_failure_kind(response)
+    return None
+
+
+async def _close_quietly(provider: Any) -> None:
+    """Chiude il client del provider di prova: il gateway ne costruirà un altro."""
+    aclose = getattr(provider, "aclose", None)
+    if aclose is None:
+        return
+    try:
+        await aclose()
+    except Exception:  # noqa: BLE001 - chiudere un client di prova non deve fallire il salvataggio
+        logger.opt(exception=True).debug("[onboarding] probe provider close failed")
+
+
 async def save_onboarding(
     data: dict[str, Any],
     *,
     session_manager: Any | None = None,
     onboarding_event: Any | None = None,
 ) -> dict[str, Any]:
-    """Save onboarding configuration."""
+    """Save onboarding configuration.
+
+    Prima di salvare fa **una domanda di prova** al provider, con la chiave,
+    l'indirizzo e il modello scelti. Se non risponde non scrive niente e torna
+    ``{"ok": False, "probe": <tipo>}`` (v. :func:`_probe_provider`; ``config``
+    quando il provider non si costruisce nemmeno): il wizard dice il tipo nella
+    sua lingua (``onboarding.probe.<tipo>``), invece di una frase inglese del
+    server. ``skip_probe`` («Salva lo stesso») salta la domanda, non la
+    costruzione: il wizard lo offre solo quando la chiave può essere giusta.
+    """
     provider_name = (data.get("provider_name") or "").strip()
     provider_format = (data.get("format") or "openai_compat").strip()
     api_key = (data.get("api_key") or "").strip()
@@ -770,6 +867,7 @@ async def save_onboarding(
     model = (data.get("model") or "").strip()
     bot_name = (data.get("bot_name") or "Jenny").strip()
     bot_icon = (data.get("bot_icon") or "✿").strip()
+    skip_probe = str(data.get("skip_probe") or "").strip().lower() in {"1", "true", "yes"}
 
     if not provider_name:
         raise WebUISettingsError("provider_name is required")
@@ -802,17 +900,28 @@ async def save_onboarding(
         locale = (data.get("locale") or "en").strip().lower()
         config.agents.defaults.language = locale if locale in WELCOME_TEMPLATES else "en"
 
-        # Fase 6.7: valida il provider PRIMA di persistere/segnalare. Se la config
-        # non produce un provider valido, l'errore torna subito alla WebUI di
-        # onboarding invece di fallire in modo asincrono e silenzioso nel
-        # GatewayContainer (che reloada la stessa config e resterebbe senza agent).
-        # Sollevare qui lascia il file intatto: ``store.mutate`` non salva.
-        from jenny.providers.factory import make_provider
+    # Fase 6.7, poi la prova: il provider si costruisce e si interroga su una
+    # copia della config, PRIMA di ``store.mutate`` — la domanda dura secondi, e
+    # il lucchetto della config resterebbe preso per tutto il tempo. Se la config
+    # non produce un provider o il provider non risponde, il file resta intatto e
+    # l'evento spento (prima un provider rotto falliva async e silenzioso nel
+    # GatewayContainer, che reloada la stessa config e restava senza agent).
+    from jenny.providers.factory import make_provider
 
-        try:
-            make_provider(config)
-        except (ValueError, RuntimeError) as exc:
-            raise WebUISettingsError(f"Provider configuration is invalid: {exc}") from exc
+    candidate = load_config()
+    _apply(candidate)
+    try:
+        provider = make_provider(candidate)
+    except (ValueError, RuntimeError) as exc:
+        logger.warning("[onboarding] provider configuration is invalid: {}", exc)
+        return {"ok": False, "probe": "config"}
+    try:
+        failure = None if skip_probe else await _probe_provider(provider, model)
+    finally:
+        await _close_quietly(provider)
+    if failure is not None:
+        logger.warning("[onboarding] probe failed: {}", failure)
+        return {"ok": False, "probe": failure}
 
     config = await store.mutate(_apply)
 
@@ -830,6 +939,7 @@ async def save_onboarding(
         onboarding_event.set()
 
     return {
+        "ok": True,
         "status": "ok",
         "chat_id": chat_id,
         "welcome_message": greeting,

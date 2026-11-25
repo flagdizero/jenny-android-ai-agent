@@ -24,11 +24,15 @@ import { showToast } from './utils.js';
 
 const LOADING = Object.freeze({ status: 'loading', models: [], message: '' });
 
-/** Le frasi uguali nei due gusci; `missing_api_base` ed `error` dicono dove si
- *  ripara, che e' diverso in casa e in officina, e ognuno ha la sua. */
+/** Le frasi uguali nei due gusci e nel primo avvio; `missing_api_base` ed
+ *  `error` dicono dove si ripara, che e' diverso in ognuno, e ognuno ha la sua.
+ *  `not_configured` e' «manca la chiave», `rejected` «la chiave c'e' ma il
+ *  provider la rifiuta» (401/403): erano lo stesso stato, e chi aveva appena
+ *  scritto una chiave sbagliata leggeva «serve una chiave». */
 export const CATALOG_NOTE_KEYS = Object.freeze({
   loading: 'common.modelsLoading',
   not_configured: 'common.modelsNeedKey',
+  rejected: 'common.modelsKeyRejected',
 });
 
 export class ModelCatalogs {

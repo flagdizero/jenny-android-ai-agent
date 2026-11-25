@@ -6633,6 +6633,34 @@ dialog.image-lightbox::backdrop { background: transparent; }
   line-height: 1.4;
 }
 
+/* L'avviso della domanda di prova fallita, sopra «Indietro»/«Avvia»: niente e'
+   stato salvato, e i bottoni portano dove si ripara. */
+.onboarding-probe {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--error);
+  background: var(--overlay);
+  text-align: left;
+}
+.onboarding-probe[hidden] { display: none; }
+.onboarding-probe-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.onboarding-probe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.onboarding-probe-actions .onboarding-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
 .onboarding-summary {
   background: rgba(255,255,255,0.03);
   border: 1px solid var(--border);

@@ -325,6 +325,28 @@ out.note = note.hidden ? null : note.textContent;
 
 
 @requires_jsdom
+def test_a_rejected_key_is_not_a_missing_key() -> None:
+    """Con una chiave che il provider rifiuta (401/403) lo stato era
+    ``not_configured`` come senza chiave, e l'officina diceva «serve una
+    chiave» a chi l'aveva appena scritta. Ora è ``rejected``, con la sua frase,
+    e il ``message`` inglese del server non si aggiunge."""
+    out = _run(
+        """
+catalogs.sec = { status: 'rejected', models: [],
+  message: 'The provider rejected the configured credential.' };
+s._modelCatalogs = new ModelCatalogs((name) => api.providerModels(name));
+s._resetBrandVisit();
+s._paint();
+await settle();
+group('sec').querySelector('[data-brand-toggle]').click();
+const note = group('sec').querySelector('[data-brand-note]');
+out.note = note.hidden ? null : note.textContent;
+"""
+    )
+    assert out["note"] == "common.modelsKeyRejected"
+
+
+@requires_jsdom
 def test_a_failed_list_says_why_and_is_asked_again() -> None:
     out = _run(
         """
