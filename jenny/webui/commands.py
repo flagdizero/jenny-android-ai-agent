@@ -1612,6 +1612,8 @@ _COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
     "cron": ("jenny.webui.cron_commands", "CRON_COMMANDS"),
     # «Ho fatto» sotto una risposta, e «Torna a prima di questo turno».
     "turn": ("jenny.webui.turn_commands", "TURN_COMMANDS"),
+    # La «Rete di casa» dell'officina: gli indirizzi privati raggiungibili.
+    "network": ("jenny.webui.network_commands", "NETWORK_COMMANDS"),
 }
 
 

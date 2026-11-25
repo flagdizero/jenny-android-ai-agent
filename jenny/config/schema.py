@@ -927,6 +927,10 @@ class SecurityConfig(Base):
 
     restrict_to_workspace: bool = True
     ssrf_whitelist: list[str] = Field(default_factory=list)
+    # Il nome che l'utente ha dato a un indirizzo di ``ssrf_whitelist`` («NAS»,
+    # «Home Assistant»), per l'officina. Solo da mostrare: a decidere cosa si
+    # raggiunge resta l'elenco qui sopra.
+    ssrf_names: dict[str, str] = Field(default_factory=dict)
 
 
 # Modalità ammesse per ``PowerConfig.keep_awake``. Fuori da queste tre si

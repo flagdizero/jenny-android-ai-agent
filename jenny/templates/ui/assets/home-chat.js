@@ -817,6 +817,44 @@ export class HomeChat {
     if (turns.length) this.onTurnsShown(turns);
   }
 
+  /** I suggerimenti di partenza, sotto il saluto (giro UX dell'11/10/2026, §7).
+   *
+   *  Solo finche' nel filo non c'e' niente di tuo: al primo messaggio se ne
+   *  vanno (`_appendUser`). Un tocco non manda niente: riempie il campo, e la
+   *  frase si puo' cambiare prima (`onPick`, che e' `_prefill` della casa). */
+  offerStarts(items, onPick) {
+    this.dropStarts();
+    if (!items?.length || this.el.querySelector('.home-msg-user')) return;
+    const box = document.createElement('div');
+    box.className = 'home-starts';
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', i18n.t('home.starts.title'));
+    const title = document.createElement('div');
+    title.className = 'home-starts-title';
+    title.textContent = i18n.t('home.starts.title');
+    box.appendChild(title);
+    for (const item of items) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'home-start';
+      btn.innerHTML = `<i class="ti ${item.icon}" aria-hidden="true"></i>`;
+      const text = document.createElement('span');
+      const label = document.createElement('b');
+      label.textContent = item.label;
+      text.append(label, document.createTextNode(item.text));
+      btn.appendChild(text);
+      btn.addEventListener('click', () => onPick?.(item.text));
+      box.appendChild(btn);
+    }
+    this._append(box);
+    this._empty = false;
+    this.syncEmpty();
+  }
+
+  dropStarts() {
+    for (const node of this.el.querySelectorAll('.home-starts')) node.remove();
+  }
+
   /** Dice a TalkBack una risposta appena finita, dal vivo.
    *
    *  Solo qui, a turno chiuso: durante lo streaming il testo cambia a ogni
@@ -926,6 +964,8 @@ export class HomeChat {
   /* ── Disegno ── */
 
   _appendUser(text, origin, media, toTop = false, at = null, device = null) {
+    /* Hai scritto: i suggerimenti di partenza hanno finito il loro lavoro. */
+    if (!toTop) this.dropStarts?.();
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-user';
     const badge = originBadge(origin, device, 'home-origin');

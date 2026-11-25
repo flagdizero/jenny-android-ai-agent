@@ -844,6 +844,36 @@ async def _close_quietly(provider: Any) -> None:
         logger.opt(exception=True).debug("[onboarding] probe provider close failed")
 
 
+def _welcome_into_transcript(chat_id: str, greeting: str) -> None:
+    """Il saluto anche nel verbale della chat, come il saluto di un quaderno.
+
+    Stava solo nella sessione: la casa lo vedeva perche', a verbale vuoto, la
+    chat si ricostruisce dalla sessione (``transcript._build_synthetic_transcript``).
+    Al primo messaggio dell'utente il verbale non e' piu' vuoto, e il saluto
+    spariva dalla chat — proprio quello sotto cui stanno i suggerimenti di
+    partenza. Un verbale che non si scrive non ferma il primo avvio.
+    """
+    import time
+    import uuid
+
+    from jenny.webui.transcript_store import append_transcript_object
+
+    key = f"websocket:{chat_id}"
+    turn_id = f"welcome:{uuid.uuid4().hex}"
+    at = int(time.time() * 1000)
+    try:
+        append_transcript_object(key, {
+            "event": "message", "chat_id": chat_id, "text": greeting, "kind": "message",
+            "turn_id": turn_id, "turn_phase": "answer", "at": at,
+        })
+        append_transcript_object(key, {
+            "event": "turn_end", "chat_id": chat_id, "turn_id": turn_id,
+            "turn_phase": "complete", "at": at,
+        })
+    except Exception:  # noqa: BLE001 — il saluto resta nella sessione
+        logger.opt(exception=True).warning("[onboarding] welcome not written to the transcript")
+
+
 async def save_onboarding(
     data: dict[str, Any],
     *,
@@ -934,6 +964,7 @@ async def save_onboarding(
         session = session_manager.get_or_create(UNIFIED_SESSION_KEY)
         session.add_message("assistant", greeting, chat_id=chat_id)
         session_manager.save(session)
+    _welcome_into_transcript(chat_id, greeting)
 
     if onboarding_event:
         onboarding_event.set()
@@ -973,6 +1004,12 @@ def _worker_settings_sections(config: Any) -> dict[str, Any]:
     except Exception:
         logger.exception("could not build the worker settings sections")
         return {"memory": None, "workers": None}
+
+
+def _home_network(config: Any) -> dict[str, Any]:
+    from jenny.webui.home_network import home_network_payload
+
+    return home_network_payload(config)
 
 
 def settings_payload(
@@ -1020,6 +1057,9 @@ def settings_payload(
         "location": {
             "enabled": config.tools.location.enable,
         },
+        # «Rete di casa» in officina (Mani): gli indirizzi che gli strumenti di
+        # Jenny possono raggiungere pur essendo privati, coi loro nomi.
+        "home_network": _home_network(config),
         # Il wakelock di servizio si prende una volta sola all'avvio: qui si
         # espone il valore scritto nel config, non lo stato del lock vivo. La UI
         # deve dire che il cambio vale dal prossimo riavvio.

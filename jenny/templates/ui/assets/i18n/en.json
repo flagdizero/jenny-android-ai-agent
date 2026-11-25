@@ -497,6 +497,24 @@
       "summaryOnMany": "on · {count} connected",
       "failed": "Didn't work: {error}"
     },
+    "homeNet": {
+      "title": "Home network",
+      "hint": "{name}'s tools can't reach the addresses of your network, for safety. Here you open one at a time: the NAS, Home Assistant, another computer.",
+      "empty": "No addresses: Jenny reaches nothing at home.",
+      "range": "a whole range, written by hand",
+      "remove": "Remove {name}",
+      "name": "Name",
+      "namePlaceholder": "NAS",
+      "address": "Address",
+      "add": "Add",
+      "added": "Added.",
+      "removed": "Removed.",
+      "error": {
+        "not_an_address": "It needs an IP address, like 192.168.1.20: not a name, not a range.",
+        "not_home": "That address isn't another device at home.",
+        "too_many": "There are already too many."
+      }
+    },
     "peers": {
       "title": "Other Jennys",
       "rowName": "Linked Jennys",
@@ -1910,6 +1928,29 @@
       "remove": "Remove {name}",
       "removed": "Reminder removed: {name}",
       "howToAdd": "A new reminder is asked for in the chat. Notebook reminders live on their boards."
+    },
+    "starts": {
+      "title": "Where to start",
+      "reminder": {
+        "label": "A reminder",
+        "text": "Remind me to drink a glass of water at 4 pm"
+      },
+      "notebook": {
+        "label": "A notebook",
+        "text": "Let's open a notebook for our home recipes"
+      },
+      "app": {
+        "label": "An app",
+        "text": "Make me an app to track our household spending"
+      },
+      "arrival": {
+        "label": "When you get somewhere",
+        "text": "When I get home, remind me to water the plants"
+      }
+    },
+    "askApp": {
+      "title": "Ask {name} for an app",
+      "example": "Make me an app to track how many hours I sleep"
     },
     "peers": {
       "title": "Other Jennys",
