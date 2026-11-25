@@ -990,6 +990,14 @@ class AgentLoop(
             workspace=scope.project_path,
             include_memory_recent_history=include_memory_recent_history,
             session_key=session.key,
+            # Il richiamo per nome (``agent/facts.py``) è per il messaggio
+            # dell'utente: non per un turno effimero (Dream, giardiniere), non per
+            # quel che arriva da un'altra Jenny su una linea.
+            recall_names=(
+                include_memory_recent_history
+                and msg.channel != "system"
+                and not msg.metadata.get("_line_peer")
+            ),
             current_runtime_lines=[
                 *self._location_runtime_lines(msg.channel, chat_id),
                 *screen_runtime_lines(msg.metadata),

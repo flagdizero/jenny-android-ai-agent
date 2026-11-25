@@ -77,6 +77,21 @@ Three things now work against that:
 
 Names and numbers are found by code, not by a model: a capitalised word that does not open a sentence, a number with three or more digits, a date, or a number with letters attached such as `42k`. A name never written with a capital letter is not seen.
 
+### Recall by name
+
+The older wordings in `memory/archive/` come back on their own when they matter. When your message names someone or something the archive knows — "tonight I'm at Marco's", even typed in lowercase — the code looks for archived wordings that carry a detail the turn does not already have, and adds them next to your message, dated, exactly as they were written. A line already in the conversation is not sent again.
+
+What decides it, all in code, with no model call:
+
+- **Which names.** Words of four letters or more that some archived wording holds as a name. The two rarest in the message count, at most. A name also used as an ordinary word (a friend called Iris, and the flower) counts only when you write it with a capital in the middle of a sentence. A name that appears in too many entries — usually your own, or your city — does not count, and neither do numbers or your notebooks' names.
+- **Which lines.** Only a wording that brings a name, place, date or number missing from what the turn already holds: the memory files, the conversation so far, your message. Two wordings of the same detail bring it once.
+- **How much.** At most four lines, 700 characters, and no new block once the conversation already carries six.
+- **Where.** The personal chat gets wordings from `USER.md` and `memory/MEMORY.md`. A [notebook](./projects.md) gets only those from `USER.md`, with a note not to write them into its journal. Nothing goes to reminders, monitors, Dream, the gardener, helpers, or turns from another Jenny.
+
+The lines sit in the turn's runtime context, never in the system prompt: the cached part of the prompt is the same whether or not a name was recalled. Jenny is told they are older wordings: what her memory files say now, a later line, or what you say now wins.
+
+The archive is read into memory once, in the background, when the app starts, and again whenever it changes. Until that first read finishes, a message recalls nothing. A name that is never written with a capital, an indirect reference ("my sister"), or a fact that never made it into `USER.md` is not recalled this way: for those Jenny still searches with `recall`, `recall_history` and `recall_chat`.
+
 ## Why Dream can say "nothing to process"
 
 If you run `/dream` on a chat that just started, or one that's still short, Jenny will reply that there's no conversation history to process yet. This is expected, not a bug: Dream only reads from `memory/history.jsonl`, and fresh conversations only reach that file *after* the Consolidator has compacted them (see Stage 1 above). A short, still-active chat simply hasn't produced any compacted history for Dream to read yet.
@@ -152,6 +167,7 @@ At the start of every conversation, Jenny's system prompt includes:
 - The `## Wikis` block: one line per wiki under `workspace/wikis/` — its name and one-line scope — rendered from disk at every build. It sits under the same "Memory" heading as `MEMORY.md` but is injected independently — an untouched `MEMORY.md` doesn't suppress it — and never inside a project conversation.
 - Any history entries from `memory/history.jsonl` that Dream hasn't processed yet (capped to the last 50 entries / roughly 8,000 tokens of text) — this is the bridge between "compacted but not yet dreamed" and the durable files.
 - The [diary](#the-diary-what-happened-in-your-notebooks): the last week of your notebooks' journals, in two grades.
+- Next to your message, not in the system prompt: older wordings of what the message names, when they carry a detail the turn lacks (see [Recall by name](#recall-by-name)).
 
 So a brand-new chat isn't a blank slate: it inherits your durable profile and project notes from the last Dream pass, plus whatever's been compacted since then but not yet folded in.
 
