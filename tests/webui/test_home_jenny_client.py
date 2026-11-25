@@ -12,7 +12,8 @@ chi l'ha toccato vedrebbe un interruttore che si rifiuta senza dire perche'.
 **«Nascosta» vince sulla taglia.** Dire «media» di una mascotte che non si vede
 e' vero e inutile; la finestra flottante invece si somma anche a quella, perche'
 sono due posti diversi e lei puo' stare sopra le altre app mentre dentro la casa
-non c'e'.
+non c'e'. Tolta il 05/10/2026, quando Jenny era l'unica porta della chat, e
+tornata il 25/11/2026 con la chiave della chat in testa alla casa.
 
 I membri si ritagliano dal sorgente e girano in node su un DOM finto.
 ``MASCOT_SIZES`` invece e' **vera**: le taglie che la casa offre e quelle che
@@ -73,6 +74,9 @@ __SIZES__
 let currentSize = 'sm';
 function mascotSize() { return currentSize; }
 function setMascotSize(size) { currentSize = size; return size; }
+let currentHidden = false;
+function mascotHidden() { return currentHidden; }
+function setMascotHidden(on) { currentHidden = Boolean(on); return currentHidden; }
 
 /* Quel che il server risponde all'interruttore, deciso dal banco. */
 let reply = null;
@@ -147,6 +151,7 @@ class HomeJenny {
   __SET_FLOATING__
   __APPLY_TRANSLATIONS__
   __VALUE__
+  __TOGGLE_VISIBLE__
   __PICK_SIZE__
   __TOGGLE_FLOATING__
   __PAINT_SIZES__
@@ -173,6 +178,7 @@ const spokenNames = [];
 function room(floating, disk, broken) {
   for (const k of Object.keys(nodi)) delete nodi[k];
   currentSize = 'sm';
+  currentHidden = false;
   reply = null;
   error = null;
   calls.length = 0;
@@ -223,6 +229,7 @@ def _harness() -> str:
         .replace("__SET_FLOATING__", member(src, "setFloating"))
         .replace("__APPLY_TRANSLATIONS__", member(src, "applyTranslations"))
         .replace("__VALUE__", member(src, "value"))
+        .replace("__TOGGLE_VISIBLE__", member(src, "toggleVisible"))
         .replace("__PICK_SIZE__", member(src, "pickSize"))
         .replace("__TOGGLE_FLOATING__", member(src, "toggleFloating"))
         .replace("__PAINT_SIZES__", member(src, "_paintSizes"))
@@ -248,8 +255,7 @@ def _run_js(script: str) -> None:
 
 
 def test_the_window_adds_itself_to_the_size() -> None:
-    """La taglia, e la finestra flottante se c'e': sono due posti diversi.
-    «Nascosta» non c'e' piu' dal 05/10/2026 — Jenny e' la porta della chat."""
+    """La taglia, e la finestra flottante se c'e': sono due posti diversi."""
     _run_js("""
       const con = jennyValue({ size: 'sm', floating: true });
       assert.ok(con.includes(i18n.t('settings.mascotSizeSmall').toLowerCase()));
@@ -270,6 +276,43 @@ def test_the_room_reads_the_preferences_that_are_live() -> None:
       she.pickSize('lg');
       assert.equal(she.value(), jennyValue({ size: 'lg', floating: true }));
       assert.ok(changes >= 1, 'la riga di «Tu e Jenny» non viene avvisata');
+    """)
+
+
+def test_hidden_wins_over_the_size_but_not_over_the_window() -> None:
+    """Nascosta in casa non dice la taglia; la finestra flottante resta detta,
+    perche' sopra le altre app lei c'e' ancora."""
+    _run_js("""
+      const hidden = jennyValue({ hidden: true, size: 'lg', floating: true });
+      assert.ok(hidden.startsWith(i18n.t('home.jenny.hidden').toLowerCase()), hidden);
+      assert.ok(!hidden.includes(i18n.t('settings.mascotSizeLarge').toLowerCase()), hidden);
+      assert.ok(hidden.includes(i18n.t('home.jenny.floatingShort').toLowerCase()), hidden);
+    """)
+
+
+# ── Mostrarla in casa ───────────────────────────────────────────────────────
+
+
+def test_the_switch_hides_her_and_says_where_the_chat_went() -> None:
+    """Acceso vuol dire «si vede». Spento, la nota dice da dove si apre la chat,
+    la riga di «Tu e Jenny» dice «nascosta», e la taglia resta scelta: vale per
+    la flottante."""
+    _run_js("""
+      const she = room({ available: true, enabled: false });
+      assert.equal(she.visibleBtn.attrs['aria-checked'], 'true');
+      assert.equal(she.visibleNote.hidden, true);
+      she.pickSize('md');
+      she.toggleVisible();
+      assert.equal(mascotHidden(), true);
+      assert.equal(she.visibleBtn.attrs['aria-checked'], 'false');
+      assert.equal(she.visibleNote.hidden, false);
+      assert.equal(she.value(), jennyValue({ hidden: true, size: 'md', floating: false }));
+      assert.ok(changes >= 2, 'la riga di «Tu e Jenny» non viene avvisata');
+      const on = she.sizeEl.children.filter((b) => b.classList.contains('is-on'));
+      assert.deepEqual(on.map((b) => b.dataset.size), ['md'], 'la taglia scelta si perde');
+      she.toggleVisible();
+      assert.equal(mascotHidden(), false);
+      assert.equal(she.visibleNote.hidden, true);
     """)
 
 

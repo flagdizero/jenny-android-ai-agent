@@ -201,6 +201,7 @@
     "configRecoveredBackup": "Settings were restored from the last good backup: config.json could not be read at startup.",
     "configRecoveredDefaults": "config.json could not be read and there was no usable backup, so Jenny started on defaults — your API key needs setting up again. The unreadable file was kept aside:",
     "themeLabel": "Theme",
+    "mascotVisible": "Show her at home",
     "mascotSize": "Mascot size",
     "mascotSizeSmall": "Small",
     "mascotSizeMedium": "Medium",
@@ -1555,7 +1556,8 @@
     "over": {
       "label": "The chat, over the page",
       "close": "close the chat",
-      "toBoard": "go to the {name} board"
+      "toBoard": "go to the {name} board",
+      "open": "open the chat"
     },
     "door": {
       "open": "Open the board"
@@ -1566,6 +1568,8 @@
     "jenny": {
       "title": "{name}",
       "floatingShort": "floating",
+      "hidden": "hidden",
+      "hiddenHint": "While she is hidden, the chat opens from the button at the top right. The floating mascot does not change, and the size below is hers.",
       "name": "Her name",
       "nameHint": "The name she introduces herself with, and the one you call her by. Changing it erases nothing she remembers.",
       "nameFailed": "I couldn't save the name.",
@@ -1811,9 +1815,7 @@
       "emptyTitle": "No other Jenny",
       "emptyBody": "If you have Jenny on another phone, link them: ask her things, or talk to her straight from here.",
       "add": "Link another Jenny",
-      "more": "Files, history, unlink: in the workshop",
-      "talk": "Talk",
-      "computer": "opencode",
+      "computer": "computer",
       "computerNote": "It only answers: it asks this Jenny nothing, so there are no permissions here.",
       "line": "Can pass the line here",
       "lineSub": "From {name} you talk to this Jenny",
@@ -1838,7 +1840,73 @@
         "repair": "needs relinking",
         "unreachable": "not answering",
         "seen": "seen {time}",
-        "never": "never seen"
+        "never": "never seen",
+        "seenComputer": "seen {time}"
+      },
+      "intro": "Your Jennys on other phones and on the computer. Tap one to talk to her or to decide what she can do here.",
+      "sec": {
+        "linked": "Linked",
+        "add": "Add",
+        "phone": "This phone",
+        "link": "Link"
+      },
+      "addSub": "With a QR, in a minute",
+      "net": {
+        "label": "Tailscale",
+        "on": "on",
+        "off": "not on",
+        "offSub": "Until it is back, the other Jennys can't be reached.",
+        "note": "Jennys talk over Tailscale, your private network: it must be on at both ends."
+      },
+      "uses": {
+        "title": "What another Jenny is for",
+        "short": "What it's for",
+        "note": "You ask in words, in chat. What she can do here is decided on her page.",
+        "ask": "Ask her a question",
+        "askSay": "“ask {name} if the email arrived”",
+        "act": "Ask her to do something",
+        "actSay": "“ask {name} to remind me on Monday”",
+        "line": "Talk to her straight from here",
+        "lineSay": "“pass me {name}”"
+      },
+      "defaultExample": "Work",
+      "talkTo": "Talk to {name}",
+      "perm": {
+        "title": "What she can do here",
+        "line": "Pass the line here",
+        "files": "Get files from here",
+        "filesSub": "Only the ones this Jenny attaches"
+      },
+      "history": "History",
+      "queued": "{count} waiting",
+      "ping": "Test the link",
+      "pingSent": "Test sent to {name}",
+      "rename": "Change name",
+      "unlink": "Unlink {name}",
+      "unlinkTitle": "Unlink {name}?",
+      "unlinkBody": "The two Jennys stop talking. If the other one is reachable it unlinks too; linking them again needs a new code.",
+      "unlinked": "Link with {name} removed",
+      "repair": {
+        "title": "Needs relinking",
+        "body": "This phone no longer has the key for this link: it happens after a restore. Link them again: name and permissions stay.",
+        "go": "Relink"
+      },
+      "down": {
+        "title": "Not answering",
+        "body": "Check that the other phone is on, with Tailscale on.",
+        "bodyComputer": "Check that the computer is on, with Tailscale on and opencode open.",
+        "bodyHere": "Tailscale isn't on on this phone: until it is back, nothing can be reached from here.",
+        "queued": "Waiting: {count}. They leave by themselves once it is back.",
+        "retry": "Try again now"
+      },
+      "ago": {
+        "now": "a moment ago",
+        "date": "on {date}"
+      },
+      "back": {
+        "list": "back to Other Jennys",
+        "peer": "back to {name}",
+        "add": "back to the previous step"
       },
       "addLead": "Keep the other phone close. Both must be on Tailscale.",
       "showQr": "Show the QR here",

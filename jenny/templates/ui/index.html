@@ -102,6 +102,13 @@
               aria-pressed="false" hidden>
         <i class="ti ti-list" aria-hidden="true"></i>
       </button>
+      <!-- La porta della chat quando Jenny e' nascosta (25/11/2026): fa quel che
+           fa il tocco su di lei, la chat sale sopra la stanza. Nelle pagine la
+           testa non c'e', e la chat e' una pagina della fila. -->
+      <button class="home-board-tool home-chat-key" id="home-chat-key" type="button" hidden>
+        <i class="ti ti-message-circle" aria-hidden="true"></i>
+        <span class="home-chat-key-dot" id="home-chat-key-dot" aria-hidden="true" hidden></span>
+      </button>
       <!-- Dal lettore: correggi tu, adesso. Compare solo li', e sparisce
            mentre l'editor e' aperto — da quel momento i comandi sono Salva e
            Annulla, e stanno in basso. -->
@@ -307,8 +314,8 @@
             <i class="ti ti-chevron-right home-row-go" aria-hidden="true"></i>
           </button>
           <!-- Le altre Jenny dell'utente (un secondo telefono, il computer): i
-               nomi delle collegate, e dentro il collegamento di una nuova
-               (`home-peers.js`). I permessi fini restano in officina. -->
+               nomi delle collegate, e dentro l'elenco, la pagina di ognuna e il
+               collegamento di una nuova (`home-peers.js`). -->
           <button class="home-row" id="home-row-peers" type="button">
             <i class="ti ti-arrows-exchange" aria-hidden="true"></i>
             <span class="home-row-label" id="home-peers-label"></span>
@@ -467,6 +474,17 @@
       </div>
 
       <div class="home-rows">
+        <!-- Mostrarla o no, in casa (25/11/2026). Da nascosta la chat si apre
+             dalla chiave in testa (`#home-chat-key`), e la nota lo dice. La
+             taglia resta scelta anche da nascosta: vale per la flottante. -->
+        <div class="home-row" id="home-jenny-visible-row">
+          <span class="home-row-label" id="home-jenny-visible-label"></span>
+          <button class="home-switch" id="home-jenny-visible" type="button" role="switch"
+                  aria-labelledby="home-jenny-visible-label">
+            <span class="home-switch-knob"></span>
+          </button>
+        </div>
+        <div class="home-card-note" id="home-jenny-visible-note" hidden></div>
         <div class="home-row home-row-stack">
           <span class="home-row-label" id="home-jenny-size-label"></span>
           <div class="home-seg" id="home-jenny-size" role="radiogroup"></div>
@@ -628,8 +646,9 @@
   </section>
 
   <!-- ── «Altre Jenny» ───────────────────────────────────────────────────
-       Le collegate, se possono passare la linea qui, e il collegamento di una
-       nuova in tre passi. La riempie `home-peers.js`. -->
+       Un menu: l'elenco delle collegate, la pagina di ognuna (parla, cosa può
+       fare qui, cronologia, nome, scollega) e il collegamento di una nuova in
+       tre passi. La riempie `home-peers.js`. -->
   <section class="home-peers-room" id="home-peers-room">
     <div class="home-you-scroll" id="home-peers-body"></div>
   </section>

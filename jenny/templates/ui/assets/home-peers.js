@@ -2,22 +2,33 @@
  *
  *  Fino al 22/11/2026 le altre Jenny stavano solo in officina (`mobile-peers.js`,
  *  cassetto Mani). Da quando la linea si passa dalla chat (`home-line.js`) sono
- *  una cosa di chi usa Jenny, non di chi la regola: l'elenco, il collegamento e
- *  i due permessi che contano entrano in casa. File, cronologia e
- *  scollegamento restano in officina, e la stanza lo dice.
+ *  una cosa di chi usa Jenny, non di chi la regola.
  *
- *  Quattro viste, una alla volta:
- *  - **l'elenco**: ogni collegata col suo stato, «Parla», se puo' passare la
- *    linea qui, e cosa puo' chiedere. Un computer con opencode non ha permessi:
- *    risponde e basta;
- *  - **collega, passo 1**: mostrare il QR o scrivere il codice dell'altra;
- *  - **passo 2**: il QR (o il modulo). Una Jenny nuova comparsa mentre il
- *    codice e' aperto e' quella che l'ha usato;
- *  - **passo 3**: come la chiami — e' il nome che dirai in chat — e i due
- *    permessi.
+ *  Dal 25/11/2026 la stanza è un menu. Prima ogni collegata era una scheda con
+ *  dentro tutto — stato, «Parla», interruttore, livello — e con tre collegate la
+ *  pagina era piena; file, cronologia e scollegamento erano un rimando
+ *  all'officina. Ora l'elenco è solo un elenco, e ogni collegata ha la sua
+ *  pagina, dove sta tutto quel che la riguarda.
+ *
+ *  Le viste, una alla volta:
+ *  - **l'elenco** (`list`): una riga per collegata, nome e stato; sotto,
+ *    «Collega» e lo stato di Tailscale su questo telefono. Senza collegate, a
+ *    cosa servono e il tasto per collegarne una;
+ *  - **la pagina di una collegata** (`peer`): «Parla», cosa può fare qui (la
+ *    linea, domande e richieste, i file), la cronologia, la prova, il nome,
+ *    «Scollega». Un computer con opencode non ha permessi: risponde e basta;
+ *  - **la cronologia** (`history`) e **il nome** (`rename`), dalla sua pagina;
+ *  - **collega, passo 1** (`add`): mostrare il QR o scrivere il codice dell'altra;
+ *  - **passo 2** (`qr`, `join`): il QR, o il modulo. Una Jenny nuova comparsa
+ *    mentre il codice è aperto è quella che l'ha usato;
+ *  - **passo 3** (`name`): come la chiami — è il nome che dirai in chat — e i
+ *    due permessi.
+ *
+ *  Due permessi fini restano solo in officina: la conferma dell'uso del
+ *  telefono dal suo, e le due righe di riassunto dopo una linea.
  *
  *  Lo stato arriva dagli stessi comandi dell'officina (`rpc.peer`,
- *  `jenny/peers/rpc.py`): qui non c'e' una seconda verita'.
+ *  `jenny/peers/rpc.py`): qui non c'è una seconda verità.
  */
 
 import { rpc } from './shared/rpc-client.js';
@@ -28,6 +39,9 @@ import { showToast } from './shared/utils.js';
 import { isComputer, peerGlyph } from './home-line.js';
 
 const t = (key, params) => i18n.t(`home.peers.${key}`, params);
+/* Le frasi della cronologia e delle richieste di fare sono quelle dell'officina:
+   una riga del registro si legge uguale nei due posti. */
+const tw = (key, params) => i18n.t(`settings.peers.${key}`, params);
 
 const POLL_MS = 4000;
 const QR_SRC = '/html-mobile/assets/vendor/qrcode-generator@1.4.4/qrcode.min.js';
@@ -52,17 +66,77 @@ export function isUnreachable(peer) {
   return Boolean(peer?.last_error && peer.last_try_ms > peer.last_seen_ms);
 }
 
-/** Lo stato di una collegata in una riga. */
-export function stateText(peer) {
+/** Quanto tempo fa, a parole: «2 minuti fa», «ieri», e oltre la settimana il
+ *  giorno. Una data secca («25/11, 17:32») obbligava a fare il conto. */
+export function agoText(ms, now = Date.now()) {
+  const seconds = Math.max(0, Math.round((now - ms) / 1000));
+  if (seconds < 90) return t('ago.now');
+  const rel = new Intl.RelativeTimeFormat(i18n.locale, { numeric: 'auto' });
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return rel.format(-minutes, 'minute');
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return rel.format(-hours, 'hour');
+  const days = Math.round(hours / 24);
+  if (days < 7) return rel.format(-days, 'day');
+  const date = new Date(ms).toLocaleDateString(i18n.locale, { day: '2-digit', month: '2-digit' });
+  return t('ago.date', { date });
+}
+
+/** Lo stato di una collegata in una riga. Una che non risponde dice anche
+ *  quando si è vista l'ultima volta: è quel che serve per capire da quanto. */
+export function stateText(peer, now = Date.now()) {
   if (!peer.has_secret) return t('state.repair');
-  if (isUnreachable(peer)) return t('state.unreachable');
-  if (peer.last_seen_ms) {
-    const time = new Date(peer.last_seen_ms).toLocaleString(i18n.locale, {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-    });
-    return t('state.seen', { time });
+  const seen = peer.last_seen_ms
+    ? t(isComputer(peer) ? 'state.seenComputer' : 'state.seen',
+      { time: agoText(peer.last_seen_ms, now) })
+    : '';
+  if (isUnreachable(peer)) {
+    return seen ? `${t('state.unreachable')} · ${seen}` : t('state.unreachable');
   }
-  return t('state.never');
+  return seen || t('state.never');
+}
+
+/** Vero se Tailscale è su in questo telefono: senza, nessuna collegata risponde. */
+export function netUp(status) {
+  return status?.tailscale?.state === 'up';
+}
+
+/* Le righe della cronologia: `direzione:tipo` → la frase (le stesse
+   dell'officina, `settings.peers.log.*`) e i suoi parametri. Un tipo che qui
+   non c'è non si mostra: sono i pezzi di un file, gli `ack`. */
+const LOG_LINES = {
+  'out:ask': (d) => ['askOut', { text: d.text || '' }],
+  'in:ask': (d) => ['askIn', { text: d.text || '' }],
+  'out:answer': () => ['answerOut', {}],
+  'in:answer': () => ['answerIn', {}],
+  'in:file': (d) => ['file', { name: d.name || '' }],
+  'out:ping': () => ['ping', {}],
+  'in:ping': () => ['ping', {}],
+  'sys:paired': () => ['paired', {}],
+  'sys:refused': (d) => ['refused', { kind: d.kind || '' }],
+  'sys:removed': () => ['removed', {}],
+  'sys:removed_by_other': () => ['removedByOther', {}],
+  'sys:confirm': (d) => [d.allowed ? 'confirmYes' : 'confirmNo', { target: d.target || '' }],
+  'sys:undo': (d) => ['undo', { files: d.restored || 0, jobs: d.jobs || 0 }],
+  'out:undo': () => ['undoAsked', {}],
+  'out:line_open': () => ['lineOut', {}],
+  'in:line_open': () => ['lineIn', {}],
+  'out:line_close': () => ['lineOutClosed', {}],
+  'in:line_close': () => ['lineInClosed', {}],
+  'in:line_trace': () => ['lineTrace', {}],
+  'in:undone': () => ['undone', {}],
+};
+
+/** La frase di una riga della cronologia, come `[chiave, parametri]`, o `null`. */
+export function historyLine(row) {
+  const make = LOG_LINES[`${row?.direction}:${row?.kind}`];
+  return make ? make(row.data || {}) : null;
+}
+
+/** Vero se una richiesta di fare si può ancora annullare da qui. */
+export function canUndoAct(act) {
+  const touched = (act?.done || []).filter((d) => d && d.undoable).length;
+  return !act?.working && act?.state === 'answered' && touched > 0;
 }
 
 /** La riga delle Impostazioni: i nomi, o che non ce n'e' nessuna. */
@@ -93,27 +167,41 @@ function loadQr() {
   return qrLoading;
 }
 
+/* Le viste della pagina di una collegata: in testa c'è il suo nome. */
+const PEER_VIEWS = ['peer', 'history', 'rename'];
+/* Dove porta Indietro da ogni vista; dall'elenco si esce dalla stanza. */
+const BACK = {
+  peer: 'list', history: 'peer', rename: 'peer', add: 'list', name: 'list', qr: 'add', join: 'add',
+};
+/* Mentre scrivi un nome o un codice non si ridisegna niente sotto le dita. */
+const TYPING_VIEWS = ['name', 'join', 'rename'];
+
 export class HomePeers {
   /**
    * @param body     il contenitore che scorre della stanza.
    * @param sheet    un `<dialog>` della forma dei fogli del piano, per i livelli.
    * @param onTalk   `(peer)`: apri la linea con lei, nella chat.
    * @param onStatus `(status)`: lo stato e' cambiato (la riga delle Impostazioni).
-   * @param onWorkshop porta all'officina, per quel che qui non c'e'.
+   * @param onHead   `(name | null)`: in testa va il nome di questa collegata
+   *                 (la sua pagina), o il titolo della stanza.
    */
-  constructor({ body, sheet, onTalk, onStatus, onWorkshop } = {}) {
+  constructor({ body, sheet, onTalk, onStatus, onHead } = {}) {
     this.body = body;
     this.sheet = sheet;
     this.onTalk = onTalk || (() => {});
     this.onStatus = onStatus || (() => {});
-    this.onWorkshop = onWorkshop || (() => {});
+    this.onHead = onHead || (() => {});
     this.status = null;
     this.view = 'list';
+    this._peerId = null;
+    this._log = null;
     this._pair = null;
     this._named = null;
     this._timer = null;
     this._open = false;
     this._busy = false;
+    this._drawn = '';
+    this._html = '';
   }
 
   /* ── Ciclo di vita ───────────────────────────────────────────────────── */
@@ -123,6 +211,8 @@ export class HomePeers {
   async open({ add = false, link = null } = {}) {
     this._open = true;
     this._link = link;
+    this._peerId = null;
+    this._log = null;
     this.view = link ? 'join' : (add ? 'add' : 'list');
     this.render();
     await this.refresh();
@@ -140,13 +230,49 @@ export class HomePeers {
     }
   }
 
-  /** Vero se Indietro ha fatto un passo dentro la stanza (dal collegamento all'elenco). */
+  /** Vero se Indietro ha fatto un passo dentro la stanza: dalla pagina di una
+   *  collegata all'elenco, dal collegamento al passo prima. */
   back() {
-    if (this.view === 'list') return false;
+    const to = BACK[this.view];
+    if (!to) return false;
     if (this.view === 'qr') this._cancelPair();
-    this.view = this.view === 'add' || this.view === 'name' ? 'list' : 'add';
-    this.render();
+    this._go(to);
     return true;
+  }
+
+  /** Torna all'elenco, da dovunque nella stanza: la radice del percorso in
+   *  testa («Altre Jenny › Lavoro») porta qui. */
+  toList() {
+    if (this.view === 'qr') this._cancelPair();
+    this._go('list');
+  }
+
+  /** Dove porta Indietro, a parole, per chi non vede la freccia; `null`
+   *  dall'elenco, da cui si esce dalla stanza. */
+  backLabel() {
+    const to = BACK[this.view];
+    if (!to) return null;
+    if (to === 'peer') return t('back.peer', { name: this._current()?.name || '' });
+    return t(to === 'list' ? 'back.list' : 'back.add');
+  }
+
+  /** Il nome da mettere in testa: la collegata di cui si guarda la pagina. */
+  headName() {
+    return PEER_VIEWS.includes(this.view) ? (this._current()?.name || null) : null;
+  }
+
+  _go(view) {
+    this.view = view;
+    if (!PEER_VIEWS.includes(view)) {
+      this._peerId = null;
+      this._log = null;
+    }
+    if (view !== 'rename') this._draftName = undefined;
+    this.render();
+  }
+
+  _current() {
+    return (this.status?.peers || []).find((p) => p.id === this._peerId) || null;
   }
 
   async refresh() {
@@ -154,6 +280,7 @@ export class HomePeers {
       this._show(await rpc.peer('status'));
     } catch (e) {
       if (!this.status) {
+        this._html = '';
         this.body.replaceChildren(el('div', 'home-card-note', t('unavailable')));
       }
     }
@@ -167,7 +294,7 @@ export class HomePeers {
    *  credere il QR scaduto, e il passo del nome non arrivava. */
   async peek() {
     if (this._open) {
-      if (!this._busy && this.view !== 'name' && this.view !== 'join') await this.refresh();
+      if (!this._busy && !TYPING_VIEWS.includes(this.view)) await this.refresh();
       return this.status;
     }
     try {
@@ -185,8 +312,7 @@ export class HomePeers {
     if (!this._open) return;
     this._timer = setTimeout(async () => {
       if (!this._open) return;
-      /* Mentre scrivi un nome non si ridisegna niente sotto le dita. */
-      if (!this._busy && this.view !== 'name' && this.view !== 'join') await this.refresh();
+      if (!this._busy && !TYPING_VIEWS.includes(this.view)) await this.refresh();
       this._schedule();
     }, POLL_MS);
   }
@@ -209,6 +335,13 @@ export class HomePeers {
         this.view = 'add';
         showToast(t('qrExpired'));
       }
+    }
+    /* La collegata di cui si guardava la pagina non c'è più (l'ha scollegata
+       l'altra, o il collegamento è stato spento): si torna all'elenco. */
+    if (PEER_VIEWS.includes(this.view) && !(status.enabled && this._current())) {
+      this.view = 'list';
+      this._peerId = null;
+      this._log = null;
     }
     this.render();
   }
@@ -235,12 +368,29 @@ export class HomePeers {
     if (!this.body) return;
     const view = {
       list: () => this._list(),
+      peer: () => this._peer(),
+      history: () => this._history(),
+      rename: () => this._rename(),
       add: () => this._add(),
       qr: () => this._qr(),
       join: () => this._join(),
       name: () => this._name(),
     }[this.view] || (() => this._list());
-    this.body.replaceChildren(...view().filter(Boolean));
+    const nodes = view().filter(Boolean);
+    /* Il giro di controllo ridisegna ogni quattro secondi, e quasi sempre
+       uguale. Cambiare i nodi sotto un dito che sta toccando una riga perde il
+       tocco (il `click` vuole lo stesso nodo all'andata e al ritorno): se il
+       disegno è lo stesso, resta quello che c'è. */
+    const html = nodes.map((node) => node.outerHTML).join('');
+    const drawn = `${this.view}:${this._peerId || ''}`;
+    if (html !== this._html || drawn !== this._drawn) {
+      this.body.replaceChildren(...nodes);
+      /* Una vista nuova parte dall'alto. */
+      if (drawn !== this._drawn) this.body.scrollTop = 0;
+      this._html = html;
+      this._drawn = drawn;
+    }
+    this.onHead(this.headName());
   }
 
   _switch(on, label, onToggle) {
@@ -261,61 +411,261 @@ export class HomePeers {
     return row;
   }
 
+  /* ── I pezzi del menu ────────────────────────────────────────────────── */
+
+  _sec(text) {
+    return el('div', 'home-peers-sec', text);
+  }
+
+  _menu(rows, cls = '') {
+    const menu = el('div', `home-rows home-peers-menu${cls ? ` ${cls}` : ''}`);
+    menu.append(...rows.filter(Boolean));
+    return menu;
+  }
+
+  /** La tessera con l'icona di una riga: del colore delle altre Jenny, grigia
+   *  (`plain`) per quel che non è un permesso, rossa (`danger`), piena (`add`). */
+  _tile(glyph, kind = '') {
+    const tile = el('span', `home-peers-tile${kind ? ` is-${kind}` : ''}`);
+    tile.appendChild(icon(glyph));
+    return tile;
+  }
+
+  /** Una riga di menu: la tessera, l'etichetta con la riga piccola sotto, e a
+   *  destra un valore, la freccia o un interruttore.
+   *
+   *  Con `run` è un bottone. Con `toggle` è la riga di un interruttore: lo
+   *  muove anche il tocco sul testo, perché su un telefono si mira alla riga.
+   *  Senza nessuno dei due è una riga ferma, che dice e basta. */
+  _row({
+    glyph, kind = '', label, sub = '', value = null, go = true, run = null,
+    on = false, toggle = null, cls = '',
+  }) {
+    const classes = `home-row${sub ? '' : ' is-slim'}${cls ? ` ${cls}` : ''}`;
+    const row = run ? button(classes, null, run) : el('div', classes);
+    const text = el('span', 'home-row-label');
+    text.appendChild(document.createTextNode(label));
+    if (sub) text.appendChild(el('span', 'home-peers-sub', sub));
+    row.append(this._tile(glyph, kind), text);
+    if (value) {
+      const right = el('span', 'home-row-value');
+      right.append(value);
+      row.appendChild(right);
+    }
+    if (toggle) {
+      row.appendChild(this._switch(on, label, toggle));
+      row.addEventListener('click', (e) => {
+        if (!e.target.closest('.home-switch')) toggle(!on);
+      });
+    } else if (run && go) {
+      row.appendChild(icon('ti-chevron-right', 'home-row-go'));
+    }
+    return row;
+  }
+
+  _badge(p) {
+    const badge = el('span', `home-peers-badge${isComputer(p) ? ' is-computer' : ''}`);
+    badge.appendChild(icon(peerGlyph(p)));
+    return badge;
+  }
+
+  /** Il pallino e lo stato di una collegata; di un computer dice che lo è. */
+  _state(p) {
+    const state = el('span', 'home-peers-state');
+    const text = stateText(p);
+    state.append(el('i', `home-line-dot${isUnreachable(p) || !p.has_secret ? ' is-off' : ''}`),
+      document.createTextNode(isComputer(p) ? `${t('computer')} · ${text}` : text));
+    return state;
+  }
+
+  /** Lo stato di Tailscale su questo telefono, come valore di una riga. */
+  _net() {
+    const up = netUp(this.status);
+    const value = el('span', 'home-peers-state');
+    value.append(el('i', `home-line-dot${up ? '' : ' is-off'}`),
+      document.createTextNode(t(up ? 'net.on' : 'net.off')));
+    return this._row({
+      glyph: 'ti-network', kind: up ? '' : 'plain', label: t('net.label'),
+      sub: up ? '' : t('net.offSub'), value,
+    });
+  }
+
+  /** A cosa serve un'altra Jenny: le tre frasi che si dicono in chat. Il nome
+   *  nell'esempio è quello di una collegata, se ce n'è una. */
+  _uses() {
+    const name = (this.status?.peers || []).find((p) => !isComputer(p))?.name || t('defaultExample');
+    return [
+      ['ti-message-question', t('uses.ask'), t('uses.askSay', { name })],
+      ['ti-hand-click', t('uses.act'), t('uses.actSay', { name })],
+      ['ti-arrows-exchange', t('uses.line'), t('uses.lineSay', { name })],
+    ];
+  }
+
+  _useRow([glyph, label, say]) {
+    const row = this._row({ glyph, label, sub: say, cls: 'home-peers-use' });
+    return row;
+  }
+
+  /* ── L'elenco ────────────────────────────────────────────────────────── */
+
   _list() {
     const s = this.status;
     if (!s) return [el('div', 'home-card-note', i18n.t('settings.loading'))];
     const peers = s.enabled ? (s.peers || []) : [];
-    const nodes = [];
-    if (!peers.length) {
-      const empty = el('div', 'home-peers-empty');
-      empty.append(icon('ti-arrows-exchange'), el('b', null, t('emptyTitle')),
-        el('span', null, t('emptyBody')));
-      nodes.push(empty);
-    }
-    for (const p of peers) nodes.push(this._card(p));
-    const add = button('home-peers-add', null, () => { this.view = 'add'; this.render(); });
-    add.append(icon('ti-plus'), document.createTextNode(t('add')));
-    nodes.push(add);
-    if (peers.length) {
-      const more = button('home-key-btn home-peers-more', t('more'), () => this.onWorkshop());
-      nodes.push(more);
-    }
-    return nodes;
+    if (!peers.length) return this._empty();
+    return [
+      el('div', 'home-peers-intro', t('intro')),
+      this._sec(t('sec.linked')),
+      this._menu(peers.map((p) => this._peerRow(p))),
+      this._sec(t('sec.add')),
+      this._menu([this._row({
+        glyph: 'ti-plus', kind: 'add', label: t('add'), sub: t('addSub'),
+        run: () => this._go('add'), cls: 'home-peers-addrow',
+      })]),
+      this._sec(t('sec.phone')),
+      this._menu([
+        this._net(),
+        this._row({
+          glyph: 'ti-help', kind: 'plain', label: t('uses.title'), run: () => this._help(),
+        }),
+      ]),
+    ];
   }
 
-  _card(p) {
-    const card = el('div', 'home-card home-peers-card');
-    card.dataset.peer = p.id;
-    const top = el('div', 'home-peers-top');
-    const badge = el('span', `home-peers-badge${isComputer(p) ? ' is-computer' : ''}`);
-    badge.appendChild(icon(peerGlyph(p)));
-    const who = el('span', 'home-peers-who');
-    who.appendChild(el('span', 'home-peers-name', p.name));
-    const state = el('span', 'home-peers-state');
-    state.append(el('i', `home-line-dot${isUnreachable(p) || !p.has_secret ? ' is-off' : ''}`),
-      document.createTextNode(isComputer(p) ? `${t('computer')} · ${stateText(p)}` : stateText(p)));
-    who.appendChild(state);
-    const talk = button('home-peers-talk', null, () => this.onTalk(p));
-    talk.append(icon('ti-message-2'), document.createTextNode(t('talk')));
+  _peerRow(p) {
+    const row = button('home-row home-peers-peer', null, () => {
+      this._peerId = p.id;
+      this._go('peer');
+    });
+    row.dataset.peer = p.id;
+    const who = el('span', 'home-row-label home-peers-who');
+    who.append(el('span', 'home-peers-name', p.name), this._state(p));
+    row.append(this._badge(p), who, icon('ti-chevron-right', 'home-row-go'));
+    return row;
+  }
+
+  _empty() {
+    const empty = el('div', 'home-peers-empty');
+    const art = el('span', 'home-peers-empty-art');
+    art.appendChild(icon('ti-arrows-exchange'));
+    empty.append(art, el('b', null, t('emptyTitle')), el('span', null, t('emptyBody')));
+    const add = button('home-peers-big home-peers-talkbig', null, () => this._go('add'));
+    add.append(icon('ti-plus'), document.createTextNode(t('add')));
+    return [
+      empty,
+      add,
+      this._sec(t('uses.short')),
+      this._menu(this._uses().map((use) => this._useRow(use))),
+      this._sec(t('sec.phone')),
+      this._menu([this._net()]),
+      el('div', 'home-peers-foot', t('net.note')),
+    ];
+  }
+
+  _help() {
+    if (!this.sheet) return;
+    const rows = this._uses().map(([glyph, label, say]) => {
+      const row = el('div', 'home-plan-sheet-row home-peers-use');
+      const text = el('span', 'home-plan-row-text');
+      text.append(el('span', null, label), el('span', 'home-plan-row-sub', say));
+      row.append(icon(glyph, 'is-peer'), text);
+      return row;
+    });
+    openActionSheet(this.sheet, {
+      children: [...sheetHead(t('uses.title'), t('uses.note')), ...rows],
+      closeLabel: i18n.t('common.close'),
+      cls: 'home-line-sheet',
+    });
+    this.sheet.showModal?.();
+  }
+
+  /* ── La pagina di una collegata ──────────────────────────────────────── */
+
+  _peer() {
+    const p = this._current();
+    if (!p) return this._list();
+    const computer = isComputer(p);
+    const down = isUnreachable(p);
+    const hero = el('div', 'home-peers-hero');
+    const who = el('div', 'home-peers-who');
+    who.append(el('div', 'home-peers-hero-name', p.name), this._state(p));
+    hero.append(this._badge(p), who);
+    /* «Parla» resta anche se non risponde: quel che scrivi parte appena torna,
+       e la chat lo dice. Senza la chiave del collegamento non c'è niente da
+       aprire. */
+    const talk = button(`home-peers-big home-peers-talkbig${down || !p.has_secret ? ' is-ghost' : ''}`,
+      null, () => this.onTalk(p));
+    talk.append(icon('ti-message-2'), document.createTextNode(t('talkTo', { name: p.name })));
     talk.disabled = !p.has_secret;
-    top.append(badge, who, talk);
-    card.appendChild(top);
-    if (isComputer(p)) {
-      card.appendChild(el('div', 'home-card-note home-peers-note', t('computerNote')));
-      return card;
+    const link = [
+      this._row({
+        glyph: 'ti-history', kind: 'plain', label: t('history'),
+        value: p.queued ? t('queued', { count: p.queued }) : null,
+        run: () => this._openHistory(p),
+      }),
+      p.has_secret && this._row({
+        glyph: 'ti-antenna-bars-5', kind: 'plain', label: t('ping'), go: false,
+        run: () => this._ping(p),
+      }),
+      this._row({
+        glyph: 'ti-pencil', kind: 'plain', label: t('rename'), run: () => this._go('rename'),
+      }),
+    ];
+    return [
+      hero,
+      this._trouble(p),
+      talk,
+      computer ? el('div', 'home-peers-foot', t('computerNote')) : null,
+      computer ? null : this._sec(t('perm.title')),
+      computer ? null : this._menu([
+        this._row({
+          glyph: 'ti-arrows-exchange', label: t('perm.line'), sub: t('lineSub', { name: p.name }),
+          on: Boolean(p.line),
+          toggle: (on) => this._run(() => rpc.peer('permissions', { id: p.id, line: on })),
+        }),
+        this._row({
+          glyph: 'ti-message-question', label: t('ask'), value: t(`level.${askLevel(p)}`),
+          run: () => this._levels(p),
+        }),
+        this._row({
+          glyph: 'ti-paperclip', label: t('perm.files'), sub: t('perm.filesSub'),
+          on: Boolean(p.send_files),
+          toggle: (on) => this._run(() => rpc.peer('permissions', { id: p.id, send_files: on })),
+        }),
+      ]),
+      this._sec(t('sec.link')),
+      this._menu(link),
+      this._menu([this._row({
+        glyph: 'ti-unlink', kind: 'danger', label: t('unlink', { name: p.name }), go: false,
+        run: () => this._unlink(p),
+      })], 'is-danger'),
+    ];
+  }
+
+  /** Quel che non va con questa collegata, in cima alla sua pagina, con la
+   *  cosa da fare: senza chiave si ricollega, se non risponde si riprova. */
+  _trouble(p) {
+    if (!p.has_secret) {
+      return this._warn(t('repair.title'), t('repair.body'), t('repair.go'), () => this._go('add'));
     }
-    card.appendChild(this._permRow(
-      t('line'), t('lineSub', { name: p.name }),
-      this._switch(Boolean(p.line), t('line'), (on) => this._run(
-        () => rpc.peer('permissions', { id: p.id, line: on }),
-      )),
-    ));
-    const level = button('home-row home-peers-row', null, () => this._levels(p));
-    level.append(el('span', 'home-row-label', t('ask')),
-      el('span', 'home-row-value', t(`level.${askLevel(p)}`)),
-      icon('ti-chevron-right', 'home-row-go'));
-    card.appendChild(level);
+    if (!isUnreachable(p)) return null;
+    let body = t(isComputer(p) ? 'down.bodyComputer' : 'down.body');
+    if (!netUp(this.status)) body = t('down.bodyHere');
+    if (p.queued) body += ` ${t('down.queued', { count: p.queued })}`;
+    return this._warn(t('down.title'), body, t('down.retry'), () => this._ping(p));
+  }
+
+  _warn(title, body, action, run) {
+    const card = el('div', 'home-peers-warn');
+    const text = el('div', 'home-peers-warn-text');
+    text.append(el('b', null, title), el('span', null, body), button('home-key-btn', action, run));
+    card.append(icon('ti-plug-connected-x'), text);
     return card;
+  }
+
+  async _ping(p) {
+    const done = await this._run(() => rpc.peer('ping', { id: p.id }));
+    if (done) showToast(t('pingSent', { name: p.name }));
   }
 
   _levels(p) {
@@ -337,6 +687,126 @@ export class HomePeers {
       cls: 'home-line-sheet',
     });
     this.sheet.showModal?.();
+  }
+
+  /** Scollegare non si annulla da qui (serve un codice nuovo): si chiede. */
+  _unlink(p) {
+    if (!this.sheet) return;
+    const go = sheetRow('ti-unlink', t('unlink', { name: p.name }), '', 'is-danger', async () => {
+      closeActionSheet(this.sheet);
+      const done = await this._run(() => rpc.peer('remove', { id: p.id }));
+      if (done) showToast(t('unlinked', { name: p.name }));
+    });
+    openActionSheet(this.sheet, {
+      children: [...sheetHead(t('unlinkTitle', { name: p.name }), t('unlinkBody')), go],
+      closeLabel: i18n.t('common.cancel'),
+      cls: 'home-line-sheet',
+    });
+    this.sheet.showModal?.();
+  }
+
+  /* ── La cronologia ───────────────────────────────────────────────────── */
+
+  async _openHistory(p) {
+    this._log = { id: p.id, rows: null, acts: [] };
+    this._go('history');
+    await this._loadLog(p.id);
+  }
+
+  async _loadLog(id) {
+    let rows = [];
+    let acts = [];
+    try {
+      rows = (await rpc.peer('history', { id })).history || [];
+      /* Le richieste di fare hanno il loro registro, che può non esserci. */
+      acts = (await rpc.peer('acts', { id }).catch(() => null))?.acts || [];
+    } catch (e) {
+      showToast(i18n.tOr(`home.peers.errors.${e?.message}`, t('errors.generic')), 'error');
+    }
+    if (this._log?.id !== id) return;
+    this._log = { id, rows, acts };
+    if (this.view === 'history') this.render();
+  }
+
+  _when(ms) {
+    return new Date(ms).toLocaleString(i18n.locale, {
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  _history() {
+    const p = this._current();
+    const log = this._log;
+    if (!p || !log) return this._list();
+    if (log.rows === null) return [el('div', 'home-card-note', i18n.t('settings.loading'))];
+    const lines = log.rows.map((row) => {
+      const line = historyLine(row);
+      if (!line) return null;
+      const node = el('div', 'home-row home-peers-log');
+      node.append(el('span', 'home-row-label', tw(`log.${line[0]}`, line[1])),
+        el('span', 'home-row-value', this._when(row.at_ms)));
+      return node;
+    }).filter(Boolean);
+    return [
+      log.acts.length ? this._sec(tw('actsTitle')) : null,
+      log.acts.length ? this._menu(log.acts.map((act) => this._actRow(p, act))) : null,
+      this._sec(t('history')),
+      lines.length ? this._menu(lines) : el('div', 'home-peers-foot', tw('historyEmpty')),
+    ];
+  }
+
+  /** Una richiesta di fare arrivata da lei: cosa ha chiesto, com'è finita, e
+   *  «Annulla» finché quel che ha toccato si può rimettere com'era. */
+  _actRow(p, act) {
+    const touched = (act.done || []).filter((d) => d && d.undoable).length;
+    const state = act.working ? 'working' : act.state;
+    const node = el('div', 'home-row home-peers-log');
+    const text = el('span', 'home-row-label');
+    text.append(document.createTextNode(`«${act.text || ''}»`),
+      el('span', 'home-peers-sub',
+        `${tw(`actState.${state}`, { count: touched })} · ${this._when(act.at_ms)}`));
+    node.appendChild(text);
+    if (canUndoAct(act)) {
+      node.appendChild(button('home-key-btn', tw('undo'), () => this._undoAct(p, act)));
+    }
+    return node;
+  }
+
+  async _undoAct(p, act) {
+    try {
+      const u = (await rpc.peer('undo', { id: p.id, qid: act.qid })).undo || {};
+      showToast(tw('undone', { files: u.restored || 0, jobs: u.jobs || 0 }));
+    } catch (e) {
+      showToast(i18n.tOr(`home.peers.errors.${e?.message}`, t('errors.generic')), 'error');
+    }
+    await this._loadLog(p.id);
+  }
+
+  /* ── Il nome ─────────────────────────────────────────────────────────── */
+
+  _rename() {
+    const p = this._current();
+    if (!p) return this._list();
+    const card = el('div', 'home-card home-peers-form');
+    const field = this._field('home-peers-rename', t('nameAsk'), {
+      value: this._draftName ?? p.name, hint: t('nameNote'),
+    });
+    const input = field.querySelector('input');
+    input.maxLength = 40;
+    input.addEventListener('input', () => { this._draftName = input.value; });
+    card.appendChild(field);
+    const save = button('home-peers-big', i18n.t('common.save'), async () => {
+      const name = input.value.trim();
+      if (!name) {
+        showToast(t('fieldsRequired'), 'error');
+        return;
+      }
+      if (name !== p.name && !(await this._run(() => rpc.peer('rename', { id: p.id, name })))) {
+        return;
+      }
+      this._go('peer');
+    });
+    return [card, save];
   }
 
   _steps(n) {
@@ -368,8 +838,7 @@ export class HomePeers {
         : []),
       choice('ti-keyboard', t('haveCode'), t('haveCodeSub'), () => {
         this._link = null;
-        this.view = 'join';
-        this.render();
+        this._go('join');
       }),
     );
     const net = el('div', 'home-peers-state home-peers-net');
@@ -536,8 +1005,7 @@ export class HomePeers {
       if (!ok) return;
       this._named = null;
       this._draftName = this._draftLine = this._draftAsk = undefined;
-      this.view = 'list';
-      this.render();
+      this._go('list');
     });
     const tail = el('div', 'home-card-note home-peers-center', t('doneNote', { name: peer.name }));
     return [this._steps(3), card, computer ? null : rows, done, tail];

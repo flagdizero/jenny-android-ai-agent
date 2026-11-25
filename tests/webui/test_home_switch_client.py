@@ -145,6 +145,10 @@ const api = {
 };
 
 /* Finto, ma con la regola che conta: chi è già lì non cambia conversazione. */
+/* Jenny nascosta in casa (`shared/mascot.js`): di default si vede. */
+let hiddenAtHome = false;
+function mascotHidden() { return hiddenAtHome; }
+
 const sessionManager = {
   personalKey: 'websocket:default',
   currentKey: 'websocket:default',
@@ -427,6 +431,7 @@ class App {
   __ASK_SETTINGS__
   __SET_VIEW__
   __APPLY_HEAD__
+  __APPLY_CHAT_KEY__
   __APPLY_BACK_LABEL__
   __APPLY_PATH__
   __PAINT_DOT__
@@ -544,6 +549,7 @@ def _harness() -> str:
         .replace("__GO_TO_PATH_ROOT__", member(src, "goToPathRoot"))
         .replace("__SET_VIEW__", member(src, "_setView"))
         .replace("__APPLY_HEAD__", member(src, "_applyHead"))
+        .replace("__APPLY_CHAT_KEY__", member(src, "_applyChatKey"))
         .replace("__SET_HEAD_TITLE__", member(src, "_setHeadTitle"))
         .replace("__ON_PAGE__", member(src, "onPageChanged"))
         .replace("__IS_CHAT_ON_SCREEN__", member(src, "isChatOnScreen"))
@@ -1708,6 +1714,26 @@ def test_a_room_over_the_chat_hides_it_and_coming_back_clears() -> None:
       app._setView('chat');
       assert.equal(app.isChatOnScreen(), true);
       assert.equal(window.JennyNative.opened, 1);
+    """)
+
+
+
+def test_hidden_she_leaves_a_chat_key_in_the_rooms() -> None:
+    """Nascosta in casa, la porta della chat diventa la chiave in testa: c'e'
+    nelle stanze, non nelle pagine (dove la testa non c'e' e la chat e' una
+    pagina), e non c'e' affatto quando lei si vede."""
+    _run_js(f"""
+      const app = home();
+      app.chatKey = {{ hidden: true }};
+      app.onPageChanged(1, {CHAT});
+      hiddenAtHome = true;
+      app._setView('jenny');
+      assert.equal(app.chatKey.hidden, false, 'nella stanza la chiave manca');
+      app._setView('chat');
+      assert.equal(app.chatKey.hidden, true, 'nelle pagine la chiave resta');
+      hiddenAtHome = false;
+      app._setView('jenny');
+      assert.equal(app.chatKey.hidden, true, 'con lei a schermo la chiave c\\u0027e\\u0027 ancora');
     """)
 
 

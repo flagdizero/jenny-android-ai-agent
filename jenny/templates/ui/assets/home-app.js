@@ -48,6 +48,7 @@ import { dotColor } from './shared/spines.js';
    che li ospitava e' stata cancellata. */
 import { HomeBand } from './home-band.js';
 import { JennyMascot } from './shared/jenny-mascot.js';
+import { mascotHidden } from './shared/mascot.js';
 import { LauncherController } from './mobile-launcher.js';
 import { HomePages } from './home-pages.js';
 import { HomeStrip } from './home-strip.js';
@@ -161,7 +162,11 @@ class HomeApp {
       onScreen: (id) => id === sessionManager.currentChatId
         && (this.chatOver || (this.view === 'chat' && (this._entry?.kind ?? 'chat') === 'chat')),
       wanted: () => chatIdOf(this._summonKey()),
-      paint: (on) => this.jenny.setBadge(on, i18n.t('jenny.replyWaiting')),
+      paint: (on) => {
+        this.jenny.setBadge(on, i18n.t('jenny.replyWaiting'));
+        /* Da nascosta il pallino sta sulla chiave che fa le sue veci. */
+        if (this.chatKeyDot) this.chatKeyDot.hidden = !on;
+      },
     });
     /* La sagoma di Jenny sopra la fascia in fondo al filo (`home-band.js`). Si
        consegna alla chat dopo la mascotte perche' le serve il suo nodo vero:
@@ -359,7 +364,8 @@ class HomeApp {
         this.line.status = { ...status, line: this.line.line };
         this.line.apply();
       },
-      onWorkshop: () => api.navigate('/html-mobile/workshop.html?mode=hands'),
+      /* Sulla pagina di una collegata la testa dice il suo nome. */
+      onHead: () => { if (this.view === 'peers') this._applyHead(); },
     });
     /* «Troppi risvegli»: la pastiglia sopra il campo e il foglio di chi sveglia
        Jenny di piu'. L'elenco intero sta in officina, nel cassetto Mani. */
@@ -706,6 +712,15 @@ class HomeApp {
     this.boardListBtn = document.getElementById('home-board-list-toggle');
     this.boardAddBtn = document.getElementById('home-board-add');
     this.boardAddBtn?.addEventListener('click', () => this.board.openAddMenu());
+    /* La chiave della chat, con Jenny nascosta: il suo tocco (v. `_applyChatKey`). */
+    this.chatKey = document.getElementById('home-chat-key');
+    this.chatKeyDot = document.getElementById('home-chat-key-dot');
+    this.chatKey?.addEventListener('click', () => this.openChatOver());
+    window.addEventListener('mascotchange', () => {
+      this._applyChatKey();
+      this._applyOverTitle();
+    });
+    this._applyChatKey();
     /* I nomi subito, non solo al cambio di lingua: questo cablaggio arriva dopo
        il primo `_applyTranslations`, e fino al 06/10/2026 la lente e l'elenco
        restavano senza nome finche' non si cambiava lingua. */
@@ -1977,6 +1992,7 @@ class HomeApp {
     if (this.boardAddBtn) this.boardAddBtn.hidden = this.view !== 'board' || locked;
     if (this.boardSearchBtn) this.boardSearchBtn.hidden = this.view !== 'board';
     if (this.boardListBtn) this.boardListBtn.hidden = this.view !== 'board';
+    this._applyChatKey();
     /* «Modifica» e' solo del lettore, e sparisce appena l'editor e' aperto: da
        li' i comandi sono Salva e Annulla, e stanno in basso. */
     if (this.editBtn) this.editBtn.hidden = this.view !== 'reader' || this.reader.editing || locked;
@@ -1992,7 +2008,9 @@ class HomeApp {
     if (this.view === 'model') this._setHeadTitle(i18n.t('home.model.title'));
     if (this.view === 'updates') this._setHeadTitle(i18n.t('home.updates.title'));
     if (this.view === 'backup') this._setHeadTitle(i18n.t('home.backup.title'));
-    if (this.view === 'peers') this._setHeadTitle(i18n.t('home.peers.title'));
+    if (this.view === 'peers') {
+      this._setHeadTitle(this.peersRoom?.headName() || i18n.t('home.peers.title'));
+    }
     this._applyPath(notebook);
     this._applyBackLabel();
   }
@@ -2010,6 +2028,9 @@ class HomeApp {
     /* Il percorso della pagina dice da quale cassetto viene: «Acero › travaso
        acero». Sei sempre a un tocco dal riassunto e a due dalla bacheca. */
     if (this.view === 'reader') root = this._readerCard ? this._cardTitle || notebook || '' : notebook || '';
+    /* La pagina di una collegata e' della stanza «Altre Jenny», non delle
+       Impostazioni: «Altre Jenny › Lavoro». */
+    if (this.view === 'peers' && this.peersRoom?.headName()) root = i18n.t('home.peers.title');
     if (this.pathRootName) this.pathRootName.textContent = root;
     this._paintDot(this.pathRootDot, this.view === 'drawer' || this.view === 'reader' ? color : null);
     this._paintDot(this.headDot, this.view === 'board' ? color : null);
@@ -2028,6 +2049,10 @@ class HomeApp {
    *  freccia; dalla bacheca porta **all'elenco** dei Quaderni (deciso con
    *  l'utente il 26/09/2026). */
   goToPathRoot() {
+    if (this.view === 'peers' && this.peersRoom?.headName()) {
+      this.peersRoom.toList();
+      return true;
+    }
     if (this.view === 'reader' && this._readerCard) return this.goBackOneRoom();
     if (this.view === 'reader' || this.view === 'drawer') {
       if (this.view === 'reader' && !this._setView('board', () => this.goToPathRoot())) return true;
@@ -2046,7 +2071,9 @@ class HomeApp {
      sceglie la stessa tabella che decide il salto, quindi le due non possono
      divergere. Fino al 26/09/2026 era scritta a schermo, come occhiello. */
   _applyBackLabel() {
-    this.backBtn?.setAttribute('aria-label', i18n.t(`home.back.${this._backLabelKey()}`));
+    /* Dentro «Altre Jenny» la freccia fa un passo nella stanza, e lo dice lei. */
+    const inside = this.view === 'peers' ? this.peersRoom?.backLabel() : null;
+    this.backBtn?.setAttribute('aria-label', inside || i18n.t(`home.back.${this._backLabelKey()}`));
   }
 
   /* Dove porta davvero la freccia. «Torna alla chat» da una stanza voleva
@@ -3111,6 +3138,9 @@ class HomeApp {
       if (this.overBack) this.overBack.hidden = false;
       this.overHead?.style.setProperty('--path-line', 'var(--peer)');
     }
+    /* Senza Jenny a schermo il velo non avrebbe da chiudersi che Indietro:
+       la freccia c'e' sempre. */
+    if (mascotHidden() && this.overBack) this.overBack.hidden = false;
     this.overBack?.setAttribute('aria-label',
       i18n.t(line ? 'home.line.back' : 'home.over.close'));
   }
@@ -3150,6 +3180,16 @@ class HomeApp {
     this.boardAddBtn?.setAttribute('aria-label', i18n.t('board.add.title'));
     this.boardSearchBtn?.setAttribute('aria-label', i18n.t('board.search.title'));
     this.boardListBtn?.setAttribute('aria-label', i18n.t('board.listView'));
+    this.chatKey?.setAttribute('aria-label', i18n.t('home.over.open'));
+  }
+
+  /** La chiave della chat in testa: c'e' solo con Jenny nascosta, perche'
+   *  allora la porta della chat non si vede piu'. La testa c'e' solo nelle
+   *  stanze (nelle pagine la chat e' una pagina della fila), e col velo su la
+   *  testa e' coperta: basta la stanza. */
+  _applyChatKey() {
+    if (!this.chatKey) return;
+    this.chatKey.hidden = !mascotHidden() || this.view === 'chat';
   }
 
   _applyTranslations() {

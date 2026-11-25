@@ -35,15 +35,22 @@
 
   // Mascotte, taglia: anti-flash come il tema. Il default CSS vale solo per
   // 'sm', quindi senza questo chi ha scelto un'altra taglia vedrebbe Jenny
-  // comparire piccola e poi ridimensionarsi. (Fino al 05/10/2026 qui si
-  // leggeva anche «non visibile»: la preferenza non c'e' piu', Jenny e' la
-  // porta della chat. La chiave si chiamava `jenny-mascotte-size` fino al
-  // 25/09/2026: finche' shared/mascot.js non l'ha copiata, si legge anche
-  // il nome vecchio.) Le misure sono duplicate da MASCOT_SIZES in
-  // shared/mascot.js — qui non si possono importare moduli.
-  var mascotSizes = { sm: '120px', md: '160px', lg: '210px' };
-  var mascotSize = mascotSizes[read('jenny-mascot-size') || read('jenny-mascotte-size')];
+  // comparire piccola e poi ridimensionarsi. Dal 25/11/2026 la scala e' un'altra
+  // e la chiave pure (`jenny-mascot-scale`): finche' shared/mascot.js non ha
+  // portato la scelta di prima, qui si leggono anche le chiavi vecchie con la
+  // stessa corrispondenza (RESCALED_SIZES). Le misure sono duplicate da
+  // MASCOT_SIZES in shared/mascot.js — qui non si possono importare moduli.
+  var mascotSizes = { sm: '120px', md: '140px', lg: '160px' };
+  var rescaledSizes = { sm: 'sm', md: 'lg', lg: 'lg' };
+  var mascotKey = read('jenny-mascot-scale')
+    || rescaledSizes[read('jenny-mascot-size') || read('jenny-mascotte-size')];
+  var mascotSize = mascotSizes[mascotKey];
   if (mascotSize) {
     document.documentElement.style.setProperty('--jenny-size', mascotSize);
+  }
+  // Nascosta in casa (25/11/2026): stesso anti-flash. L'attributo lo legge
+  // solo home-style.css, e a runtime lo tiene shared/mascot.js.
+  if (read('jenny-mascot-hidden') === '1') {
+    document.documentElement.setAttribute('data-jenny-hidden', '');
   }
 })();

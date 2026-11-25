@@ -179,8 +179,8 @@ export class JennyMascot {
     this._onChatClose = () => this._onWireClose();
     wsManager.addEventListener('chat:close', this._onChatClose);
 
-    // Preferenze mascotte (la stanza «Jenny» della casa): la taglia, v.
-    // shared/mascot.js.
+    // Preferenze mascotte (la stanza «Jenny» della casa): la taglia, e in casa
+    // nascosta o no, v. shared/mascot.js.
     this._onMascotChange = () => this._applyMascotPrefs();
     window.addEventListener('mascotchange', this._onMascotChange);
 
@@ -217,6 +217,17 @@ export class JennyMascot {
   _updateGestureExclusion() {
     const api = window.JennyNative;
     if (!api || typeof api.setGestureExclusion !== 'function') return;
+    /* Nascosta (la casa, `data-jenny-hidden`): non c'e' niente da proteggere,
+       e il bordo torna al Back di sistema. Un rettangolo vuoto toglie
+       l'esclusione (`MainActivity.setGestureExclusion`). */
+    if (!this.el.getClientRects().length) {
+      try {
+        api.setGestureExclusion(0, 0, 0, 0);
+      } catch (_) {
+        /* bridge assente */
+      }
+      return;
+    }
     const r = this.el.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const m = 8; // margine di sicurezza (px CSS) attorno all'hitbox
@@ -587,6 +598,8 @@ export class JennyMascot {
      una sola variante, il loro path non dipende da nessuna preferenza. */
   _applyMascotPrefs() {
     if (!this._talk.timer) this._syncArt();
+    /* Mostrata o nascosta in casa: il suo rettangolo c'e' o non c'e' piu'. */
+    this._updateGestureExclusion();
   }
 
   /* ── Drag / tap ── */

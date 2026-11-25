@@ -514,7 +514,8 @@ body.home {
    assoluta e finiva sopra il testo di quella dopo. La WebView del telefono
    (Chromium) lo ricalcolava. */
 .home-msg-jenny.home-at-band { position: relative; }
-.home-msg-jenny.home-at-band > .home-tail {
+/* Da nascosta la fascia non c'e', e la coda resta sotto il suo testo. */
+:root:not([data-jenny-hidden]) .home-msg-jenny.home-at-band > .home-tail {
   position: absolute;
   left: 0;
   top: calc(100% + var(--home-thread-gap));
@@ -2410,8 +2411,8 @@ button.home-wakes-act:active { background: var(--active); }
    Il numero non e' a occhio: l'arte e' un quadrato con margini trasparenti, e
    sotto i piedi ce n'e' il 12,24% del lato (bbox alpha dei webp impacchettati,
    identico nelle tre pose frontali — misurato, non stimato). La posa del
-   bordo ha il 12,50%: 0,26 punti di differenza, cioe' 0,3 px a 120 e 0,5 a
-   210 — sotto il pixel, quindi mettendola via non saltella. Quindi il bordo
+   bordo ha il 12,50%: 0,26 punti di differenza, cioe' 0,3 px a 120 e 0,4 a
+   160 — sotto il pixel, quindi mettendola via non saltella. Quindi il bordo
    basso del quadrato va messo *sotto* il pavimento di quella stessa quota, e i
    piedi ci finiscono sopra esatti.
    `--home-composer-h` e non il bordo del filo: il composer e' l'unica linea
@@ -2433,6 +2434,43 @@ button.home-wakes-act:active { background: var(--active); }
 .home-shell {
   --jenny-floor: calc(var(--home-composer-h, 64px) - var(--jenny-size) * 0.1224);
 }
+
+/* ── Jenny nascosta (25/11/2026) ──
+   La stanza «Jenny» la nasconde (`data-jenny-hidden` su <html>, scritto da
+   `shared/mascot.js` e al primo fotogramma da `bootstrap.js`). Vale solo per
+   la casa: l'officina non carica questo foglio.
+
+   Lo spazio che le si lascia in fondo — la fascia del filo, il fondo dei
+   Quaderni e delle Impostazioni — e' scritto come `--jenny-size *
+   --jenny-art-h`: con l'altezza a zero tutti quei conti la lasciano fuori da
+   soli, anche quelli che arriveranno. Il resto e' detto a mano: la fascia
+   sparisce (la coda dell'ultima risposta torna sotto il suo testo, v. sopra),
+   le scatole in fondo non si scansano e la riga del piano arriva al bordo.
+   La porta della chat diventa la chiave in testa (`#home-chat-key`). */
+:root[data-jenny-hidden] .home-shell { --jenny-art-h: 0; }
+:root[data-jenny-hidden] .home-shell > .jenny-duo { display: none; }
+:root[data-jenny-hidden] .home-band { display: none; }
+:root[data-jenny-hidden] .home-thread {
+  padding-bottom: 10px;
+  --jenny-dodge: 0px;
+}
+:root[data-jenny-hidden] .home-shell .home-plan-hint { padding-right: 0; }
+
+/* La chiave della chat: c'e' solo con Jenny nascosta, e solo dove la chat non
+   e' gia' a schermo (`HomeApp._applyChatKey`). Il pallino e' quello che
+   starebbe su di lei: una risposta che non hai ancora visto. */
+.home-chat-key { position: relative; }
+.home-chat-key-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.home-chat-key-dot[hidden] { display: none; }
 
 /* Una cosa che non è andata, detta nel filo. Sobria come il separatore: in casa
    un guasto si dice come si direbbe a voce, non con un pannello rosso. Sta nel
@@ -6693,16 +6731,61 @@ dialog.home-photo-viewer[open] { display: flex; }
 
 
 /* ── La stanza «Altre Jenny» (`home-peers.js`) ───────────────────────────
-   Le collegate come schede: chi e', come sta, «Parla», e i permessi che
-   contano. Il colore e' quello di un'altra Jenny (`--peer`), lo stesso della
-   linea: qui si decide con chi si potra' parlare di la'. */
-.home-peers-card { padding: 0; display: flex; flex-direction: column; }
+   Un menu: l'elenco delle collegate, e per ognuna la sua pagina. Le righe sono
+   quelle delle Impostazioni (`.home-rows`, `.home-row`), con una tessera per
+   l'icona e un titolino sopra ogni gruppo. Il colore e' quello di un'altra
+   Jenny (`--peer`), lo stesso della linea: qui si decide con chi si potra'
+   parlare di la'. */
+.home-peers-intro {
+  flex: none;
+  padding: 0 6px 2px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.home-peers-sec {
+  flex: none;
+  padding: 12px 6px 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.home-peers-menu { padding: 0 12px; }
+.home-peers-menu .home-row { min-height: 56px; gap: 12px; padding: 7px 0; }
+.home-peers-menu .home-row.is-slim { min-height: 50px; }
+.home-peers-menu .home-row-label { font-size: 14.5px; }
+.home-peers-menu .home-row-value { font-size: 13.5px; }
+/* Una riga ferma (lo stato di Tailscale, una voce della cronologia) non e' un
+   bottone: non ha la manina ne' il lampo del tocco. */
+.home-peers-menu div.home-row { cursor: default; }
+.home-peers-menu div.home-row:active { background: none; }
+.home-peers-menu div.home-row:has(.home-switch) { cursor: pointer; }
+.home-peers-tile {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--peer) 16%, transparent);
+  color: var(--peer);
+  font-size: 19px;
+}
+.home-peers-tile.is-plain { background: var(--overlay-strong); color: var(--text-muted); }
+.home-peers-tile.is-danger { background: color-mix(in oklab, var(--error) 16%, transparent); color: var(--error); }
+.home-peers-tile.is-add { background: var(--peer); color: var(--peer-ink); }
+.home-peers-menu.is-danger .home-row-label { color: var(--error); }
+/* La frase da dire in chat, sotto ogni cosa che un'altra Jenny fa. */
+.home-peers-use .home-peers-sub,
+.home-peers-use .home-plan-row-sub { color: var(--peer); }
 .home-peers-top { display: flex; align-items: center; gap: 12px; padding: 12px 14px 10px; }
 .home-peers-top.is-flat { padding: 0; }
 .home-peers-badge {
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -6711,7 +6794,7 @@ dialog.home-photo-viewer[open] { display: flex; }
   font-size: 19px;
 }
 .home-peers-badge.is-computer { background: var(--overlay-strong); color: var(--text-muted); }
-.home-peers-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.home-peers-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .home-peers-name {
   font-size: 15.5px;
   font-weight: 600;
@@ -6724,74 +6807,79 @@ dialog.home-photo-viewer[open] { display: flex; }
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: 12.5px;
   color: var(--text-muted);
 }
 .home-peers-net { padding: 2px 8px; }
-.home-peers-talk {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 13px;
-  border: 1px solid var(--peer);
-  border-radius: 999px;
-  background: none;
-  color: var(--peer);
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.home-peers-talk:disabled { opacity: .45; }
-.home-peers-talk:active { background: color-mix(in oklab, var(--peer) 16%, transparent); }
-.home-peers-card .home-peers-row {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 14px;
-  border: 0;
-  border-top: 1px solid var(--border);
-  background: none;
-  text-align: left;
-  font: inherit;
-  color: var(--text);
-}
 .home-peers-sub { display: block; margin-top: 2px; font-size: 12px; color: var(--text-muted); font-weight: 400; }
-.home-peers-note { padding: 0 14px 12px; }
 .home-peers-flatnote { padding: 0; }
+.home-peers-foot {
+  flex: none;
+  padding: 4px 6px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
 .home-switch.is-peer.is-on { background: var(--peer); }
 .home-switch.is-peer.is-on .home-switch-knob { background: var(--peer-ink); }
-.home-peers-add {
-  flex: none;
-  width: 100%;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 14px;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 14.5px;
+/* La pagina di una collegata: chi e', e sotto la cosa che si fa piu' spesso. */
+.home-peers-hero { flex: none; display: flex; align-items: center; gap: 14px; padding: 2px 6px 8px; }
+.home-peers-hero .home-peers-badge { width: 54px; height: 54px; font-size: 26px; }
+.home-peers-hero-name {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--heading);
+  overflow-wrap: anywhere;
 }
-.home-peers-add .ti { color: var(--peer); font-size: 19px; }
-.home-peers-add:active { background: var(--active); }
-.home-peers-more { align-self: flex-start; }
+.home-peers-hero .home-peers-state { font-size: 13px; }
+.home-peers-talkbig { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; }
+.home-peers-talkbig .ti { font-size: 19px; }
+/* Non risponde: «Parla» resta, ma non e' piu' la cosa da fare per prima. */
+.home-peers-talkbig.is-ghost { background: none; border: 1px solid var(--border-strong); color: var(--text-muted); }
+.home-peers-talkbig:disabled { opacity: .45; }
+.home-peers-warn {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, var(--warning) 45%, transparent);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--warning) 8%, transparent);
+}
+.home-peers-warn > .ti { flex: none; margin-top: 1px; font-size: 22px; color: var(--warning); }
+.home-peers-warn-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.home-peers-warn-text b { font-size: 14.5px; font-weight: 600; color: var(--heading); }
+.home-peers-warn-text span { font-size: 12.5px; line-height: 1.45; color: var(--text-muted); }
+.home-peers-warn-text .home-key-btn { margin-top: 8px; min-height: 32px; padding: 4px 14px; font-size: 13px; }
+/* La cronologia: la frase a sinistra, quando a destra; una frase lunga va a capo. */
+.home-peers-log { align-items: flex-start; }
+.home-peers-log .home-row-label { font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.home-peers-log .home-row-value { font-size: 12px; padding-top: 1px; }
+.home-peers-menu .home-peers-log { min-height: 44px; padding: 10px 0; }
 .home-peers-empty {
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 34px 20px 10px;
+  gap: 8px;
+  padding: 18px 20px 6px;
   text-align: center;
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.45;
 }
-.home-peers-empty .ti { font-size: 34px; color: var(--peer); }
-.home-peers-empty b { color: var(--heading); font-size: 16px; }
+.home-peers-empty-art {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--peer) 16%, transparent);
+  color: var(--peer);
+  font-size: 32px;
+}
+.home-peers-empty b { font-size: 17px; color: var(--heading); }
+.home-peers-empty > span:not(.home-peers-empty-art) { font-size: 13.5px; line-height: 1.45; color: var(--text-muted); }
 /* Il collegamento: tre passi, e in cima quanti ne mancano. */
 .home-peers-steps { display: flex; justify-content: center; gap: 6px; margin: 2px 0 6px; }
 .home-peers-steps i { width: 22px; height: 3px; border-radius: 2px; background: var(--border-strong); }
