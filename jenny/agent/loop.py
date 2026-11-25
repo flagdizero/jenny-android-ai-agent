@@ -17,11 +17,12 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, NamedTuple
 
 from loguru import logger
 
+from jenny.agent import turn_work
 from jenny.agent.autocompact import AutoCompact
 from jenny.agent.context import ContextBuilder
 from jenny.agent.cron_turns import CronTurnCoordinator
 from jenny.agent.hook import AgentHook, CompositeHook
-from jenny.agent.loop_plan import PLAN_STALE_META, LoopPlanMixin, is_plan_turn
+from jenny.agent.loop_plan import PLAN_STALE_META, LoopPlanMixin, _is_step_work, is_plan_turn
 from jenny.agent.loop_provider import ProviderPresetMixin
 from jenny.agent.loop_tasks import LoopTasksMixin
 from jenny.agent.memory import Consolidator
@@ -680,6 +681,31 @@ class AgentLoop(
         except Exception:  # noqa: BLE001 — senza registro il turno lavora lo stesso
             logger.opt(exception=True).warning("Peer request {}: no undo journal", act["qid"])
             return None
+
+    def _turn_work_begin(
+        self, metadata: Mapping[str, Any] | None, session_key: str | None,
+        channel: str, chat_id: str,
+    ) -> tuple[Any, Any]:
+        """Il turno ordinario che parte e il suo registro; ``(None, None)`` senza id.
+
+        Un turno senza ``webui_turn_id`` (una notifica, la mascotte,
+        l'orologio) non ha un posto nel verbale a cui la casa agganci «Ho
+        fatto», e non lega niente (``agent.turn_work``).
+        """
+        from jenny.agent.write_journal import journal_for
+
+        if not isinstance(self.workspace, (str, Path)):
+            return None, None
+        root = Path(self.workspace)
+        ref = turn_work.begin(
+            root, metadata, session=session_key or "", chat=f"{channel}:{chat_id}")
+        if ref is None:
+            return None, None
+        try:
+            return ref, journal_for(root, turn_work.turn_journal_key(ref.turn))
+        except Exception:  # noqa: BLE001 — senza registro il turno lavora lo stesso
+            logger.opt(exception=True).warning("Turn {}: no undo journal", ref.turn)
+            return ref, None
 
     async def _peer_turn_ended(self, msg: InboundMessage, outcome: Any) -> None:
         """La fine di un turno di una richiesta di un'altra Jenny, detta a ``PeerActs``."""
@@ -1752,7 +1778,14 @@ class AgentLoop(
         peer_act = peer_gate.act_of(metadata)
         if plan_journal is None and peer_act is not None:
             plan_journal = self._peer_act_journal(peer_act)
+        # Ogni altro turno con un id del filo scrive nel registro suo
+        # (``turn-<id>``, ``agent.turn_work``): «Ho fatto» e «Torna a prima».
+        turn_ref = None
+        if peer_act is None and not _is_step_work(metadata):
+            turn_ref, plan_journal = self._turn_work_begin(
+                metadata, active_session_key, channel, chat_id)
         journal_token = set_journal(plan_journal, step=plan_step)
+        turn_work_token = turn_work.bind(turn_ref)
         peer_gate_token = peer_gate.bind(peer_act)
         async def _on_context_overflow(new_window: int) -> None:
             """Called by the runner when a context_length error occurs.
@@ -1825,6 +1858,9 @@ class AgentLoop(
 
             await phone_drive.end_turn(current_request_context())
             reset_journal(journal_token)
+            turn_work.reset(turn_work_token)
+            if turn_ref is not None:
+                turn_work.end(turn_ref, plan_journal)
             peer_gate.reset(peer_gate_token)
             reset_turn_taint(turn_taint_token)
             reset_workspace_scope(workspace_token)

@@ -179,6 +179,14 @@ _CRON_PARAMETERS = tool_parameters_schema(
 )
 
 
+def _note_in_turn(job: CronJob) -> None:
+    """Il job appena creato, nella riga del turno ordinario in corso (``agent.turn_work``):
+    «Ho fatto» lo elenca, e «Torna a prima» lo toglie."""
+    from jenny.agent import turn_work
+
+    turn_work.note_job(job.id, job_display_name(job))
+
+
 @tool_parameters(_CRON_PARAMETERS)
 class CronTool(Tool, ContextAware):
     """Tool to schedule reminders and recurring tasks."""
@@ -597,6 +605,7 @@ class CronTool(Tool, ContextAware):
             )
         except ValueError as exc:
             return f"Error: {exc}"
+        _note_in_turn(job)
         await board_changed(notebook)
         out = self._created(job)
         where = (f"on the card «{card['title']}»" if card is not None
@@ -677,6 +686,7 @@ class CronTool(Tool, ContextAware):
             # scatta mai) torna al modello come le altre risposte d'errore di
             # questo tool, da correggere e riprovare.
             return f"Error: {exc}"
+        _note_in_turn(job)
         return self._created(job)
 
     def _created(self, job: CronJob) -> str:

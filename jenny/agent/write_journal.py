@@ -135,6 +135,9 @@ HELPER = "helper"
 # I registri dei piani (``plan.work``): la pulizia li toglie solo quando sa
 # quali nominano ancora i piani.
 SWEPT_WITH_KEEP_KEYS = ("plan", "undo")
+# I ritorni dei turni ordinari (``undo-turn-*``) cominciano come quelli dei piani,
+# ma li toglie la scadenza dei turni (``agent.turn_work.sweep``), non questa.
+_NOT_SWEPT = ("undo-turn-",)
 
 
 def journal_key(kind: str, ident: str) -> str:
@@ -1335,6 +1338,69 @@ def live_journal(install_root: Path, key: str) -> WriteJournal | None:
         return _LIVE.get((str(Path(install_root).resolve()), key))
 
 
+def release_journal(install_root: Path, key: str) -> bool:
+    """Lascia andare il registro vivo di *key*: chi lo chiede dopo lo rilegge dal database.
+
+    :func:`journal_for` tiene ogni registro che apre per tutta la vita del
+    processo; per quelli di un aiutante o di un piano va bene (sono pochi), per
+    quello di un turno (``agent.turn_work``) no: uno per turno si
+    accumulerebbe. Non lo lascia se è ancora al lavoro — un thread di
+    ``python_exec`` in corsa, o un «prima» in attesa del suo «dopo» — e allora
+    ritorna ``False``: resta vivo, come prima.
+    """
+    live = (str(Path(install_root).resolve()), key)
+    with _LIVE_LOCK:
+        journal = _LIVE.get(live)
+        if journal is None:
+            return True
+        if journal.busy or journal._pending:
+            return False
+        del _LIVE[live]
+        return True
+
+
+def journal_entries(install_root: Path, key: str) -> list[dict[str, Any]]:
+    """Le righe del registro *key*, lette dal database senza aprirne uno vivo.
+
+    Per chi vuole solo sapere cosa ha fatto (un elenco da mostrare): leggere con
+    :func:`journal_for` terrebbe in memoria un registro che nessuno scrive più.
+    """
+    rows = _undo_db(install_root).read(
+        "SELECT path, before, after, ts, saved, shared, tool, task_id, attempt, step "
+        "FROM entries WHERE journal = ? ORDER BY ts, id", (key,))
+    return [_entry(row) for row in rows]
+
+
+def drop_journals(install_root: Path, keys: Iterable[str]) -> int:
+    """Toglie i registri *keys* (righe, annulla, contenuti che nessuno nomina più).
+
+    Per chi sa che di quei registri non si chiederà più l'annulla: la scadenza
+    dei turni (``agent.turn_work``). Ritorna quanti ne ha trovati.
+    """
+    keys = sorted(set(keys))
+    if not keys:
+        return 0
+    database = _undo_db(install_root)
+    found = 0
+    shas: list[str] = []
+    with database.write() as conn:
+        for key in keys:
+            shas.extend(r[0] for r in conn.execute(
+                "SELECT sha FROM objects WHERE journal = ?", (key,)))
+            found += conn.execute("DELETE FROM journals WHERE key = ?", (key,)).rowcount
+            # Righe senza la riga del registro non dovrebbero esserci (le scrive
+            # ``_ensure_row`` prima), ma un database vecchio non lo promette.
+            conn.execute("DELETE FROM entries WHERE journal = ?", (key,))
+            conn.execute("DELETE FROM objects WHERE journal = ?", (key,))
+            conn.execute("DELETE FROM undos WHERE key = ?", (key,))
+    _drop_unreferenced(install_root, shas)
+    root = str(Path(install_root).resolve())
+    with _LIVE_LOCK:
+        for key in keys:
+            _LIVE.pop((root, key), None)
+    return found
+
+
 def read_undo_state(install_root: Path, key: str) -> dict[str, Any] | None:
     """L'ultimo annulla di *key*: ``{"state", "by", "started_at", "merged", …resoconto}``."""
     try:
@@ -1408,7 +1474,8 @@ def sweep_orphan_journals(install_root: Path, keep: Iterable[str],
         database = _undo_db(install_root)
         known = {r[0] for r in database.read("SELECT key FROM journals")} | {
             r[0] for r in database.read("SELECT key FROM undos")}
-        gone = sorted(k for k in known if k.startswith(swept) and k not in alive)
+        gone = sorted(k for k in known if k.startswith(swept) and k not in alive
+                      and not k.startswith(_NOT_SWEPT))
         if gone:
             with database.write() as conn:
                 for key in gone:

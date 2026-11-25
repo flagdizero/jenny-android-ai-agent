@@ -271,6 +271,14 @@ def _peer_line_from(raw: Any) -> dict[str, str] | None:
     return line_mark(line_metadata(raw))
 
 
+def _origin_turn_from(raw: Any) -> str | None:
+    """Il turno d'origine salvato in una spec, validato come un id del filo."""
+    from jenny.agent.turn_work import turn_id_of
+    from jenny.bus.events import WEBUI_TURN_METADATA_KEY
+
+    return turn_id_of({WEBUI_TURN_METADATA_KEY: raw})
+
+
 def _coerce_str(value: Any, default: str = "") -> str:
     return value if isinstance(value, str) else default
 
@@ -351,6 +359,11 @@ class SubagentSpec:
     # ``None`` fuori da una linea: il turno che legge il risultato risponde
     # ancora all'altra Jenny, e non a questo telefono soltanto.
     peer_line: dict[str, str] | None = None
+    # Il turno ordinario che l'ha lanciato (``agent.turn_work``: l'id del filo),
+    # ``None`` fuori da un turno con id. Nella spec perché un rilancio o una
+    # ripresa restano lavoro di quel turno: i suoi file stanno sotto la sua
+    # risposta, e il suo «Torna a prima» li toglie.
+    origin_turn: str | None = None
 
     def __post_init__(self) -> None:
         # Il tipo si valida qui, alla costruzione della spec, e non piu in la:
@@ -407,6 +420,7 @@ class SubagentSpec:
             "steps": self.steps,
             "peer_act": dict(self.peer_act) if self.peer_act else None,
             "peer_line": dict(self.peer_line) if self.peer_line else None,
+            "origin_turn": self.origin_turn,
         }
 
     @classmethod
@@ -456,6 +470,8 @@ class SubagentSpec:
             peer_act=_peer_act_from(raw.get("peer_act")),
             # Dal 23/11/2026: un record precedente non la ha.
             peer_line=_peer_line_from(raw.get("peer_line")),
+            # Dal 25/11/2026: un record precedente non la ha.
+            origin_turn=_origin_turn_from(raw.get("origin_turn")),
         )
 
 

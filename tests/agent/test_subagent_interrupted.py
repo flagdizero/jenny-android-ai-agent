@@ -274,6 +274,7 @@ async def test_a_cancelled_wait_still_waits_for_the_thread() -> None:
 
 async def _helper_killed_mid_run(
     tmp_path: Path, *, rounds_before_kill: int, plan: bool = True,
+    origin_turn: str | None = None,
 ) -> tuple[Path, str, str]:
     """Fa lavorare un aiutante, «uccide il processo» e ritorna il disco di quel momento.
 
@@ -302,6 +303,7 @@ async def _helper_killed_mid_run(
     spec = SubagentSpec(
         task=BRIEF, label="maple care", agent_type="writer", session_key=SESSION,
         plan_id="plan-7" if plan else None, plan_step="step-2" if plan else None,
+        origin_turn=origin_turn,
     )
     task_id, lineage = await sm._launch(spec)
     await asyncio.wait_for(paused.wait(), timeout=5)
@@ -352,6 +354,37 @@ async def test_a_helper_killed_mid_run_is_resumable_after_the_restart(tmp_path: 
     assert seed[1]["content"] == BRIEF
     assert seed[-1] == {"role": "user", "content": "Go on from where you stopped."}
     assert sm.interrupted_helpers(SESSION) == []
+
+
+async def test_a_resumed_helper_still_works_for_the_turn_that_launched_it(
+    tmp_path: Path,
+) -> None:
+    """``origin_turn`` sta nella spec: dopo il riavvio la ripresa annota il registro
+    nella riga dello stesso turno, e quel che fa va ancora in quella riga
+    (``agent.turn_work``)."""
+    from jenny.agent import turn_work
+    from jenny.agent.write_journal import journal_key
+
+    disk, _task_id, lineage = await _helper_killed_mid_run(
+        tmp_path, rounds_before_kill=2, plan=False, origin_turn="t-launch")
+    sm = _manager(disk)
+    [record] = sm.list_records(SESSION)
+    assert record.spec.origin_turn == "t-launch"
+    seen: list[str | None] = []
+
+    async def _run(spec: AgentRunSpec) -> AgentRunResult:
+        seen.append(turn_work.current_turn())
+        messages = list(spec.initial_messages) + [{"role": "assistant", "content": "done"}]
+        return AgentRunResult(final_content="done", messages=messages, stop_reason="completed")
+
+    sm.runner.run = _run  # type: ignore[method-assign]
+    outcome = await sm.send(lineage, "Go on from where you stopped.")
+    assert outcome.mode == "resumed"
+    await _settle(sm)
+    assert seen == ["t-launch"]
+    row = turn_work.read_row(disk, "t-launch")
+    assert row is not None and row["journals"] == [journal_key("helper", lineage)]
+    assert row["session"] == SESSION
 
 
 async def test_a_helper_killed_before_its_first_checkpoint_is_not_resumable(

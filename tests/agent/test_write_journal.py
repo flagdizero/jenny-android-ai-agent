@@ -863,3 +863,61 @@ def test_an_installed_draft_is_undone_with_whoever_wrote_it(ws: Path) -> None:
     assert page.read_text() == "dalla bozza"
     report = WriteJournal(ws, helper.journal.key).undo()
     assert report.kept == [] and page.read_text() == original
+
+
+# -- lasciar andare e togliere un registro (i turni, ``agent.turn_work``) -----
+
+
+def test_a_released_journal_is_read_again_from_the_database(ws: Path) -> None:
+    key = journal_key("turn", "t1")
+    journal = write_journal.journal_for(ws, key)
+    with bind_journal(journal):
+        _write(ws / "wikis/piante/wiki/acero.md", "uno")
+    assert write_journal.release_journal(ws, key)
+    assert write_journal.live_journal(ws, key) is None
+    again = write_journal.journal_for(ws, key)
+    assert again is not journal and again.changed_files == 1
+    assert write_journal.release_journal(ws, "turn-mai-aperto")
+
+
+def test_a_busy_journal_is_not_released(ws: Path) -> None:
+    key = journal_key("turn", "t2")
+    journal = write_journal.journal_for(ws, key)
+    journal.enter_thread()
+    assert not write_journal.release_journal(ws, key)
+    assert write_journal.live_journal(ws, key) is journal
+    journal.exit_thread()
+    assert write_journal.release_journal(ws, key)
+
+
+def test_reading_entries_opens_no_live_journal(ws: Path) -> None:
+    key = journal_key("turn", "t3")
+    with bind_journal(WriteJournal(ws, key)):
+        _write(ws / "wikis/piante/wiki/acero.md", "uno")
+    assert [e["path"] for e in write_journal.journal_entries(ws, key)] == [
+        "wikis/piante/wiki/acero.md"]
+    assert write_journal.live_journal(ws, key) is None
+
+
+def test_dropped_journals_take_their_saved_contents_with_them(ws: Path) -> None:
+    keep, drop = journal_key("turn", "resta"), journal_key("turn", "va")
+    with bind_journal(write_journal.journal_for(ws, keep)):
+        _write(ws / "wikis/piante/wiki/acero.md", "uno")
+    with bind_journal(write_journal.journal_for(ws, drop)):
+        _write(ws / "wikis/piante/wiki/felce.md", "due")
+    saved = lambda: [p for p in objects_dir_for(ws).rglob("*") if p.is_file()]  # noqa: E731
+    assert len(saved()) == 2
+    assert write_journal.drop_journals(ws, [drop, "turn-che-non-c-e"]) == 1
+    assert write_journal.journal_entries(ws, drop) == []
+    assert write_journal.live_journal(ws, drop) is None
+    assert write_journal.journal_entries(ws, keep)
+    assert len(saved()) == 1
+
+
+def test_an_undo_of_a_turn_is_not_swept_with_the_plans(ws: Path) -> None:
+    """``undo-turn-*`` comincia come i ritorni dei piani, ma lo toglie la scadenza dei turni."""
+    key = journal_key("undo-turn", "t4")
+    with bind_journal(WriteJournal(ws, key)):
+        _write(ws / "wikis/piante/wiki/acero.md", "uno")
+    assert sweep_orphan_journals(ws, keep=set(), keep_keys={"plan-altro"}) == 0
+    assert write_journal.journal_entries(ws, key)

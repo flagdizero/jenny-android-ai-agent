@@ -87,9 +87,17 @@ class UndoMixin:
             keep |= {m.lineage_id for m in self._records.load_running()}
             # I registri che i piani nominano ancora: il ritorno di un piano
             # toglie anche il lavoro degli aiutanti dei suoi passi.
+            from jenny.agent import turn_work
             from jenny.agent.staged_writes import pending_journal_keys
             from jenny.plan.work import kept_journal_keys
 
+            # I turni ordinari: prima le righe scadute (che lasciano andare i
+            # loro aiutanti), poi i registri che le righe vive nominano ancora:
+            # il «Torna a prima» di un turno toglie anche i suoi aiutanti.
+            turn_work.sweep(root)
+            helper_prefix = journal_key(HELPER, "")
+            keep |= {k.removeprefix(helper_prefix) for k in turn_work.kept_journal_keys(root)
+                     if k.startswith(helper_prefix)}
             # E quelli delle bozze in attesa: installata, una bozza è lavoro di
             # chi l'ha scritta, e il suo annulla la deve poter togliere.
             removed = sweep_orphan_journals(
