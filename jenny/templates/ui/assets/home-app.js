@@ -39,6 +39,7 @@ import { HomeUpdates } from './home-updates.js';
 import { HomeWakes } from './home-wakes.js';
 import { HomeReminders } from './home-reminders.js';
 import { HomeMemory } from './home-memory.js';
+import { HomeDid } from './home-did.js';
 import { HomeBackup } from './home-backup.js';
 import { prepareExtensions, mountExtensions } from './shared/extensions.js';
 import { HomeYou } from './home-you.js';
@@ -738,6 +739,9 @@ class HomeApp {
     this._wireAskApp();
     /* «Apri Chi risponde» sotto un errore che si ripara li'. */
     this.chat.onOpenModel = () => this.openModelFromChat();
+    /* «Ho fatto» sotto le risposte dei turni che hanno toccato qualcosa. */
+    this.did = new HomeDid({ thread: this.chat.el });
+    this.chat.onTurnsShown = (turns) => this.did.ask(turns);
     /* I due comandi della bacheca in testa: la lente, l'unica porta verso
        tutto, e l'elenco al posto della bacheca. */
     this.boardSearchBtn = document.getElementById('home-board-search-open');

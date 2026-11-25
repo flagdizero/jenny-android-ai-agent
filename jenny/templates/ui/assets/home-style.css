@@ -1940,6 +1940,26 @@ button.home-wakes-act:active { background: var(--active); }
 /* Una richiesta di fare: l'elenco di cosa ha toccato di là, e «Chiedi di annullare». */
 .home-peer-card.is-act.is-ok .home-peer-head,
 .home-peer-card.is-undone .home-peer-head { color: var(--meta); border-color: var(--meta); }
+/* «Ho fatto» in coda a una risposta (`home-did.js`): discreta come l'ora,
+   e sotto, aperta, l'elenco della scheda di un'altra Jenny e il ritorno. */
+.home-did {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: 999px; background: transparent;
+  color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer;
+}
+.home-did .ti { font-size: 13px; }
+.home-did:active { background: var(--hover); }
+.home-did-detail {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+.home-did-note { margin: 0; color: var(--text-muted); font-size: 12.5px; line-height: 1.4; }
+.home-did-act {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
+}
+.home-did-act:active { background: var(--hover); }
 .home-peer-done { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
 .home-peer-done-item {
   display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--text-muted);

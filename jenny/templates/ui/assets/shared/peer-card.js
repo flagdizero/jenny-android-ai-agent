@@ -60,7 +60,7 @@ function headText(card, status, time) {
 }
 
 /** L'elenco di cosa ha toccato: file, promemoria, pagine aperte (queste restano). */
-function doneNode(done) {
+export function doneNode(done) {
   const items = (Array.isArray(done) ? done : [])
     .filter((d) => d && typeof d.label === 'string' && DONE_ICONS[d.kind]);
   if (!items.length) return null;

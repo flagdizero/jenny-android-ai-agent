@@ -234,6 +234,8 @@ export class HomeChat {
        la risposta che non e' arrivata): riceve `{text, media, entries}`, cioe'
        la domanda intera, allegati compresi. */
     this.onRetry = null;
+    /* Chi vuole sapere quali risposte (per turno) sono a schermo: «Ho fatto». */
+    this.onTurnsShown = null;
     /* Un turno dal vivo appena chiuso, con quanto ci ha messo. */
     this.onTurnClosed = null;
     /* Chi apre «Chi risponde» da un errore che si ripara li' (chiave
@@ -438,13 +440,14 @@ export class HomeChat {
           if (turn.boundary) this._appendBoundary();
           else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, false, turn.at, turn.device);
           else this._appendAssistant(turn.content, turn.media, false, turn.latencyMs, turn.at, turn.error,
-            turn.journal, turn.moves, turn.peer);
+            turn.journal, turn.moves, turn.peer, turn.turnId);
         }
       });
     } finally {
       this._anchor = null;
     }
     this.onThreadChange?.();
+    this._shownTurns?.();
     if (!this._reading) this._live = new WeakSet();
     this._empty = !this.el.querySelector(THREAD_NODES);
     this.syncEmpty();
@@ -471,10 +474,11 @@ export class HomeChat {
         if (turn.boundary) this._appendBoundary(true);
         else if (turn.user) this._appendUser(turn.text, turn.origin, turn.media, true, turn.at, turn.device);
         else this._appendAssistant(turn.content, turn.media, true, turn.latencyMs, turn.at, null,
-          turn.journal, turn.moves, turn.peer);
+          turn.journal, turn.moves, turn.peer, turn.turnId);
       }
     });
     this.onThreadChange?.();
+    this._shownTurns?.();
   }
 
   /** Molti messaggi in fila, e la sagoma di Jenny ricalcolata **una volta**,
@@ -803,8 +807,18 @@ export class HomeChat {
     const closing = this.turnNode;
     this._resetTurn();
     this._announce(closing);
+    if (closing?.dataset?.turn) this.onTurnsShown?.([closing.dataset.turn]);
     /* Un turno lungo: chi vuole proporre il piano a passi (`home-plan.js`). */
     if (closing?.isConnected) this.onTurnClosed?.(closing, latencyMs);
+  }
+
+  /* Le risposte del filo che sanno il loro turno: «Ho fatto» chiede i conti
+     di tutte in una volta (`home-did.js`). */
+  _shownTurns() {
+    if (!this.onTurnsShown) return;
+    const turns = [...this.el.querySelectorAll('.home-msg-jenny[data-turn]')]
+      .map((n) => n.dataset.turn);
+    if (turns.length) this.onTurnsShown(turns);
   }
 
   /** I suggerimenti di partenza, sotto il saluto (giro UX dell'11/10/2026, §7).
@@ -981,9 +995,10 @@ export class HomeChat {
   }
 
   _appendAssistant(content, media, toTop = false, latencyMs = null, at = null, error = null,
-    journal = null, moves = null, peer = null) {
+    journal = null, moves = null, peer = null, turnId = null) {
     const node = document.createElement('div');
     node.className = 'home-msg home-msg-jenny';
+    if (turnId && node.dataset) node.dataset.turn = turnId;
     const card = peer ? peerCardNode(peer) : null;
     if (card) {
       node.appendChild(card);
@@ -1272,6 +1287,8 @@ export class HomeChat {
       this.turnNode = document.createElement('div');
       this.turnNode.className = 'home-msg home-msg-jenny';
       if (this.turnNode.dataset) this.turnNode.dataset.at = String(Date.now());
+      /* Il turno del verbale: ci si aggancia «Ho fatto» (`home-did.js`). */
+      if (this.turnNode.dataset && this.turnId) this.turnNode.dataset.turn = this.turnId;
       this._append(this.turnNode);
     }
     return this.turnNode;

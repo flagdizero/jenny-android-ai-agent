@@ -79,6 +79,14 @@ When a subagent finishes, a collapsible **"What it actually did"** block is appe
 
 Updates arrive by push as the job changes state; while something is running the panel additionally polls every 5 seconds, and that polling stops while the app is in the background.
 
+## "Done": what a turn touched, and going back
+
+In the home, a reply whose turn touched something carries a small **Done: 1 file, 1 reminder** next to its time. It appears only when the turn wrote a file, set a reminder, sent a message, used an app on the phone or anything else that leaves a trace; a turn that only searched the web has none. A helper Jenny launched in that turn counts with it, and while she is still working the row says so.
+
+Tap it to see the list: the files, the reminders, and what cannot be undone — a message sent, a page opened, a search, a reminder that already rang. **Go back to before this turn** puts the files back as they were (the helpers' files too) and removes the reminders the turn set; for a few seconds **Undo** puts everything back as the turn left it. A file that changed after the turn is left as it is, and Jenny is told that you went back, so she does not assume the files are still there. After 14 days the list stays but you can no longer go back from it.
+
+This covers turns that start from the chat (the home, the workshop, Telegram, a reminder that wakes her). A reply to a notification, the floating mascot or the watch does not get the row.
+
 ## "N files modified"
 
 When the agent writes or edits files in your workspace during a turn (using its file-writing tools), the reply bubble gets a collapsible pill under it, closed by default, labeled **"N files modified"** with a badge showing the number of distinct files touched. Expand it to see, for each file:

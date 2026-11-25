@@ -1896,6 +1896,27 @@
       "failed": "Non ci sono riuscita, riprova.",
       "foot": "Un fatto nuovo lo dici in chat: {name} lo scrive qui da sola."
     },
+    "did": {
+      "label": "Ho fatto: {what}",
+      "file": "{n} file",
+      "files": "{n} file",
+      "job": "{n} promemoria",
+      "jobs": "{n} promemoria",
+      "other": "{n} altra cosa",
+      "others": "{n} altre cose",
+      "working": "Sto ancora lavorando",
+      "stillWorking": "un aiutante lavora ancora",
+      "undoneLabel": "Tornata a prima di questo turno",
+      "loading": "Un attimo…",
+      "unavailable": "Non riesco a leggere cosa ho fatto.",
+      "undo": "Torna a prima di questo turno",
+      "redo": "Rimetti com'era",
+      "undoneNote": "Sei tornato a prima di questo turno.",
+      "expired": "È passato troppo tempo: da qui non si torna più indietro.",
+      "workingNote": "Un aiutante di questo turno sta ancora lavorando: aspetta che finisca.",
+      "conflict": "Qualcosa è cambiato nel frattempo: ecco l'elenco di adesso.",
+      "failed": "Non ci sono riuscita, riprova."
+    },
     "reminders": {
       "title": "Promemoria",
       "active": "{n} attivi",
