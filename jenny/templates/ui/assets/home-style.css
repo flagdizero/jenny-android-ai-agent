@@ -3015,6 +3015,7 @@ button.home-wakes-act:active { background: var(--active); }
 .home-updates-room,
 .home-peers-room,
 .home-reminders-room,
+.home-memory-room,
 .home-backup-room {
   display: none;
   flex: 1;
@@ -3028,6 +3029,7 @@ button.home-wakes-act:active { background: var(--active); }
 .home-shell[data-view='updates'] .home-updates-room,
 .home-shell[data-view='peers'] .home-peers-room,
 .home-shell[data-view='reminders'] .home-reminders-room,
+.home-shell[data-view='memory'] .home-memory-room,
 .home-shell[data-view='backup'] .home-backup-room { display: flex; }
 
 /* Sei righe diventate una: da quando la chat sta dentro un pannello della
@@ -6497,6 +6499,68 @@ dialog.home-photo-viewer[open] { display: flex; }
   /* Non `#fff`: su `--error` il bianco sta a 3,6:1 nel tema di serie. */
   color: var(--on-error);
 }
+
+/* ── «Cosa ricorda di te» ───────────────────────────────────────────────
+   Due gruppi di frasi, «Di te» e «I suoi appunti», e in fondo «Dimenticato di
+   recente». Una frase si tocca per correggerla; il cestino a destra la toglie.
+   Il lucchetto dice «corretta da te»; un dettaglio perso sta sotto la frase,
+   con «Rimetti». */
+#home-memory-room .home-you-scroll { gap: 14px; }
+.home-memory-section { display: flex; flex-direction: column; gap: 6px; }
+.home-memory-sec {
+  padding: 0 4px; color: var(--text-muted); font-size: 12px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.home-memory-dreaming,
+.home-memory-empty,
+.home-memory-foot { margin: 0 4px; color: var(--text-muted); font-size: 13px; line-height: 1.45; }
+.home-memory-foot { font-size: 12px; }
+.home-memory-row { flex-wrap: wrap; gap: 8px; cursor: default; }
+.home-memory-text {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+  padding: 0; border: 0; background: transparent; color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+div.home-memory-text { cursor: default; }
+.home-memory-text:active { opacity: .7; }
+.home-memory-sentence { overflow-wrap: anywhere; line-height: 1.4; }
+.home-memory-locked,
+.home-memory-why { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 12px; }
+.home-memory-locked .ti { font-size: 13px; color: var(--accent); }
+.home-memory-row.is-wrong .home-memory-sentence { text-decoration: line-through; color: var(--text-muted); }
+.home-memory-row.is-changed .home-memory-sentence,
+.home-memory-row.is-removed .home-memory-sentence { color: var(--text-muted); }
+.home-memory-remove {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text-muted); font-size: 18px; cursor: pointer;
+}
+.home-memory-remove:active { background: var(--hover); }
+.home-memory-lost { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }
+.home-memory-lost-line {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  color: var(--warning); font-size: 12.5px;
+}
+.home-memory-putback {
+  flex: none; min-height: 34px; padding: 0 12px; border: 1px solid var(--border);
+  border-radius: 999px; background: transparent; color: var(--text);
+  font: inherit; font-size: 13px; cursor: pointer;
+}
+.home-memory-putback:active { background: var(--hover); }
+.home-memory-field {
+  width: 100%; box-sizing: border-box; min-height: 84px; padding: 10px 12px;
+  border: 1px solid var(--border-strong); border-radius: 12px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 15px;
+  line-height: 1.4; resize: vertical;
+}
+.home-memory-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.home-memory-actions button {
+  flex: 1; min-height: 44px; padding: 0 14px; border-radius: 999px; font: inherit;
+  font-size: 14px; cursor: pointer;
+}
+.home-memory-changed { border: 0; background: var(--accent); color: var(--on-accent); }
+.home-memory-wrong { border: 1px solid var(--border); background: transparent; color: var(--text); }
+.home-memory-actions button:active { opacity: .7; }
 
 /* ── «Promemoria» ───────────────────────────────────────────────────────
    Due gruppi (chiesti da te, messi da Jenny), una riga per promemoria: il

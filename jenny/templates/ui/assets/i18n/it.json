@@ -1838,6 +1838,42 @@
         "no": "No"
       }
     },
+    "memory": {
+      "title": "Cosa ricorda di te",
+      "count": "{n} cose",
+      "nothingYet": "ancora niente",
+      "loading": "Sto leggendo…",
+      "unavailable": "Non riesco a leggere la memoria adesso.",
+      "dreaming": "{name} sta riordinando la memoria: la pagina si aggiorna da sola.",
+      "aboutYou": "Di te",
+      "herNotes": "I suoi appunti",
+      "emptyUser": "{name} non ha ancora scritto niente su di te.",
+      "emptyNotes": "Nessun appunto per ora.",
+      "locked": "corretta da te",
+      "remove": "Togli",
+      "lost": "Una riscrittura ha perso «{word}».",
+      "putBack": "Rimetti",
+      "putBackDetail": "Rimetti la frase con {word}",
+      "recent": "Dimenticato di recente",
+      "kind": {
+        "removed": "tolta",
+        "changed": "cambiata",
+        "wrong": "non era vera"
+      },
+      "editTitle": "Correggi",
+      "editSub": "Scrivila come deve essere, poi di' a {name} perché la cambi.",
+      "fieldLabel": "La voce",
+      "changed": "È cambiato",
+      "wrong": "Non era vero",
+      "lockNote": "Quello che correggi tu, {name} non lo riscrive quando riordina. Se le dici in chat che è cambiato, invece, lo aggiorna.",
+      "close": "Chiudi",
+      "savedChanged": "Corretta.",
+      "savedWrong": "Corretta: quella vecchia non torna.",
+      "removed": "Voce tolta.",
+      "conflict": "È cambiata nel frattempo: ecco com'è adesso.",
+      "failed": "Non ci sono riuscita, riprova.",
+      "foot": "Un fatto nuovo lo dici in chat: {name} lo scrive qui da sola."
+    },
     "did": {
       "label": "Ho fatto: {what}",
       "file": "{n} file",

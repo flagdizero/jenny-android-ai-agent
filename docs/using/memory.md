@@ -92,6 +92,18 @@ The lines sit in the turn's runtime context, never in the system prompt: the cac
 
 The archive is read into memory once, in the background, when the app starts, and again whenever it changes. Until that first read finishes, a message recalls nothing. A name that is never written with a capital, an indirect reference ("my sister"), or a fact that never made it into `USER.md` is not recalled this way: for those Jenny still searches with `recall`, `recall_history` and `recall_chat`. When she searches with `recall`, each fact it finds is shown by its newest wording, and the line also names what its older wordings say that no live file says any more (`— in no live file any more: …`): in a chain of shorter and shorter rewrites the newest is the poorest, and the lost detail is visible without opening the entry.
 
+### What she remembers about you: the room
+
+In the home, **Settings → What she remembers about you** shows the two memory files as sentences: **About you** (`USER.md`) and **Her notes** (`memory/MEMORY.md`). The row says how many things she knows about you.
+
+- **Tap a sentence to correct it.** Write it as it should be, then say why: **It changed** files the old wording in `memory/archive/`, linked to the new one; **It wasn't true** also marks it retracted, so recall by name never brings it back. The corrected entry gets a lock (below).
+- **The trash removes it** at once, with a few seconds of **Undo**. A removed entry is marked `forgotten` and stays out of recall by name.
+- **Details a rewrite lost.** When an older wording of an entry carried a name or a number that no memory file says any more, the entry says so ("A rewrite lost “Oreste”") with **Put back**: the older sentence comes back as its own entry, right under the newer one, so nothing the newer one knows is overwritten.
+- **Recently forgotten** lists what left the files in the last four weeks: removed (with **Put back**), changed, and not true (struck through).
+- While Dream is tidying up, the room says so and refreshes by itself; it does not lock you out. If an entry changed in the meantime, your edit is not written over it: the room says so and shows it as it is now.
+
+Saving `USER.md` or `memory/MEMORY.md` from the workshop's file editor now goes through the archive too: a reworded line is filed as changed, and a line you deleted by hand counts as removed by you.
+
 ### Entries you corrected are locked
 
 An entry of `USER.md` or `memory/MEMORY.md` that you corrected yourself gets a lock, and Dream does not reword it. The lock is kept outside the workspace, in the app's own database, so nothing Dream can write reaches it, and the memory files carry no mark of it.

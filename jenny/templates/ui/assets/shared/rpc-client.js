@@ -106,6 +106,12 @@ export const rpc = {
     return send(`cron.${method}`, params);
   },
 
+  /** «Cosa ricorda di te» (`memory.list`, `.correct`, `.remove`, `.restore`):
+   *  `jenny/webui/memory_commands.py`. */
+  memory(method, params = {}) {
+    return send(`memory.${method}`, params);
+  },
+
   /** «Ho fatto» e il ritorno a prima di un turno (`turn.summaries`, `.work`,
    *  `.undo`, `.redo`): `jenny/webui/turn_commands.py`. */
   turn(method, params = {}) {

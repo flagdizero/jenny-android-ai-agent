@@ -1838,6 +1838,42 @@
         "no": "No"
       }
     },
+    "memory": {
+      "title": "What she remembers about you",
+      "count": "{n} things",
+      "nothingYet": "nothing yet",
+      "loading": "Reading…",
+      "unavailable": "I can't read the memory right now.",
+      "dreaming": "{name} is tidying her memory: the page updates by itself.",
+      "aboutYou": "About you",
+      "herNotes": "Her notes",
+      "emptyUser": "{name} hasn't written anything about you yet.",
+      "emptyNotes": "No notes for now.",
+      "locked": "corrected by you",
+      "remove": "Remove",
+      "lost": "A rewrite lost “{word}”.",
+      "putBack": "Put back",
+      "putBackDetail": "Put back the sentence with {word}",
+      "recent": "Recently forgotten",
+      "kind": {
+        "removed": "removed",
+        "changed": "changed",
+        "wrong": "wasn't true"
+      },
+      "editTitle": "Correct",
+      "editSub": "Write it as it should be, then tell {name} why it changes.",
+      "fieldLabel": "The entry",
+      "changed": "It changed",
+      "wrong": "It wasn't true",
+      "lockNote": "What you correct, {name} doesn't rewrite when she tidies up. If you tell her in the chat that it changed, she updates it.",
+      "close": "Close",
+      "savedChanged": "Corrected.",
+      "savedWrong": "Corrected: the old one won't come back.",
+      "removed": "Entry removed.",
+      "conflict": "It changed in the meantime: here it is now.",
+      "failed": "That didn't work, try again.",
+      "foot": "Tell her a new fact in the chat: {name} writes it here herself."
+    },
     "did": {
       "label": "Done: {what}",
       "file": "{n} file",
