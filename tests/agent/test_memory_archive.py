@@ -865,3 +865,133 @@ class TestTheArchiverIsWiredIntoTheRegistryDreamActuallyGets:
 
         assert self._saved(tmp_path, "Preferisce risposte brevi")
         assert not self._saved(tmp_path, "Non vuole report formali")
+
+
+class TestForgotten:
+    """``forgotten``: la voce l'ha tolta l'utente, e il file resta come lapide."""
+
+    def test_it_round_trips(self, tmp_path: Path):
+        from dataclasses import replace
+
+        from jenny.agent.memory_archive import read_archived
+
+        path = archive_entry(tmp_path, replace(_ENTRY, forgotten=True))
+        assert "forgotten: yes" in path.read_text(encoding="utf-8")
+        back = read_archived(path)
+        assert back is not None and back.forgotten
+
+    def test_an_ordinary_entry_is_not_forgotten(self, tmp_path: Path):
+        from jenny.agent.memory_archive import read_archived
+
+        path = archive_entry(tmp_path, _ENTRY)
+        assert "forgotten" not in path.read_text(encoding="utf-8")
+        back = read_archived(path)
+        assert back is not None and not back.forgotten
+
+    def test_it_is_added_to_a_file_already_there(self, tmp_path: Path):
+        """Dream l'aveva già archiviata; poi l'utente la toglie dalla stanza."""
+        from dataclasses import replace
+
+        from jenny.agent.memory_archive import read_archived
+
+        first = archive_entry(tmp_path, _ENTRY, when=date(2026, 8, 18))
+        again = archive_entry(tmp_path, replace(_ENTRY, forgotten=True))
+        assert again == first
+        back = read_archived(first)
+        assert back is not None and back.forgotten
+        assert back.demoted == "2026-08-18"
+
+
+class TestUnarchive:
+    def test_it_removes_the_file_of_that_id(self, tmp_path: Path):
+        from jenny.agent.memory_archive import unarchive
+
+        archive_entry(tmp_path, _ENTRY)
+        assert unarchive(tmp_path, _ENTRY.id) is True
+        assert find_archived(tmp_path, _ENTRY.id) is None
+
+    def test_an_unknown_id_is_not_an_error(self, tmp_path: Path):
+        from jenny.agent.memory_archive import unarchive
+
+        assert unarchive(tmp_path, "deadbeef") is False
+        archive_entry(tmp_path, _ENTRY)
+        assert unarchive(tmp_path, "deadbeef") is False
+        assert find_archived(tmp_path, _ENTRY.id) is not None
+
+    def test_a_wildcard_never_reaches_the_glob(self, tmp_path: Path):
+        from jenny.agent.memory_archive import unarchive
+
+        archive_entry(tmp_path, _ENTRY)
+        assert unarchive(tmp_path, "*") is False
+        assert unarchive(tmp_path, "") is False
+        assert find_archived(tmp_path, _ENTRY.id) is not None
+
+    def test_older_versions_keep_their_link_and_end_at_the_live_entry(self, tmp_path: Path):
+        """La versione rimessa torna viva: quella più vecchia la punta ancora, e la
+        catena finisce lì, come per ogni sostituta viva."""
+        from jenny.agent.memory_archive import archive_chains, erosion, unarchive
+
+        old = ArchivedEntry(id="0a0a0a0a", text="Amici: Tiziana (Cremona).",
+                            source="USER.md", superseded_by="0b0b0b0b")
+        mid = ArchivedEntry(id="0b0b0b0b", text="Amici: Tiziana.", source="USER.md")
+        archive_entry(tmp_path, old)
+        archive_entry(tmp_path, mid)
+        assert len(archive_chains(list_archived(tmp_path))) == 1
+
+        unarchive(tmp_path, "0b0b0b0b")
+        [chain] = archive_chains(list_archived(tmp_path))
+        assert [v.id for v in chain.versions] == ["0a0a0a0a"]
+        assert chain.latest.superseded_by == "0b0b0b0b"
+        measured = erosion(list_archived(tmp_path), ["- Amici: Tiziana."], {"0b0b0b0b"})
+        assert measured.lost == {"cremona"}
+
+
+class TestLostDetails:
+    """Il cuore di ``recall`` reso pubblico: il dettaglio perso e chi lo porta."""
+
+    def _chains(self, *versions: ArchivedEntry):
+        from jenny.agent.memory_archive import archive_chains
+
+        return archive_chains(list(versions))
+
+    def test_it_names_the_newest_wording_that_still_carries_it(self):
+        from jenny.agent.memory_archive import lost_details
+
+        newest = ArchivedEntry(id="n", text="Piano: mesi da Oreste a Cremona.",
+                               source="USER.md", superseded_by="live")
+        oldest = ArchivedEntry(id="o", text="Piano di vita: Oreste a Cremona, Islanda.",
+                               source="USER.md", superseded_by="n")
+        chains = self._chains(newest, oldest)
+        found = lost_details(chains, "- Piano: mesi da Oreste.")
+        assert list(found) == [0]
+        details = {d.anchor: d for d in found[0]}
+        assert set(details) == {"cremona", "islanda"}
+        assert details["cremona"].shown == "Cremona"
+        assert details["cremona"].version.id == "n"
+        assert details["islanda"].version.id == "o"
+
+    def test_a_name_still_live_somewhere_is_not_lost(self):
+        from jenny.agent.memory_archive import lost_details
+
+        chains = self._chains(ArchivedEntry(id="a", text="Oreste vive a Cremona.",
+                                            source="USER.md", superseded_by="live"))
+        assert lost_details(chains, "- Oreste.\n- Cremona è casa sua.") == {}
+
+    def test_retracted_and_forgotten_wordings_carry_nothing(self):
+        from jenny.agent.memory_archive import lost_details
+
+        chains = self._chains(
+            ArchivedEntry(id="r", text="Vive a Cremona.", source="USER.md", retracted=True),
+            ArchivedEntry(id="f", text="Lavora a Lodi.", source="USER.md", forgotten=True),
+        )
+        assert lost_details(chains, "- Altro.") == {}
+
+    def test_only_limits_the_chains_measured(self):
+        from jenny.agent.memory_archive import lost_details
+
+        chains = self._chains(
+            ArchivedEntry(id="a", text="Vive a Cremona.", source="USER.md"),
+            ArchivedEntry(id="b", text="Lavora a Lodi.", source="USER.md"),
+        )
+        assert set(lost_details(chains, "")) == {0, 1}
+        assert set(lost_details(chains, "", only={1})) == {1}
