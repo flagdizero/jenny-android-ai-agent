@@ -1377,6 +1377,15 @@ class GatewayContainer:
                 await self.zone_watch.start()
             await self.snapshot.start()
             self._maintenance = asyncio.create_task(self._database_maintenance())
+            # Il catalogo del richiamo per nome, in un thread: pronto prima del
+            # primo messaggio invece che dal secondo (``agent/facts.py``). Un di
+            # più: se manca o fallisce, il primo turno lo fa partire da sé.
+            facts = getattr(getattr(self._agent, "context", None), "facts", None)
+            if facts is not None:
+                try:
+                    facts.refresh_async()
+                except Exception:
+                    logger.opt(exception=True).warning("Could not start the fact catalogue")
             if (questions := getattr(self, "_peer_questions", None)) is not None:
                 await questions.refresh()
                 questions.start()

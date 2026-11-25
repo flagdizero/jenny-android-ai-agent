@@ -13,6 +13,16 @@ from typing import Any, Callable, Mapping, NamedTuple, Sequence
 from loguru import logger
 
 from jenny.agent.diary import DiaryTurn, diary_turn, upcoming_dates
+from jenny.agent.facts import HEADER as FACT_RECALL_HEADER
+from jenny.agent.facts import (
+    MAX_BLOCKS_IN_HISTORY,
+    MEMORY_SOURCE,
+    NOTEBOOK_NOTE,
+    USER_SOURCE,
+    FactCatalogue,
+    blocks_in_history,
+)
+from jenny.agent.facts import history_text as recalled_history_text
 from jenny.agent.memory import (
     HISTORY_FLOOR_METADATA_KEY,
     MemoryStore,
@@ -584,6 +594,11 @@ class ContextBuilder:
         self.cron_service = cron_service
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace, disabled_skills=set(disabled_skills) if disabled_skills else None)
+        # Il richiamo per nome (``agent/facts.py``): un catalogo in memoria
+        # dell'archivio, costruito in un thread la prima volta che serve.
+        self.facts = FactCatalogue(
+            workspace, wikis_dir_name=self.wikis_dir_name, extra_stop=(current_bot_name(),),
+        )
 
     def build_system_prompt(
         self,
@@ -1592,12 +1607,16 @@ class ContextBuilder:
         available_tools: list[str] | None = None,
         orchestrator: bool | None = None,
         board_since: str | None = None,
+        recall_names: bool = False,
     ) -> list[dict[str, Any]]:
         """Build the complete message list for an LLM call.
 
         ``board_since`` is when the conversation last moved (its last persisted
         message): in a notebook, what the user pinned on the board after that is
         said in this turn.
+
+        ``recall_names`` turns on the recall by name (``agent/facts.py``): only
+        the user's own turn sets it, never a helper's result or an internal run.
         """
         root = workspace or self.workspace
         extra: list[str] = []
@@ -1612,6 +1631,11 @@ class ContextBuilder:
         # dal messaggio.
         if current_role == "user":
             extra.extend(_board_turn_lines(root, current_message, board_since, self.timezone))
+        if recall_names and current_role == "user":
+            extra.extend(self._fact_recall_lines(
+                session_key, current_message, history,
+                diary.section if diary is not None else "",
+            ))
         runtime_ctx = self._build_runtime_context(
             channel,
             chat_id,
@@ -1656,6 +1680,41 @@ class ContextBuilder:
             return messages
         messages.append({"role": current_role, "content": merged})
         return messages
+
+    def _fact_recall_lines(self, session_key: str | None, message: str,
+                           history: Sequence[Mapping[str, Any]], diary_section: str) -> list[str]:
+        """Le formulazioni archiviate che il messaggio richiama per nome, con la testa.
+
+        Solo nella chat personale e in quella di un quaderno: mai un turno
+        interno (cron, Dream, giardiniere, aiutanti, altre Jenny). In un quaderno
+        solo quel che veniva da ``USER.md`` — chi sei viaggia, dove altro lavori
+        no — con l'avviso di non metterlo nel journal. Un catalogo non pronto, o
+        che solleva, costa le righe e mai il turno.
+        """
+        if not session_key or not message:
+            return []
+        personal = is_personal_session_key(session_key)
+        if not personal and not is_project_session_key(session_key):
+            return []
+        try:
+            self.facts.refresh_async()
+            if not self.facts.ready or blocks_in_history(history) >= MAX_BLOCKS_IN_HISTORY:
+                return []
+            files = [self.memory.read_file(self.memory.user_file),
+                     self.memory.read_file(self.memory.soul_file)]
+            if personal:
+                files.append(self.memory.read_memory())
+            known = "\n".join([*files, diary_section, message, recalled_history_text(history)])
+            sources = (USER_SOURCE, MEMORY_SOURCE) if personal else (USER_SOURCE,)
+            lines = self.facts.recall_lines(message, known=known, sources=sources,
+                                            history=history)
+        except Exception as exc:  # noqa: BLE001 — v. la docstring
+            logger.warning("fact recall: skipped for {}: {}", session_key, exc)
+            return []
+        if not lines:
+            return []
+        head = [FACT_RECALL_HEADER] if personal else [FACT_RECALL_HEADER, NOTEBOOK_NOTE]
+        return [*head, *lines]
 
     def _diary_turn(self, session_key: str | None, session_metadata: Mapping[str, Any] | None,
                     history: Sequence[Mapping[str, Any]]) -> DiaryTurn | None:
