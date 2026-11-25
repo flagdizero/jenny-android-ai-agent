@@ -282,6 +282,10 @@ export class HomeChat {
       // volentieri: finisce subito sopra il messaggio piu' vecchio.
       mount: (node) => this.el.insertBefore(node, this.el.firstChild),
       label: () => i18n.t('chat.loadPrevious'),
+      /* Il posto della scheda di un piano finito dipende da `hasMore`
+         (`HomePlan.place`), che al disegno della pagina era ancora quello di
+         prima. */
+      adopted: () => this.onThreadChange?.(),
     });
     /* **Una volta sola, qui.** Stava in fondo a `load()`, e `bindInfiniteScroll`
        non ha guardia: un ascoltatore in piu' a ogni ricarica. Finche' una

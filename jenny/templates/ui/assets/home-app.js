@@ -255,6 +255,9 @@ class HomeApp {
         if (notebook) return `nb:${notebook}`;
         return key && key === sessionManager.personalKey ? 'personal' : null;
       },
+      /* C'e' altra storia sopra quella a schermo: la scheda di un piano finito
+         aspetta la sua pagina invece di salire in cima a questa. */
+      hasOlder: () => !!(this.chat.pager?.hasMore && this.chat.pager.cursor),
       onChange: () => this.chat.liveChanged(),
       onLockChange: () => {
         this._applyPlanLock();

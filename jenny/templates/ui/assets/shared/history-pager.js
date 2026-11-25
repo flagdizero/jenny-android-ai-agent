@@ -44,6 +44,8 @@ export class HistoryPager {
    *  @param {(messages) => void} host.prepend  il disegno, in cima
    *  @param {(node) => void}     host.mount    dove va il bottone
    *  @param {() => string}       host.label    cosa c'è scritto sopra
+   *  @param {() => void}         [host.adopted] dopo ogni pagina adottata: `hasMore`
+   *                                         e il cursore sono quelli nuovi
    *
    *  `label` è un appiglio e non un `i18n.t` qui dentro di proposito: `i18n`
    *  costruisce la sua istanza al caricamento del modulo e legge `localStorage`,
@@ -71,6 +73,10 @@ export class HistoryPager {
   adopt(page) {
     this.cursor = page?.before_cursor || null;
     this.hasMore = page?.has_more_before !== false;
+    /* Chi mette nel filo qualcosa che dipende da «c'e' altra storia sopra?»
+       (la scheda di un piano finito, in casa) lo sa solo da qui in poi: il
+       disegno della pagina e' avvenuto col valore di prima. */
+    this._host.adopted?.();
   }
 
   bindInfiniteScroll() {
