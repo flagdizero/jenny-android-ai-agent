@@ -135,7 +135,11 @@ export class HomeReminders {
     if (hers.length) {
       parts.push(this._section(i18n.t('home.reminders.hers', { name: botName.get() }), hers));
     }
-    parts.push(el('p', 'home-reminders-foot', i18n.t('home.reminders.howToAdd')));
+    /* Vuota, la frase di sopra dice gia' come chiederne uno: sotto resta solo
+       dove stanno quelli dei quaderni (visto su jenny_s22 il 25/11/2026). */
+    const empty = !mine.length && !hers.length;
+    parts.push(el('p', 'home-reminders-foot',
+      i18n.t(empty ? 'home.reminders.notebooksElsewhere' : 'home.reminders.howToAdd')));
     this.body.replaceChildren(...parts);
   }
 

@@ -123,4 +123,6 @@ const app = await boot();
 app.openReminders();
 await until(() => $('home-reminders-body').querySelector('.home-reminders-empty'));
 assert.equal(rows().length, 0);
+const foot = $('home-reminders-body').querySelector('.home-reminders-foot').textContent;
+assert.ok(!foot.includes('chat'), 'la stanza vuota dice due volte di chiederlo in chat');
 """)

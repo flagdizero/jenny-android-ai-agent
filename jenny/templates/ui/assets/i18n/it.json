@@ -1888,7 +1888,8 @@
       "toggle": "Acceso: {name}",
       "remove": "Togli {name}",
       "removed": "Promemoria tolto: {name}",
-      "howToAdd": "Un promemoria nuovo si chiede in chat. Quelli dei quaderni stanno sulle loro bacheche."
+      "howToAdd": "Un promemoria nuovo si chiede in chat. Quelli dei quaderni stanno sulle loro bacheche.",
+      "notebooksElsewhere": "Quelli dei quaderni stanno sulle loro bacheche."
     },
     "starts": {
       "title": "Da dove cominciare",

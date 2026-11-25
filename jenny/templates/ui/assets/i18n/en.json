@@ -1888,7 +1888,8 @@
       "toggle": "On: {name}",
       "remove": "Remove {name}",
       "removed": "Reminder removed: {name}",
-      "howToAdd": "A new reminder is asked for in the chat. Notebook reminders live on their boards."
+      "howToAdd": "A new reminder is asked for in the chat. Notebook reminders live on their boards.",
+      "notebooksElsewhere": "Notebook reminders live on their boards."
     },
     "starts": {
       "title": "Where to start",
