@@ -182,7 +182,16 @@
            che non abita c'e' la sua foto. -->
       <div class="home-chat" id="home-chat">
       <!-- La conversazione. Un solo filo, dall'alto verso il basso. -->
-      <div class="home-thread" id="home-thread"></div>
+      <!-- `role=log` dice cos'e' (una conversazione), ma senza annunciarsi da
+           solo: una rilettura della storia verrebbe letta per intero, e le bolle
+           degli aiutanti dentro il filo si annunciano gia' da sole
+           (`home-work.js`). Le risposte nuove le dice `#home-announce`. -->
+      <div class="home-thread" id="home-thread" role="log" aria-live="off"></div>
+
+      <!-- Per chi usa TalkBack: il testo di una risposta appena finita. Non si
+           vede. Sta dentro `#home-chat`, che si sposta fra la pagina e il velo
+           (`home-move.js`): cosi' c'e' una volta sola, e va dove va la chat. -->
+      <div class="home-sr-only" id="home-announce" aria-live="polite" aria-atomic="true"></div>
 
       <!-- Lo stato vuoto sta FUORI dal filo, sovrapposto. Dentro sarebbe il primo
            figlio, e il primo figlio del filo porta il `margin-top:auto` che tiene
@@ -198,7 +207,7 @@
 
       <!-- Lo stato del filo: compare solo quando c'e' qualcosa da dire (rete giu',
            riconnessione). A filo funzionante non occupa spazio. -->
-      <div class="home-wire" id="home-wire" hidden></div>
+      <div class="home-wire" id="home-wire" role="status" hidden></div>
 
       <!-- Gli allegati in attesa di partire. Vuoto non occupa spazio. -->
       <div class="home-pending" id="home-pending" hidden></div>

@@ -147,15 +147,31 @@ export class OnboardingController {
       case 2: this._renderStep2(); break;
       case 3: this._renderStep3(); break;
     }
+    this._announceStep();
+  }
+
+  /* Un passo nuovo si dice: il fuoco va al suo titolo, cosi' un lettore di
+     schermo legge dove sei invece di restare su un bottone che non c'e' piu'.
+     Solo quando il passo cambia: un ridisegno dello stesso passo (la lista dei
+     modelli che arriva) non deve strappare il fuoco dal campo in cui scrivi. */
+  _announceStep() {
+    if (this._announcedStep === this.step) return;
+    this._announcedStep = this.step;
+    const heading = this.contentEl?.querySelector('.onboarding-heading');
+    if (!heading) return;
+    heading.setAttribute('tabindex', '-1');
+    heading.focus?.({ preventScroll: true });
   }
 
   _progress() {
     const dots = [];
     for (let i = 0; i < 4; i++) {
       const cls = i < this.step ? 'onboarding-dot done' : i === this.step ? 'onboarding-dot active' : 'onboarding-dot';
-      dots.push(`<div class="${cls}"></div>`);
+      dots.push(`<div class="${cls}" aria-hidden="true"></div>`);
     }
-    return `<div class="onboarding-progress">${dots.join('')}</div>`;
+    /* I pallini non si leggono: una barra di avanzamento si'. */
+    const label = escapeHtml(i18n.t('onboarding.stepOf', { n: this.step + 1, of: 4 }));
+    return `<div class="onboarding-progress" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="${this.step + 1}" aria-label="${label}">${dots.join('')}</div>`;
   }
 
   // ── Step 0: Format ──────────────────────────────────────────────────
@@ -167,12 +183,12 @@ export class OnboardingController {
         <p class="onboarding-desc">${i18n.t('onboarding.selectFormatDesc')}</p>
         ${this._progress()}
         <div class="format-cards">
-          <button class="format-card${this.format === 'openai_compat' ? ' selected' : ''}" data-format="openai_compat">
+          <button class="format-card${this.format === 'openai_compat' ? ' selected' : ''}" data-format="openai_compat" aria-pressed="${this.format === 'openai_compat'}">
             <i class="ti ti-brand-openai" aria-hidden="true"></i>
             <span class="format-label">${i18n.t('settings.openaiCompat')}</span>
             <span class="format-hint">${i18n.t('onboarding.openaiCompatHint')}</span>
           </button>
-          <button class="format-card${this.format === 'anthropic' ? ' selected' : ''}" data-format="anthropic">
+          <button class="format-card${this.format === 'anthropic' ? ' selected' : ''}" data-format="anthropic" aria-pressed="${this.format === 'anthropic'}">
             ${getProviderBrand('anthropic').logo}
             <span class="format-label">${i18n.t('onboarding.anthropicCompat')}</span>
             <span class="format-hint">${i18n.t('onboarding.anthropicCompatHint')}</span>
@@ -225,8 +241,13 @@ export class OnboardingController {
   _selectFormat(format) {
     if (format !== this.format) this.model = '';
     this.format = format;
-    this.contentEl.querySelectorAll('.format-card').forEach(c => c.classList.remove('selected'));
-    this.contentEl.querySelector(`[data-format="${format}"]`).classList.add('selected');
+    this.contentEl.querySelectorAll('.format-card').forEach((c) => {
+      c.classList.remove('selected');
+      c.setAttribute('aria-pressed', 'false');
+    });
+    const picked = this.contentEl.querySelector(`[data-format="${format}"]`);
+    picked.classList.add('selected');
+    picked.setAttribute('aria-pressed', 'true');
     this.contentEl.querySelector('#btn-next-0').disabled = false;
   }
 
@@ -495,18 +516,30 @@ export class OnboardingController {
       return;
     }
     listEl.innerHTML = this.models.map(m => `
-      <div class="onboarding-model-item${this.model === m ? ' selected' : ''}" data-model="${escapeHtml(m)}">
+      <div class="onboarding-model-item${this.model === m ? ' selected' : ''}" data-model="${escapeHtml(m)}" role="button" tabindex="0" aria-pressed="${this.model === m}">
         ${escapeHtml(m)}
       </div>
     `).join('');
 
     listEl.querySelectorAll('.onboarding-model-item').forEach(item => {
+      /* Un div che fa da bottone: per un lettore di schermo e per una
+         tastiera lo e' davvero (ruolo, fuoco, Invio e Spazio). */
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          item.click();
+        }
+      });
       item.addEventListener('click', () => {
         this.model = item.dataset.model;
         this._clearProbeFailure();
         this.contentEl.querySelector('#custom-model').value = '';
-        listEl.querySelectorAll('.onboarding-model-item').forEach(el => el.classList.remove('selected'));
+        listEl.querySelectorAll('.onboarding-model-item').forEach((el) => {
+          el.classList.remove('selected');
+          el.setAttribute('aria-pressed', 'false');
+        });
         item.classList.add('selected');
+        item.setAttribute('aria-pressed', 'true');
         this._updateSelectedDisplay();
         this._validateLaunch();
       });
@@ -695,6 +728,9 @@ export class OnboardingController {
       overlay = document.createElement('div');
       overlay.id = 'onboarding-loading-overlay';
       overlay.className = 'onboarding-loading-overlay';
+      /* Si annuncia: mentre la prova gira, il resto della pagina tace. */
+      overlay.setAttribute('role', 'status');
+      overlay.setAttribute('aria-live', 'polite');
       overlay.innerHTML = `
         <div class="onboarding-loading-content">
           <div class="onboarding-spinner"></div>
