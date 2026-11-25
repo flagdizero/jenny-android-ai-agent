@@ -1812,6 +1812,22 @@
         "no": "No"
       }
     },
+    "reminders": {
+      "title": "Promemoria",
+      "active": "{n} attivi",
+      "none": "nessuno",
+      "loading": "Li sto leggendo…",
+      "unavailable": "Non riesco a leggere i promemoria adesso.",
+      "empty": "Nessun promemoria per adesso. Chiedine uno a Jenny in chat: «ricordami di…».",
+      "mine": "Chiesti da te",
+      "hers": "Messi da {name}",
+      "next": "prossimo {when}",
+      "done": "già suonato",
+      "toggle": "Acceso: {name}",
+      "remove": "Togli {name}",
+      "removed": "Promemoria tolto: {name}",
+      "howToAdd": "Un promemoria nuovo si chiede in chat. Quelli dei quaderni stanno sulle loro bacheche."
+    },
     "peers": {
       "title": "Altre Jenny",
       "none": "nessuna",

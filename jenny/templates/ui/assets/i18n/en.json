@@ -1812,6 +1812,22 @@
         "no": "No"
       }
     },
+    "reminders": {
+      "title": "Reminders",
+      "active": "{n} on",
+      "none": "none",
+      "loading": "Reading them…",
+      "unavailable": "I can't read the reminders right now.",
+      "empty": "No reminders for now. Ask Jenny for one in the chat: \"remind me to…\".",
+      "mine": "Asked by you",
+      "hers": "Set by {name}",
+      "next": "next {when}",
+      "done": "already rung",
+      "toggle": "On: {name}",
+      "remove": "Remove {name}",
+      "removed": "Reminder removed: {name}",
+      "howToAdd": "A new reminder is asked for in the chat. Notebook reminders live on their boards."
+    },
     "peers": {
       "title": "Other Jennys",
       "none": "none",

@@ -39,6 +39,7 @@ const ROOM_ELEMENTS = {
   updates: 'home-updates-room',
   peers: 'home-peers-room',
   backup: 'home-backup-room',
+  reminders: 'home-reminders-room',
 };
 
 /* Quanto aspettare il DOM di un'app: lo stesso margine dell'officina, dentro i

@@ -1560,6 +1560,8 @@ _COMMAND_FAMILIES: dict[str, tuple[str, str]] = {
     "staged": ("jenny.webui.staged_commands", "STAGED_COMMANDS"),
     # «Usa il telefono»: la modalità e le app su «Sempre».
     "phone": ("jenny.webui.phone_commands", "PHONE_COMMANDS"),
+    # L'«Annulla» dopo aver tolto un promemoria.
+    "cron": ("jenny.webui.cron_commands", "CRON_COMMANDS"),
 }
 
 

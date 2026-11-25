@@ -90,11 +90,14 @@ export function wakesNote(rows, total) {
 export class HomeWakes {
   /** @param pill   `#home-wakes`, la pastiglia sopra il campo.
    *  @param sheet  `#home-wakes-sheet`, il foglio.
-   *  @param onAll  «Tutti i promemoria»: apre l'elenco intero (l'officina). */
-  constructor({ pill, sheet, onAll = null } = {}) {
+   *  @param onAll  «Tutti i promemoria»: apre l'elenco intero (la stanza
+   *                Promemoria).
+   *  @param onPayload  ogni lettura riuscita del payload `/api/webui/cron`. */
+  constructor({ pill, sheet, onAll = null, onPayload = null } = {}) {
     this.pill = pill || document.getElementById('home-wakes');
     this.sheet = sheet || document.getElementById('home-wakes-sheet');
     this.onAll = onAll;
+    this.onPayload = onPayload;
     this.payload = null;
     this.open = null;      // l'id della riga aperta (mostra «Togli»)
     this.busy = false;
@@ -114,6 +117,9 @@ export class HomeWakes {
     } catch {
       return;   // il gateway non risponde: la pastiglia resta com'era
     }
+    /* Lo stesso elenco serve alla stanza Promemoria e alla sua riga in
+       Impostazioni: una lettura per tutti. */
+    this.onPayload?.(this.payload);
     this._draw();
   }
 

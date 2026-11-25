@@ -242,6 +242,7 @@ _UI_MANIFEST = [
     "assets/home-plan.js",
     "assets/home-line.js",
     "assets/home-peers.js",
+    "assets/home-reminders.js",
     "assets/home-model.js",
     "assets/home-pages.js",
     "assets/home-strip.js",

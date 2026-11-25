@@ -1,6 +1,7 @@
 """Cron service for scheduling agent tasks."""
 
 import asyncio
+import copy
 import uuid
 from contextlib import suppress
 from datetime import datetime
@@ -384,6 +385,12 @@ _PAST_GRACE_MS = 24 * 60 * 60 * 1000
 # Fra un tentativo e l'altro di un singolo che non ha suonato (``_settle_one_shot``).
 _ONE_SHOT_RETRY_MS = 5 * 60 * 1000
 
+# «Annulla» dopo un'eliminazione (v. ``CronService.restore_job``): per quanto si
+# tiene in memoria un job tolto, e quanti al massimo. Dieci minuti coprono il
+# ripensamento; l'avviso con «Annulla» della casa ne dura cinque secondi.
+RESTORE_WINDOW_MS = 10 * 60 * 1000
+RESTORE_KEEP = 20
+
 
 def _refuse_past_one_time(schedule: CronSchedule, now_ms: int) -> None:
     """Un singolo nuovo con la data gia' passata si rifiuta, invece di suonare subito.
@@ -521,6 +528,11 @@ class CronService:
         # (:meth:`follow_timezone`); il tool ``cron`` lo legge da qui, così non
         # ne tiene una copia ferma all'avvio. ``None`` fuori dal gateway.
         self.timezone: str | None = None
+        # I job tolti da poco, per «Annulla» (v. :meth:`restore_job`): id →
+        # (job com'era, i suoi record di esecuzione, quando e' stato tolto).
+        # Solo in memoria: e' un ripensamento di pochi secondi, non un cestino
+        # che sopravvive a un riavvio.
+        self._removed_recently: dict[str, tuple[CronJob, list[dict[str, Any]], int]] = {}
 
     def _zones_changed(self) -> None:
         if self.on_zones_changed is None:
@@ -1528,6 +1540,9 @@ class CronService:
         removed = len(store.jobs) < before
 
         if removed:
+            # Prima che i record se ne vadano: «Annulla» rimette il job con la
+            # sua storia, non uno nuovo con lo stesso nome.
+            self._keep_for_restore(job)
             self._save_store()
             self._arm_timer()
             if job.schedule.kind == "zone":
@@ -1545,6 +1560,78 @@ class CronService:
             return "removed"
 
         return "not_found"
+
+    def _keep_for_restore(self, job: CronJob) -> None:
+        now = _now_ms()
+        try:
+            runs = cron_store.read_runs(self._db, job.id)
+        except Exception:  # noqa: BLE001 — senza la storia si rimette lo stesso
+            logger.exception("Cron: could not keep the runs of {} for undo", job.id)
+            runs = []
+        self._removed_recently[job.id] = (copy.deepcopy(job), runs, now)
+        self._prune_removed(now)
+
+    def _prune_removed(self, now: int) -> None:
+        for job_id, (_job, _runs, at) in list(self._removed_recently.items()):
+            if now - at > RESTORE_WINDOW_MS:
+                self._removed_recently.pop(job_id, None)
+        while len(self._removed_recently) > RESTORE_KEEP:
+            oldest = min(self._removed_recently, key=lambda k: self._removed_recently[k][2])
+            self._removed_recently.pop(oldest, None)
+
+    def restore_job(self, job_id: str) -> Literal["restored", "taken", "not_found"]:
+        """Rimette un job tolto da poco: l'«Annulla» dopo un cestino.
+
+        Lo stesso job, con il suo id, il suo orario e la sua storia — non uno
+        nuovo con lo stesso testo. Entro ``RESTORE_WINDOW_MS`` dall'eliminazione,
+        e finche' il gateway non si riavvia: e' un ripensamento, non un cestino.
+
+        La prossima esecuzione si riconta **da adesso**, come una ripresa dalla
+        pausa (:func:`next_run_on_resume`): un «ogni ora» tolto e rimesso non
+        scatta subito per recuperare. Un ``at`` passato nel frattempo torna in
+        pausa invece di scattare in ritardo. ``taken`` se nel frattempo un job
+        con lo stesso id esiste gia' (non succede con gli id opachi, ma non si
+        sovrascrive).
+
+        Un job di un quaderno torna nello scheduler ma non sulla bacheca: la
+        casa offre «Annulla» solo per i promemoria della chat personale.
+        """
+        now = _now_ms()
+        self._prune_removed(now)
+        entry = self._removed_recently.get(job_id)
+        if entry is None:
+            return "not_found"
+        store = self._load_store()
+        if any(j.id == job_id for j in store.jobs):
+            return "taken"
+        job, runs, _at = entry
+        job = copy.deepcopy(job)
+        if job.enabled:
+            if job.schedule.kind == "zone":
+                job.state.zone_inside = None
+                job.state.next_run_at_ms = None
+            elif can_resume(job, now):
+                job.state.next_run_at_ms = next_run_on_resume(job, now)
+            else:
+                # Un ``at`` scaduto mentre era tolto: torna, ma in pausa.
+                job.enabled = False
+                job.state.next_run_at_ms = None
+                job.paused_at_ms = now
+        job.updated_at_ms = now
+        store.jobs.append(job)
+        self._save_store()
+        self._removed_recently.pop(job_id, None)
+        for record in reversed(runs):
+            with suppress(Exception):
+                cron_store.write_run(
+                    self._db, str(record.get("run_id") or ""), job_id,
+                    int(record.get("updated_at_ms") or now), record,
+                )
+        self._arm_timer()
+        if job.schedule.kind == "zone":
+            self._zones_changed()
+        logger.info("Cron: restored job '{}' ({})", job.name, job.id)
+        return "restored"
 
     def set_paused(
         self, job_id: str, paused: bool
