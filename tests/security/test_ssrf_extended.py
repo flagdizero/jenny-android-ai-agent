@@ -302,11 +302,12 @@ def test_ssrf_whitelist_applies_identically_to_both_policies():
 
 
 def test_app_server_policy_never_grants_loopback_even_with_lan_whitelist():
-    """Anche whitelistando l'intero /8 di loopback, la policy app-server deve
-    restare progettata per bloccare il loopback (nessuna whitelist bypassa
-    quella scelta esplicita nel codice sorgente: ``_APP_SERVER_BLOCKED_NETWORKS``
-    include sempre 127.0.0.0/8, e ``_is_blocked`` consulta la whitelist globale
-    PRIMA del blocklist, quindi qui documentiamo il comportamento reale)."""
+    """Whitelistare l'intero /8 di loopback non apre il telefono alle app.
+
+    Fino al 25/11/2026 lo apriva: ``_is_blocked`` consultava la whitelist prima
+    di ogni blocco, e questo test documentava il buco come «comportamento
+    reale». Ora il pavimento (``_THE_PHONE_ITSELF``) viene prima della whitelist.
+    """
     configure_ssrf_whitelist(["127.0.0.0/8"])
     try:
         with patch(
@@ -314,11 +315,8 @@ def test_app_server_policy_never_grants_loopback_even_with_lan_whitelist():
             _fake_resolve("self.example", ["127.0.0.1"]),
         ):
             ok, err = validate_app_server_target("http://self.example/x")
-            # Nota: la whitelist ha priorità sul blocklist in _is_blocked, quindi
-            # whitelistare 127.0.0.0/8 SBLOCCA il loopback anche per app_server.
-            # Comportamento reale verificato, non quello "auspicato" dal commento
-            # del modulo (che parla di loopback come limite sempre attivo).
-            assert ok, f"whitelist ha priorità sul blocklist per design attuale, got: {err}"
+        assert not ok
+        assert "127.0.0.1" in err
     finally:
         configure_ssrf_whitelist([])
 

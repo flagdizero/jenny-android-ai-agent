@@ -106,6 +106,21 @@ _SSH_BLOCKED_NETWORKS = [
 
 _allowed_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
 
+# Il telefono stesso: loopback, «questa rete» (``0.0.0.0/8``, dove ``0.0.0.0``
+# arriva all'host) e ``::/96`` (``::``, ``::1`` e il loopback scritto
+# IPv4-compatibile, ``::127.0.0.1``). È il **pavimento** di tutte e tre le
+# policy, controllato prima della whitelist: ``security.ssrfWhitelist`` apre
+# fasce di rete, mai il telefono. Prima del 25/11/2026 lo aveva solo l'SSH; una
+# voce scritta a mano che copriva ``127.0.0.0/8`` lasciava arrivare
+# ``web_fetch``, ``http_get``, i socket di ``python_exec`` e le Jenny App
+# all'API del gateway dall'interno. La rete di casa dell'officina quelle voci
+# già non le crea (``webui/home_network.py``).
+_THE_PHONE_ITSELF = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("0.0.0.0/8"),
+    ipaddress.ip_network("::/96"),
+]
+
 
 def configure_ssrf_whitelist(cidrs: list[str]) -> None:
     """Allow specific CIDR ranges to bypass SSRF blocking (e.g. Tailscale's 100.64.0.0/10)."""
@@ -159,10 +174,24 @@ def _is_blocked(
     addr: ipaddress.IPv4Address | ipaddress.IPv6Address,
     blocked_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
 ) -> bool:
+    if is_the_phone(addr):
+        return True
     normalized = _normalize_addr(addr)
     if _allowed_networks and any(normalized in net for net in _allowed_networks):
         return False
     return any(form in net for form in _address_forms(addr) for net in blocked_networks)
+
+
+def is_the_phone(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """True se una forma dell'indirizzo porta al telefono stesso (v. ``_THE_PHONE_ITSELF``).
+
+    Nessuna whitelist lo cambia.
+    """
+    return any(
+        form.is_loopback or form.is_unspecified
+        or any(form in net for net in _THE_PHONE_ITSELF)
+        for form in _address_forms(addr)
+    )
 
 
 def is_blocked_ip(ip: str) -> bool:
@@ -259,9 +288,9 @@ def validate_ssh_target(host: str) -> tuple[bool, str]:
     the SSH tool as a bridge back to the gateway's own API — and so do
     link-local/metadata and 0.0.0.0/8 (see ``_SSH_BLOCKED_NETWORKS``).
 
-    The loopback check is deliberately made **before** the blocklist, because
-    the blocklist yields to ``security.ssrfWhitelist`` and this must not: a
-    range opened for ``web_fetch`` would otherwise open the phone to SSH too.
+    The phone itself (loopback, unspecified) is refused before anything else,
+    whitelist included: the same floor ``_is_blocked`` applies to every policy
+    (``_THE_PHONE_ITSELF``), checked here first only to say so in its own words.
 
     Unlike the URL validators this takes a bare hostname: SSH has no scheme to
     parse, so ``_validate_target`` (which requires http/https) does not apply.
@@ -291,16 +320,9 @@ def validate_ssh_target(host: str) -> tuple[bool, str]:
         return False, f"Cannot resolve hostname: {hostname}"
 
     for addr in addrs:
-        # Il pavimento, controllato PRIMA della whitelist. ``_is_blocked``
-        # consulta ``_allowed_networks`` per primo, quindi chi apre una fascia
-        # per ``web_fetch`` la aprirebbe anche qui: bastava mettere in whitelist
-        # un intervallo che copre 127.0.0.0/8 perche l'agente potesse aprire una
-        # sessione SSH verso il telefono stesso, e con essa raggiungere l'API del
-        # gateway dall'interno. Il loopback e la sola cosa che questa policy
-        # promette senza condizioni: qui non si negozia.
-        # Il non specificato (`0.0.0.0`, `::`) è il telefono tanto quanto il
-        # loopback: una connessione verso di lui arriva all'host stesso.
-        if any(form.is_loopback or form.is_unspecified for form in _address_forms(addr)):
+        # Il pavimento sta anche dentro ``_is_blocked``; qui si controlla prima
+        # solo per dire con parole sue perché l'host è rifiutato.
+        if is_the_phone(addr):
             return False, f"Blocked: {hostname} resolves to the phone itself ({addr})"
         if _is_blocked(addr, _SSH_BLOCKED_NETWORKS):
             return False, f"Blocked: {hostname} resolves to {addr}"
