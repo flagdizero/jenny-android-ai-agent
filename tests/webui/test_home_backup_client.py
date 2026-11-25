@@ -116,6 +116,15 @@ class HomeBackup {
 
 const notices = [];
 const day = 86400000;
+// N giorni di calendario fa, alla stessa ora: la stanza conta i giorni del
+// calendario (``dayOffset``), non i blocchi di 24 ore. ``Date.now() - 47 * day``
+// alle 23 passate, con un cambio d'ora in mezzo, cadeva un giorno dopo e il
+// test diceva 46 (visto il 25/11/2026 alle 23:03).
+function daysBack(n, from = Date.now()) {
+  const d = new Date(from);
+  d.setDate(d.getDate() - n);
+  return d.getTime();
+}
 function room(backup) {
   for (const k of Object.keys(nodi)) delete nodi[k];
   exportOutcome = true;
@@ -196,7 +205,7 @@ def test_the_row_says_when_like_a_person_would() -> None:
 
       /* I secondi epoch del config diventano millisecondi: sbagliare la
          conversione darebbe «gennaio 1970», che a schermo sembra un guasto. */
-      const threeDays = (Date.now() - 3 * day) / 1000;
+      const threeDays = daysBack(3) / 1000;
       assert.ok(!backupValue({ last_export_at: threeDays }).includes('1970'),
         backupValue({ last_export_at: threeDays }));
 
@@ -431,13 +440,13 @@ def test_an_old_file_turns_the_row_yellow_and_says_the_days() -> None:
     («47 giorni fa»), e va colorata. Mai fatto non si colora: il primo giorno
     sarebbe un rimprovero, e la riga dice gia' «mai»."""
     _run_js("""
-      const old = (Date.now() - 47 * day) / 1000;
+      const old = daysBack(47) / 1000;
       const s = room({ last_export_at: old });
       assert.equal(s.stale(), 47);
       assert.equal(s.value(), i18n.t('scope.ago.days', { n: '47' }));
       assert.equal(s.warn(), true);
 
-      const fresh = room({ last_export_at: (Date.now() - 10 * day) / 1000 });
+      const fresh = room({ last_export_at: daysBack(10) / 1000 });
       assert.equal(fresh.stale(), 0);
       assert.equal(fresh.warn(), false);
 
@@ -452,8 +461,8 @@ def test_the_room_says_how_old_and_what_would_be_lost() -> None:
     """In cima alla stanza: da quanti giorni, quanti salvataggi locali sono
     venuti dopo (quel che un telefono perso si porterebbe via), e il gesto."""
     _run_js(_TAP + """
-      const exported = (NOW - 40 * day) / 1000;
-      SNAPS.list = [snap(1), snap(2), { id: 'vecchio', created_at_ms: NOW - 50 * day, trigger: 'auto' }];
+      const exported = daysBack(40, NOW) / 1000;
+      SNAPS.list = [snap(1), snap(2), { id: 'vecchio', created_at_ms: daysBack(50, NOW), trigger: 'auto' }];
       const s = room({ last_export_at: exported });
       const card = nodi['home-backup-stale'];
       assert.equal(card.hidden, false);
@@ -473,7 +482,7 @@ def test_the_room_says_how_old_and_what_would_be_lost() -> None:
 def test_an_unreadable_history_keeps_the_plain_sentence() -> None:
     _run_js(_TAP + """
       SNAPS.list = null;
-      const s = room({ last_export_at: (NOW - 40 * day) / 1000 });
+      const s = room({ last_export_at: daysBack(40, NOW) / 1000 });
       await s.open();
       assert.ok(nodi['home-backup-stale'].innerHTML.includes(i18n.t('home.backup.stale.sub')));
     """)
@@ -484,7 +493,7 @@ def test_an_extension_that_copies_by_itself_silences_the_notice() -> None:
     la copia spenta l'avviso vale anche li'. L'estensione puo' colorare la riga
     per conto suo (una copia in ritardo)."""
     _run_js(_EXTENSION + """
-      const s = room({ last_export_at: (Date.now() - 60 * day) / 1000 });
+      const s = room({ last_export_at: daysBack(60) / 1000 });
       ext.covers = true;
       ext.coversBackup = function () { return this.covers; };
       ext.warn = function () { return false; };
