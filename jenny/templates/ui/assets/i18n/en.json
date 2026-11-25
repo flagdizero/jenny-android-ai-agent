@@ -497,6 +497,11 @@
       "summaryOnMany": "on · {count} connected",
       "failed": "Didn't work: {error}"
     },
+    "webAccess": {
+      "enable": "{name} goes on the web",
+      "hint": "Turns off {name}'s search, page reading and browser together.",
+      "saved": "Saved. New helpers follow it right away, the chat from the next start."
+    },
     "homeNet": {
       "title": "Home network",
       "hint": "{name}'s tools can't reach the addresses of your network, for safety. Here you open one at a time: the NAS, Home Assistant, another computer.",

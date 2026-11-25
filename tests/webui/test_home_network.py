@@ -91,3 +91,27 @@ async def test_not_from_a_remote_connection(config_file, monkeypatch) -> None:
     with pytest.raises(CommandError) as err:
         await dispatch_command(None, "network.add", {"address": "192.168.1.20"})
     assert err.value.code == "phone_only"
+
+
+async def test_the_web_switch_writes_the_config_and_says_when_it_counts(config_file) -> None:
+    """``network.web_access``: l'interruttore del web, dall'officina invece che da config.json."""
+    out = await dispatch_command(None, "network.web_access", {"enabled": False})
+    assert out["requires_restart"] is True
+    assert out["web_search"]["enabled"] is False
+    on_disk = json.loads(config_file.read_text(encoding="utf-8"))["tools"]["androidWeb"]
+    assert on_disk["enable"] is False
+
+    again = await dispatch_command(None, "network.web_access", {"enabled": False})
+    assert again["requires_restart"] is False, "nessun cambio, niente da riavviare"
+
+    back = await dispatch_command(None, "network.web_access", {"enabled": True})
+    assert back["requires_restart"] is True and back["web_search"]["enabled"] is True
+
+
+@pytest.mark.parametrize("value", ["0", 1, None, "false"])
+async def test_the_web_switch_wants_a_boolean(config_file, value) -> None:
+    before = config_file.read_text(encoding="utf-8")
+    with pytest.raises(CommandError) as err:
+        await dispatch_command(None, "network.web_access", {"enabled": value})
+    assert err.value.code == "bad_request"
+    assert config_file.read_text(encoding="utf-8") == before

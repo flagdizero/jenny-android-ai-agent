@@ -1050,6 +1050,7 @@ def settings_payload(
             "tool_hint_max_length": defaults.tool_hint_max_length,
         },
         "web_search": {
+            "enabled": config.tools.android_web.enable,
             "max_results": android_web_search.max_results,
             "timeout": android_web_search.timeout,
             "fetch_max_chars": android_web_fetch.max_chars,

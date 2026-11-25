@@ -1,4 +1,4 @@
-"""I comandi ``network.*``: la «Rete di casa» dell'officina.
+"""I comandi ``network.*``: la «Rete di casa» dell'officina, e l'interruttore del web.
 
 Scritture, quindi comandi del WebSocket e non route ``/api/``
 (``CONTRIBUTING.md``). Le regole stanno in ``home_network.py``; qui la porta,
@@ -61,7 +61,45 @@ async def network_remove(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     return await _write(lambda config: remove_entry(config, entry))
 
 
+async def network_web_access(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Accende o spegne il web di Jenny (``enabled``): ``tools.androidWeb.enable``.
+
+    Un interruttore solo per ``web_search``, ``web_fetch`` e i ``browser_*``
+    (``AndroidWebGateMixin``). Fino al 25/11/2026 viveva solo in ``config.json``.
+
+    **Vale dal prossimo avvio per la chat**: gli strumenti si registrano
+    all'avvio e la lista di una chat non cambia da un turno all'altro (la cache
+    del provider comincia da lì, v. ``AgentLoop._turn_tool_view``). Gli aiutanti
+    nuovi invece rileggono la config viva (``subagent_toolbox``) e lo seguono
+    subito. ``requires_restart`` dice alla casa se c'è stato un cambio.
+
+    Non è «solo dal telefono» come la rete di casa: spegnere o riaccendere il web
+    non apre niente che il gateway non apra già di suo.
+    """
+    from jenny.config.store import mutate
+    from jenny.webui.settings_api import settings_payload
+
+    enabled = params.get("enabled")
+    if not isinstance(enabled, bool):
+        raise CommandError("bad_request", "enabled must be true or false")
+    changed = False
+
+    def _apply(config: Any) -> bool:
+        nonlocal changed
+        web = config.tools.android_web
+        if web.enable == enabled:
+            return False
+        web.enable = enabled
+        changed = True
+        return True
+
+    await mutate(_apply)
+    return {"ok": True, "web_search": settings_payload()["web_search"],
+            "requires_restart": changed}
+
+
 NETWORK_COMMANDS = {
     "network.add": network_add,
     "network.remove": network_remove,
+    "network.web_access": network_web_access,
 }

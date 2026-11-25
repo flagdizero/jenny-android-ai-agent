@@ -497,6 +497,11 @@
       "summaryOnMany": "acceso · {count} collegati",
       "failed": "Non riuscito: {error}"
     },
+    "webAccess": {
+      "enable": "{name} va sul web",
+      "hint": "Spegne insieme la ricerca, la lettura delle pagine e il browser di {name}.",
+      "saved": "Salvato. Gli aiutanti nuovi lo seguono subito, la chat dal prossimo avvio."
+    },
     "homeNet": {
       "title": "Rete di casa",
       "hint": "Gli strumenti di {name} non raggiungono gli indirizzi della tua rete, per sicurezza. Qui ne apri uno alla volta: il NAS, Home Assistant, un altro computer.",
