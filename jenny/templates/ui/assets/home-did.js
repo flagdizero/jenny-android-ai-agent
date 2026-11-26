@@ -13,6 +13,12 @@
  *  verbale): la chat avvisa quando ne mostra (`onTurnsShown`), dal vivo a turno
  *  finito e dopo ogni pagina di storia, e qui si chiedono i conti di tutte in
  *  una richiesta.
+ *
+ *  I conti gia' avuti si tengono (`_known`) e si **ridisegnano** a ogni
+ *  avviso: il filo si rifa' da capo quando lo si ricarica o si cambia chat, e
+ *  le righe disegnate prima non ci sono piu'. Si richiedono al server solo i
+ *  turni mai chiesti, quello appena chiuso (`fresh`: mentre girava i conti
+ *  erano parziali) e quelli con un aiutante ancora al lavoro.
  */
 
 import { i18n } from './shared/i18n.js';
@@ -22,8 +28,7 @@ import { doneNode } from './shared/peer-card.js';
 import { showToast, showUndo } from './shared/utils.js';
 
 const t = (key, params) => i18n.t(`home.did.${key}`, params);
-/* I conti chiesti per la stessa risposta non si richiedono: un turno chiuso
-   non cambia, tranne quando lo cambia questa stanza (che lo richiede da se'). */
+/* Quanti turni in una richiesta: il tetto di `turn.summaries`. */
 const MAX_BATCH = 120;
 
 /** «Ho fatto: 1 file, 1 promemoria»; con un aiutante al lavoro lo dice. */
@@ -45,31 +50,58 @@ export class HomeDid {
   /** @param thread  `#home-thread`, dove stanno le risposte. */
   constructor({ thread } = {}) {
     this.thread = thread || document.getElementById('home-thread');
-    this._asked = new Set();
+    /* I conti avuti, per turno; `null` = il server ha detto «niente riga». */
+    this._known = new Map();
+    /* I turni con un aiutante ancora al lavoro: i loro conti cambieranno. */
+    this._working = new Set();
     this.thread?.addEventListener('click', (e) => {
       const btn = e.target.closest?.('.home-did');
       if (btn) this._toggle(btn);
     });
   }
 
-  /** La chat ha mostrato queste risposte: i conti, e la riga dove serve. */
-  async ask(turns) {
-    const fresh = [...new Set((turns || []).filter((id) => id && !this._asked.has(id)))];
-    if (!fresh.length) return;
-    for (const id of fresh) this._asked.add(id);
-    for (let i = 0; i < fresh.length; i += MAX_BATCH) {
-      const batch = fresh.slice(i, i + MAX_BATCH);
+  /** La chat ha mostrato queste risposte: i conti, e la riga dove serve.
+   *
+   *  Quel che si sa gia' si ridisegna subito (i nodi possono essere nuovi);
+   *  al server vanno i turni mai chiesti, tutti quelli di *turns* con `fresh`
+   *  (un turno appena chiuso, o cambiato da questa stanza), e quelli con un
+   *  aiutante al lavoro, a ogni giro: quando l'aiutante finisce il suo
+   *  resoconto e' un turno nuovo, e la sua fine passa di qui. */
+  async ask(turns, { fresh = false } = {}) {
+    const shown = [...new Set((turns || []).filter(Boolean))];
+    const wanted = new Set(this._working);
+    for (const id of shown) {
+      if (fresh || !this._known.has(id)) wanted.add(id);
+      else this._show(id, this._known.get(id));
+    }
+    const list = [...wanted];
+    for (let i = 0; i < list.length; i += MAX_BATCH) {
+      const batch = list.slice(i, i + MAX_BATCH);
       let answer;
       try {
         answer = await rpc.turn('summaries', { turns: batch });
       } catch {
-        for (const id of batch) this._asked.delete(id);
-        return;
+        return;   // niente in `_known`: al prossimo avviso si richiede
       }
-      for (const [turn, summary] of Object.entries(answer?.turns || {})) {
-        this._paint(turn, summary);
-      }
+      for (const turn of batch) this._learn(turn, answer?.turns?.[turn] || null);
     }
+  }
+
+  /* I conti di *turn*, appena arrivati o cambiati qui: si tengono e si disegnano. */
+  _learn(turn, summary) {
+    this._known.set(turn, summary);
+    if (summary?.working) this._working.add(turn);
+    else this._working.delete(turn);
+    this._show(turn, summary);
+  }
+
+  /* La riga di *turn* com'e' adesso: disegnata, o tolta se non ne ha piu'. */
+  _show(turn, summary) {
+    if (summary && didLabel(summary)) {
+      this._paint(turn, summary);
+      return;
+    }
+    this._node(turn)?.querySelector('.home-did')?.remove();
   }
 
   /** L'ultima risposta di *turn* nel filo (un turno lungo puo' averne piu'). */
@@ -133,6 +165,8 @@ export class HomeDid {
       parts.push(button('home-did-act', t('redo'), () => this._redo(turn, node)));
     } else if (work.state === 'expired') {
       parts.push(el('p', 'home-did-note', t('expired')));
+    } else if (work.running) {
+      parts.push(el('p', 'home-did-note', t('runningNote')));
     } else if (work.working) {
       parts.push(el('p', 'home-did-note', t('workingNote')));
     } else if (work.expect_end) {
@@ -148,12 +182,13 @@ export class HomeDid {
     try {
       await rpc.turn('undo', { turn, expect_end: expectEnd });
     } catch (err) {
-      const key = err?.code === 'conflict' ? 'conflict' : err?.code === 'busy' ? 'workingNote' : 'failed';
+      const key = { conflict: 'conflict', busy: 'workingNote', running: 'runningNote' }[err?.code]
+        || 'failed';
       showToast(t(key), 'error');
       await this._open(turn, node);
       return;
     }
-    this._paint(turn, { state: 'undone' });
+    this._learn(turn, { ...(this._known.get(turn) || {}), state: 'undone', working: false });
     node.querySelector('.home-did-detail')?.remove();
     node.querySelector('.home-did')?.setAttribute('aria-expanded', 'false');
     showUndo(t('undoneLabel'), () => this._redo(turn, node), { label: i18n.t('apps.undo') });
@@ -167,7 +202,6 @@ export class HomeDid {
       return;
     }
     node.querySelector('.home-did-detail')?.remove();
-    this._asked.delete(turn);
-    await this.ask([turn]);
+    await this.ask([turn], { fresh: true });
   }
 }

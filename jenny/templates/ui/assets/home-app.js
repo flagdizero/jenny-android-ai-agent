@@ -742,7 +742,7 @@ class HomeApp {
     this.chat.onOpenModel = () => this.openModelFromChat();
     /* «Ho fatto» sotto le risposte dei turni che hanno toccato qualcosa. */
     this.did = new HomeDid({ thread: this.chat.el });
-    this.chat.onTurnsShown = (turns) => this.did.ask(turns);
+    this.chat.onTurnsShown = (turns, { closed = false } = {}) => this.did.ask(turns, { fresh: closed });
     /* I due comandi della bacheca in testa: la lente, l'unica porta verso
        tutto, e l'elenco al posto della bacheca. */
     this.boardSearchBtn = document.getElementById('home-board-search-open');

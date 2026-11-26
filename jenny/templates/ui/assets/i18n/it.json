@@ -1924,6 +1924,7 @@
       "undoneNote": "Sei tornato a prima di questo turno.",
       "expired": "È passato troppo tempo: da qui non si torna più indietro.",
       "workingNote": "Un aiutante di questo turno sta ancora lavorando: aspetta che finisca.",
+      "runningNote": "Questo turno non è ancora finito: aspetta che finisca.",
       "conflict": "Qualcosa è cambiato nel frattempo: ecco l'elenco di adesso.",
       "failed": "Non ci sono riuscita, riprova."
     },

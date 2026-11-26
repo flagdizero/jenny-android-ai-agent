@@ -88,3 +88,76 @@ assert.ok(undo, 'nessun Annulla dopo il ritorno');
 undo.click();
 await until(() => calls.some(([m]) => m === 'redo'), { msg: 'Annulla non rimette' });
 """)
+
+
+def test_the_rows_come_back_when_the_thread_is_drawn_again() -> None:
+    """Il filo riletto ha nodi nuovi: la riga torna, senza richiedere i conti."""
+    run_home(_HEAD + """
+threads['websocket:default'] = { messages: [
+  { role: 'user', text: 'scrivi la lista', turnId: 'turn-a' },
+  { role: 'assistant', text: 'fatto', turnId: 'turn-a' },
+] };
+const app = await boot();
+await until(() => did().length, { msg: 'nessuna riga al primo disegno' });
+const first = did()[0];
+await app.chat.reload();
+await until(() => did().length === 1 && did()[0] !== first,
+  { msg: 'dopo la rilettura la riga non torna' });
+assert.equal(asked.filter((t) => t === 'turn-a').length, 1, 'i conti di un turno chiuso richiesti due volte');
+""")
+
+
+def test_a_turn_asked_while_it_ran_is_asked_again_at_its_end() -> None:
+    """I conti presi a meta' turno sono parziali: alla fine si richiedono."""
+    run_home(_HEAD + """
+delete touched['turn-a'];
+const app = await boot();
+frame({ event: 'stream_end', chat_id: 'default', turn_id: 'turn-a', text: 'sto scrivendo la lista' });
+await tick(10);
+/* Una pagina di storia caricata in mezzo: la bolla del turno in corso non si chiede. */
+app.chat._shownTurns();
+await tick(10);
+assert.ok(!asked.includes('turn-a'), 'il turno in corso chiesto prima della fine');
+/* E se qualcuno l'ha chiesto lo stesso, a meta': niente riga, ancora. */
+await app.did.ask(['turn-a']);
+assert.equal(did().length, 0);
+touched['turn-a'] = { files: 1, jobs: 0, others: 0, working: false, state: 'open' };
+frame({ event: 'turn_end', chat_id: 'default', turn_id: 'turn-a' });
+await until(() => did().length, { msg: 'a fine turno i conti non sono stati richiesti' });
+""")
+
+
+def test_a_helper_still_working_is_asked_again_when_a_later_turn_ends() -> None:
+    """«Un aiutante lavora ancora» non resta scritto dopo che ha finito."""
+    run_home(_HEAD + """
+touched['turn-a'] = { files: 0, jobs: 0, others: 0, working: true, state: 'open' };
+threads['websocket:default'] = { messages: [
+  { role: 'user', text: 'cerca i voli', turnId: 'turn-a' },
+  { role: 'assistant', text: 'ci guardo', turnId: 'turn-a' },
+] };
+await boot();
+await until(() => did().length, { msg: 'nessuna riga per il turno con l\\u2019aiutante' });
+const before = did()[0].textContent;
+touched['turn-a'] = { files: 2, jobs: 0, others: 0, working: false, state: 'open' };
+frame({ event: 'stream_end', chat_id: 'default', turn_id: 'turn-b', text: 'l\\u2019aiutante ha finito' });
+frame({ event: 'turn_end', chat_id: 'default', turn_id: 'turn-b' });
+await until(() => did()[0]?.textContent !== before, { msg: 'la riga dice ancora che l\\u2019aiutante lavora' });
+assert.match(did()[0].textContent, /2/);
+""")
+
+
+def test_a_turn_still_running_says_so_instead_of_offering_to_go_back() -> None:
+    run_home(_HEAD + """
+threads['websocket:default'] = { messages: [
+  { role: 'user', text: 'scrivi', turnId: 'turn-a' },
+  { role: 'assistant', text: 'sto scrivendo', turnId: 'turn-a' },
+] };
+rpcAnswers['turn.work'] = (p) => ({ ok: true, turn: p.turn, working: false, running: true,
+  state: 'open', expect_end: null, items: [{ kind: 'file', label: 'notes/a.md', undoable: true }] });
+await boot();
+await until(() => did().length);
+did()[0].click();
+const detail = () => $('home-thread').querySelector('.home-did-detail');
+await until(() => detail()?.querySelector('.home-did-note'), { msg: 'nessuna nota sul turno in corso' });
+assert.equal(detail().querySelector('.home-did-act'), null, 'offre il ritorno a turno in corso');
+""")

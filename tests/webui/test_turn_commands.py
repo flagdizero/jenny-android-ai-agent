@@ -15,7 +15,10 @@ import pytest
 
 from jenny import db as jdb
 from jenny.agent import turn_work
+from jenny.agent.tools.android_web import AndroidWebFetchTool, AndroidWebSearchTool
+from jenny.agent.tools.browser import BrowserOpenTool
 from jenny.agent.write_journal import bind_journal, journal_for
+from jenny.bus.events import WEBUI_TURN_METADATA_KEY
 from jenny.cron.service import CronService
 from jenny.cron.types import CronSchedule
 from jenny.security.subagent_policy import check_write, settle_writes
@@ -66,7 +69,10 @@ def _do_a_turn(w, *, write=True, job=True, search=True) -> str | None:
             turn_work.note_job(created.id, "acqua")
             job_id = created.id
         if search:
-            turn_work.note({"kind": "egress", "what": "web_search", "label": "meteo", "undoable": False})
+            # Dalla dichiarazione dello strumento vero, come fa il runner: una nota
+            # scritta a mano qui aveva un ``what`` che nessuno strumento dichiara,
+            # e il test passava mentre ogni ricerca prendeva la riga.
+            turn_work.note_tool(object.__new__(AndroidWebSearchTool), {"query": "meteo"})
     return job_id
 
 
@@ -78,6 +84,16 @@ async def test_a_turn_that_touched_things_gets_its_counts(world) -> None:
 
 async def test_a_turn_that_only_searched_gets_no_row(world) -> None:
     _do_a_turn(world, write=False, job=False)
+    out = await dispatch_command(world.ctx, "turn.summaries", {"turns": [TURN]})
+    assert out["turns"] == {}
+
+
+async def test_a_turn_that_only_opened_pages_gets_no_row(world) -> None:
+    ref = turn_work.ref_for(world.root, TURN, session="websocket:default", chat="websocket:default")
+    with turn_work.bound(ref):
+        turn_work.note_tool(object.__new__(AndroidWebFetchTool), {"url": "https://x.example"})
+        turn_work.note_tool(object.__new__(BrowserOpenTool), {"url": "https://y.example"})
+    assert len(turn_work.read_row(world.root, TURN)["notes"]) == 2
     out = await dispatch_command(world.ctx, "turn.summaries", {"turns": [TURN]})
     assert out["turns"] == {}
 
@@ -105,6 +121,25 @@ async def test_back_to_before_the_turn_and_undo_of_it(world) -> None:
     assert (await dispatch_command(world.ctx, "turn.work", {"turn": TURN}))["state"] == "open"
 
 
+async def test_back_and_undo_of_it_work_more_than_once(world) -> None:
+    """Tornare a prima, ripensarci, e di nuovo: il secondo «Annulla» rimette i file.
+
+    Il registro del ritorno teneva le righe del giro prima, e il secondo redo
+    non rimetteva niente pur riaprendo il turno.
+    """
+    _do_a_turn(world, job=False, search=False)
+    page = world.root / "notes" / "a.md"
+    for _ in range(3):
+        work = await dispatch_command(world.ctx, "turn.work", {"turn": TURN})
+        back = await dispatch_command(
+            world.ctx, "turn.undo", {"turn": TURN, "expect_end": work["expect_end"]})
+        assert back["restored"] == 1
+        assert page.read_text(encoding="utf-8") == "before"
+        again = await dispatch_command(world.ctx, "turn.redo", {"turn": TURN})
+        assert again["restored"] == 1
+        assert page.read_text(encoding="utf-8") == "after"
+
+
 async def test_a_file_changed_after_the_preview_is_a_conflict(world) -> None:
     _do_a_turn(world, job=False, search=False)
     work = await dispatch_command(world.ctx, "turn.work", {"turn": TURN})
@@ -125,6 +160,46 @@ async def test_not_while_a_helper_of_the_turn_is_working(world) -> None:
         await dispatch_command(world.ctx, "turn.undo", {"turn": TURN})
     assert err.value.code == "busy"
     assert (world.root / "notes" / "a.md").read_text(encoding="utf-8") == "after"
+
+
+async def test_not_while_the_turn_itself_is_still_running(world) -> None:
+    """Un turno in corso non si riporta a prima: Jenny ci scriverebbe sopra."""
+    ref = turn_work.begin(
+        world.root, {WEBUI_TURN_METADATA_KEY: TURN}, session="websocket:default",
+        chat="websocket:default")
+    journal = journal_for(world.root, turn_work.turn_journal_key(TURN))
+    with turn_work.bound(ref), bind_journal(journal):
+        path = world.root / "notes" / "a.md"
+        check_write(path)
+        path.write_text("after", encoding="utf-8")
+        settle_writes("write_file")
+
+    work = await dispatch_command(world.ctx, "turn.work", {"turn": TURN})
+    assert work["running"] is True and work["expect_end"] is None
+    assert [i["label"] for i in work["items"]] == ["notes/a.md"]
+    with pytest.raises(CommandError) as err:
+        await dispatch_command(world.ctx, "turn.undo", {"turn": TURN})
+    assert err.value.code == "running"
+    assert path.read_text(encoding="utf-8") == "after"
+
+    turn_work.end(ref, journal)
+    work = await dispatch_command(world.ctx, "turn.work", {"turn": TURN})
+    assert work["running"] is False and work["expect_end"]
+    out = await dispatch_command(world.ctx, "turn.undo", {"turn": TURN, "expect_end": work["expect_end"]})
+    assert out["restored"] == 1
+    assert path.read_text(encoding="utf-8") == "before"
+
+
+async def test_a_turn_whose_task_died_is_not_running_for_ever() -> None:
+    """Se la fine del turno salta, il segno «in corso» cade col task che lo portava."""
+    turn = "t-1700000001-dead"
+
+    async def a_turn_that_never_ends_properly() -> None:
+        turn_work.begin(Path("."), {WEBUI_TURN_METADATA_KEY: turn})
+        assert turn_work.in_flight(turn)
+
+    await asyncio.create_task(a_turn_that_never_ends_properly())
+    assert not turn_work.in_flight(turn)
 
 
 async def test_bad_ids_are_refused(world) -> None:
