@@ -5,13 +5,14 @@ Scritture, quindi comandi del WebSocket e non route ``/api/``
 porta: i parametri, i codici d'errore, e il thread — leggere l'archivio intero
 e riscrivere un file sono millisecondi di disco che il loop non deve aspettare.
 
-- ``memory.list`` → le due sezioni (voci, lucchetti, dettagli persi), «di
-  recente», e ``dreaming`` se Dream sta lavorando adesso;
+- ``memory.list`` → le due sezioni (le frasi, col tema quelle di «Di te»),
+  «Tolte da te», ``dreaming`` se Dream sta lavorando adesso e ``sorting`` se
+  le frasi senza tema si stanno ordinando (parte da qui, in sottofondo);
 - ``memory.correct {file, id, text, reason}`` con ``reason`` ``changed`` o
-  ``wrong``;
+  ``wrong`` (la stanza manda sempre ``wrong``: la frase di prima non torna);
 - ``memory.remove {file, id}``;
-- ``memory.restore {id, after?, lock?}``: l'«Annulla» del cestino (con
-  ``lock`` com'era la voce prima), e «Rimetti» (sistemata da te).
+- ``memory.restore {id, lock?}``: «Rimetti», e l'«Annulla» del cestino (con
+  ``lock`` com'era la voce prima).
 
 Un id che non c'e' piu' risponde ``conflict``: la voce e' cambiata nel frattempo,
 e la stanza rilegge invece di scriverci sopra.
@@ -50,9 +51,18 @@ async def _run(fn: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> 
 
 
 async def memory_list(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
+    from jenny.agent import memory_themes
     from jenny.agent.memory_service import list_memory
 
-    return await _run(list_memory, _root(ctx))
+    root = _root(ctx)
+    out = await _run(list_memory, root)
+    llm = ctx.get_llm() if getattr(ctx, "get_llm", None) else None
+    if out.pop("unsorted", 0):
+        # Le frasi senza tema si ordinano in sottofondo: la stanza le mostra
+        # subito cosi' come sono, e si rilegge finche' ``sorting`` e' vero.
+        memory_themes.sort_in_background(root, llm)
+    out["sorting"] = memory_themes.sorting(root)
+    return out
 
 
 async def memory_correct(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -83,8 +93,7 @@ async def memory_restore(ctx: CommandContext, params: Mapping[str, Any]) -> dict
     lock = params.get("lock", True)
     if not isinstance(lock, bool):
         raise CommandError("bad_request", "lock must be a boolean")
-    return await _run(restore, _root(ctx), _id(params), after=_id(params, "after", required=False),
-                      lock=lock)
+    return await _run(restore, _root(ctx), _id(params), lock=lock)
 
 
 MEMORY_COMMANDS = {

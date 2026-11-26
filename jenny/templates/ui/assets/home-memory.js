@@ -1,35 +1,38 @@
 /** La casa — «Cosa ricorda di te».
  *
  *  Quel che Jenny sa di te (`USER.md`, «Di te») e i suoi appunti
- *  (`memory/MEMORY.md`, «I suoi appunti»), come frasi. Fino al 25/11/2026 si
- *  vedevano solo in officina, come Markdown grezzo nell'editor di file, che li
- *  riscriveva senza lasciare traccia.
+ *  (`memory/MEMORY.md`, «I suoi appunti»), come frasi.
  *
- *  - **Correggere**: un tocco sulla voce apre un foglio col testo; si dice se
- *    *e' cambiato* (prima era vero: resta come passato) o se *non era vero*
- *    (non torna piu'), e la scelta e' il salvataggio. La voce corretta e'
- *    «sistemata da te»: Dream non la riordina (cede solo a una correzione che
- *    dici in chat), ma resta tua da cambiare o togliere. Fino al 25/11/2026
- *    aveva un lucchetto, e si leggeva «non si tocca piu'».
- *  - **Togliere**: il cestino toglie subito, con «Annulla», che la rimette
- *    com'era — sistemata da te solo se lo era gia'. Una voce tolta non torna
- *    quando la nomini.
- *  - **Le versioni di prima**: quando una riscrittura ha perso un nome o un
- *    numero che nessun file dice piu', sotto la voce c'e' una riga chiusa; si
- *    apre sulla **frase vecchia intera**, coi dettagli persi evidenziati, e
- *    «Rimetti». Fino al 25/11/2026 erano righe di parole sciolte («Una
- *    riscrittura ha perso: Lost, Translation»), che da sole non si capivano.
- *  - **«Dimenticato di recente»**: quel che non e' piu' nella lista — tolto, o
- *    non vero. Le versioni vecchie di una voce che c'e' ancora stanno sotto di
- *    lei (`memory_service._recent`).
+ *  **Un ritratto a temi, di solo testo.** Le frasi di «Di te» stanno sotto un
+ *  tema (chi sei, persone, salute...), una scheda per tema; sulle righe non
+ *  c'e' nessuna icona. Il tema non e' nel file: lo tiene `agent/memory_themes.py`
+ *  e lo assegna il modello alle frasi che non l'hanno, in sottofondo, quando la
+ *  stanza si apre (`sorting`: una riga lo dice, e la stanza si rilegge).
+ *  Finche' nessuna frase ha un tema, stanno in fila.
  *
- *  Un gesto rilegge e ridisegna la stanza, ma **la posizione resta**: si
- *  ritrova la prima voce che si vedeva e la si rimette allo stesso punto
- *  (`keepPlace`). Prima un cestino in fondo alla lista poteva riportarti su.
+ *  Un tocco sulla frase apre il foglio, e li' c'e' tutto:
  *
- *  Tutto passa dai comandi `memory.*` (`webui/memory_commands.py`), che
- *  archiviano ogni formulazione che se ne va. Una voce cambiata nel frattempo
- *  risponde `conflict`: si rilegge, invece di scrivere sopra.
+ *  - **Correggere**: il testo e un solo «Salva». La frase di prima non torna da
+ *    sola, e quella che hai scritto tu Jenny non la riscrive quando riordina
+ *    (il lucchetto, che qui non si vede).
+ *  - **Togliere**: «Togli questa frase», poi «Annulla» per qualche secondo, che
+ *    la rimette com'era. Due tocchi, non uno: con un cestino su ogni riga una
+ *    frase si toglieva anche per sbaglio, scorrendo.
+ *  - **«Tolte da te»**: in fondo, chiusa, la lista di quel che hai tolto tu
+ *    nelle ultime settimane, con «Rimetti».
+ *
+ *  **Cosa non c'e', di proposito.** Fino al 26/11/2026 la stanza mostrava anche
+ *  i dettagli persi dalle riscritture, le formulazioni cambiate e quelle tolte
+ *  da Jenny, un lucchetto e due tasti per dire perche' si corregge. Erano i
+ *  meccanismi dell'archivio messi in vetrina: per meta' stime (un legame fra
+ *  due frasi scelto per somiglianza), e nessuno li capiva. L'archivio continua
+ *  a lavorare da solo — Jenny ripesca una formulazione vecchia quando la
+ *  nomini — e qui resta solo quel che e' certo.
+ *
+ *  Un gesto rilegge e ridisegna la stanza, ma **la posizione resta**
+ *  (`placeOf`/`restorePlace`). Tutto passa dai comandi `memory.*`
+ *  (`webui/memory_commands.py`); una voce cambiata nel frattempo risponde
+ *  `conflict`: si rilegge, invece di scrivere sopra.
  */
 
 import { i18n } from './shared/i18n.js';
@@ -42,6 +45,8 @@ import { showToast, showUndo } from './shared/utils.js';
 const t = (key, params) => i18n.t(`home.memory.${key}`, params);
 /* Mentre Dream lavora la stanza si rilegge da sola, con calma. */
 const DREAM_POLL_MS = 15_000;
+/* Mentre le frasi prendono un tema, piu' spesso: sono pochi secondi. */
+const SORT_POLL_MS = 2_500;
 
 /** La riga di riferimento per non perdere il punto: la prima che si vede in
  *  cima a *scroller*, con quanto sta sotto il bordo. `null` se non ce n'e'. */
@@ -71,26 +76,6 @@ export function restorePlace(scroller, place, fallbackTop) {
   scroller.scrollTop += delta;
 }
 
-/** Una frase con le parole di *words* evidenziate (`<mark>`), senza HTML. */
-export function markWords(text, words) {
-  const span = el('span', 'home-memory-old-text');
-  const wanted = (words || []).filter(Boolean)
-    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  if (!wanted.length) {
-    span.textContent = text;
-    return span;
-  }
-  const re = new RegExp(`(${wanted.join('|')})`, 'giu');
-  let last = 0;
-  for (const m of String(text).matchAll(re)) {
-    if (m.index > last) span.appendChild(document.createTextNode(text.slice(last, m.index)));
-    span.appendChild(el('mark', null, m[0]));
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) span.appendChild(document.createTextNode(text.slice(last)));
-  return span;
-}
-
 /** Il valore della riga di Impostazioni: quante cose sa di te. */
 export function memorySummary(data) {
   const mine = (data?.files || []).find((f) => f.file === 'user');
@@ -99,12 +84,31 @@ export function memorySummary(data) {
   return n ? t('count', { n }) : t('nothingYet');
 }
 
-/** Le righe di «Dimenticato di recente», con quel che si puo' fare. */
-export function recentRows(data) {
-  return (data?.recent || []).map((row) => ({
-    ...row,
-    canPutBack: row.kind === 'removed',
-  }));
+/* I temi, nell'ordine in cui si leggono (le chiavi di
+   `agent/memory_themes.py`). `other` e le frasi ancora senza tema in fondo. */
+const THEMES = ['identity', 'people', 'health', 'home', 'tastes', 'character', 'plans', 'answers'];
+
+/** Le frasi raggruppate per tema, nell'ordine di {@link THEMES}; in fondo
+ *  «Altro», con quelle che non ne hanno uno. Se nessuna ha un tema (il modello
+ *  non le ha ancora ordinate) torna un gruppo solo senza nome: la stanza le
+ *  mostra in fila, senza un «Altro» che le contiene tutte. */
+export function byTheme(entries) {
+  const groups = new Map(THEMES.map((key) => [key, []]));
+  const rest = [];
+  for (const entry of entries || []) {
+    if (groups.has(entry.theme)) groups.get(entry.theme).push(entry);
+    else rest.push(entry);
+  }
+  const out = THEMES.filter((key) => groups.get(key).length)
+    .map((key) => ({ key, entries: groups.get(key) }));
+  if (!out.length) return rest.length ? [{ key: '', entries: rest }] : [];
+  if (rest.length) out.push({ key: 'other', entries: rest });
+  return out;
+}
+
+/** Le frasi che hai tolto tu, per «Tolte da te». */
+export function removedRows(data) {
+  return (data?.recent || []).filter((row) => row.kind === 'removed');
 }
 
 export class HomeMemory {
@@ -117,7 +121,8 @@ export class HomeMemory {
     this.busy = false;
     this._failed = false;
     this._timer = null;
-    /* Le voci con le versioni di prima aperte: restano aperte a un ridisegno. */
+    /* Le sezioni chiuse che hai aperto: restano aperte a un ridisegno, e si
+       richiudono quando esci dalla stanza. */
     this._opened = new Set();
   }
 
@@ -129,6 +134,7 @@ export class HomeMemory {
 
   close() {
     this._open = false;
+    this._opened.clear();
     window.clearTimeout(this._timer);
     this._timer = null;
     closeActionSheet(this.sheet);
@@ -148,9 +154,8 @@ export class HomeMemory {
     }
     this.render();
     this.onChange?.(this.data);
-    if (this.data?.dreaming && this._open) {
-      this._timer = window.setTimeout(() => this.refresh(), DREAM_POLL_MS);
-    }
+    const wait = this.data?.sorting ? SORT_POLL_MS : this.data?.dreaming ? DREAM_POLL_MS : 0;
+    if (wait && this._open) this._timer = window.setTimeout(() => this.refresh(), wait);
   }
 
   render() {
@@ -165,30 +170,82 @@ export class HomeMemory {
     if (this.data.dreaming) {
       parts.push(el('div', 'home-memory-dreaming', t('dreaming', { name: botName.get() })));
     }
-    for (const file of this.data.files || []) {
-      parts.push(this._section(file));
-    }
-    const recent = recentRows(this.data);
-    if (recent.length) parts.push(this._recent(recent));
-    parts.push(el('p', 'home-memory-foot', t('foot', { name: botName.get() })));
+    const files = this.data.files || [];
+    const mine = files.find((f) => f.file === 'user');
+    const notes = files.find((f) => f.file === 'memory');
+    if (mine) parts.push(this._aboutYou(mine));
+    if (notes?.entries.length) parts.push(this._folded('notes', notes));
+    const removed = removedRows(this.data);
+    if (removed.length) parts.push(this._folded('removed', null, removed));
+    /* Vuota, la frase di sopra dice gia' come si riempie: niente piede. */
+    if (mine?.entries.length) parts.push(el('p', 'home-memory-foot', t('foot', { name: botName.get() })));
     this.body.replaceChildren(...parts);
     restorePlace(this.body, place, top);
   }
 
-  _section(file) {
+  /** «Di te»: sempre aperta, e' la stanza. */
+  _aboutYou(file) {
     const wrap = el('div', 'home-memory-section');
     wrap.dataset.file = file.file;
-    wrap.appendChild(el('div', 'home-memory-sec',
-      file.file === 'user' ? t('aboutYou') : t('herNotes', { name: botName.get() })));
+    const head = el('div', 'home-memory-sec');
+    head.append(el('span', null, t('aboutYou')),
+      el('span', 'home-memory-n', String(file.entries.length || '')));
+    wrap.appendChild(head);
     if (!file.entries.length) {
-      wrap.appendChild(el('p', 'home-memory-empty',
-        file.file === 'user' ? t('emptyUser', { name: botName.get() }) : t('emptyNotes')));
+      wrap.appendChild(el('p', 'home-memory-empty', t('emptyUser', { name: botName.get() })));
       return wrap;
     }
-    const list = el('div', 'home-rows home-memory-list');
-    for (const entry of file.entries) list.appendChild(this._entry(file.file, entry));
-    wrap.appendChild(list);
+    wrap.appendChild(el('p', 'home-memory-hint', t('hint')));
+    if (this.data.sorting) {
+      wrap.appendChild(el('p', 'home-memory-sorting', t('sorting', { name: botName.get() })));
+    }
+    for (const group of byTheme(file.entries)) {
+      if (!group.key) {
+        wrap.appendChild(this._list(file.file, group.entries));
+        continue;
+      }
+      const box = el('div', 'home-memory-theme');
+      box.dataset.theme = group.key;
+      const name = el('div', 'home-memory-theme-name');
+      name.dataset.place = `theme:${group.key}`;
+      name.append(el('span', null, t(`theme.${group.key}`)),
+        el('span', 'home-memory-n', String(group.entries.length)));
+      box.append(name, this._list(file.file, group.entries));
+      wrap.appendChild(box);
+    }
     return wrap;
+  }
+
+  /** Una sezione chiusa: «I suoi appunti» (`notes`) o «Tolte da te»
+   *  (`removed`). La testata e' un tasto; aperta, mostra le sue righe. */
+  _folded(kind, file, rows = null) {
+    const wrap = el('div', `home-memory-section is-folded is-${kind}`);
+    if (file) wrap.dataset.file = file.file;
+    const open = this._opened.has(kind);
+    const n = file ? file.entries.length : rows.length;
+    const head = button('home-memory-fold', null, () => {
+      if (this._opened.has(kind)) this._opened.delete(kind);
+      else this._opened.add(kind);
+      this.render();
+    });
+    head.dataset.place = `fold:${kind}`;
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const label = el('span', 'home-memory-fold-label');
+    label.append(el('span', null, t(kind === 'notes' ? 'herNotes' : 'removedByYou')),
+      el('span', 'home-memory-n', String(n)));
+    head.append(label, icon(open ? 'ti-chevron-up' : 'ti-chevron-down'));
+    wrap.appendChild(head);
+    if (!open) return wrap;
+    wrap.appendChild(el('p', 'home-memory-hint',
+      t(kind === 'notes' ? 'notesHint' : 'removedHint', { name: botName.get() })));
+    wrap.appendChild(kind === 'notes' ? this._list(file.file, file.entries) : this._removed(rows));
+    return wrap;
+  }
+
+  _list(fileKey, entries) {
+    const list = el('div', 'home-rows home-memory-list');
+    for (const entry of entries) list.appendChild(this._entry(fileKey, entry));
+    return list;
   }
 
   _entry(fileKey, entry) {
@@ -197,136 +254,80 @@ export class HomeMemory {
     row.dataset.place = entry.id;
     const text = button('home-memory-text', null, () => this._edit(fileKey, entry));
     text.appendChild(el('span', 'home-memory-sentence', entry.text));
-    if (entry.locked) {
-      const mine = el('span', 'home-memory-locked');
-      mine.append(icon('ti-pencil-check'), document.createTextNode(t('locked')));
-      text.appendChild(mine);
-    }
     row.appendChild(text);
-    const trash = button('home-memory-remove', null, () => this._remove(fileKey, entry));
-    trash.setAttribute('aria-label', t('remove'));
-    trash.appendChild(icon('ti-trash'));
-    row.appendChild(trash);
-    if (entry.lost?.length) row.appendChild(this._lost(entry));
     return row;
   }
 
-  /* Sotto la voce: una riga chiusa, «una versione di prima diceva di piu'».
-     Aperta, ogni frase vecchia intera coi dettagli persi evidenziati e il suo
-     «Rimetti», che la rimette accanto a questa. */
-  _lost(entry) {
-    const box = el('div', 'home-memory-lost');
-    const open = this._opened.has(entry.id);
-    const n = entry.lost.length;
-    const head = button('home-memory-lost-head', null, () => {
-      if (this._opened.has(entry.id)) this._opened.delete(entry.id);
-      else this._opened.add(entry.id);
-      this.render();
-    });
-    head.setAttribute('aria-expanded', open ? 'true' : 'false');
-    head.append(icon('ti-history'),
-      el('span', null, n === 1 ? t('lostOne') : t('lostMany', { n })),
-      icon(open ? 'ti-chevron-up' : 'ti-chevron-down'));
-    box.appendChild(head);
-    if (!open) return box;
-    for (const detail of entry.lost) {
-      const words = (detail.words || [detail.word]).filter(Boolean);
-      const old = el('div', 'home-memory-old');
-      const body = el('div', 'home-memory-old-body');
-      body.appendChild(markWords(detail.text || words.join(', '), words));
-      if (detail.date) body.appendChild(el('span', 'home-memory-why', t('oldDate', { date: detail.date })));
-      old.appendChild(body);
-      const put = button('home-memory-putback', t('putBack'),
-        () => this._restore(detail.id, entry.id));
-      put.setAttribute('aria-label', t('putBackDetail', { word: words.join(', ') }));
-      old.appendChild(put);
-      box.appendChild(old);
-    }
-    return box;
-  }
-
-  _recent(rows) {
-    const wrap = el('div', 'home-memory-section is-recent');
-    wrap.appendChild(el('div', 'home-memory-sec', t('recent')));
+  _removed(rows) {
     const list = el('div', 'home-rows home-memory-list');
     for (const row of rows) {
-      const node = el('div', `home-row home-memory-row is-${row.kind}`);
+      const node = el('div', 'home-row home-memory-row is-removed');
       node.dataset.id = row.id;
-      node.dataset.place = `recent:${row.id}`;
+      node.dataset.place = `removed:${row.id}`;
       const text = el('div', 'home-memory-text');
       text.appendChild(el('span', 'home-memory-sentence', row.text));
-      text.appendChild(el('span', 'home-memory-why', t(`kind.${row.kind}`)));
       node.appendChild(text);
-      if (row.canPutBack) {
-        node.appendChild(button('home-memory-putback', t('putBack'), () => this._restore(row.id)));
-      }
+      node.appendChild(button('home-memory-putback', t('putBack'), () => this._restore(row.id)));
       list.appendChild(node);
     }
-    wrap.appendChild(list);
-    return wrap;
+    return list;
   }
 
   /* ── I gesti ─────────────────────────────────────────────────────────── */
 
-  /** Il foglio di correzione: il testo, e se e' cambiato o non era vero. */
+  /** Il foglio di correzione: il testo e «Salva». */
   _edit(fileKey, entry) {
     const field = document.createElement('textarea');
     field.className = 'home-memory-field';
     field.value = entry.text;
     field.rows = 3;
     field.setAttribute('aria-label', t('fieldLabel'));
-    const choose = (reason) => this._correct(fileKey, entry, field.value, reason);
-    /* Due tasti che sono anche il salvataggio: ognuno dice cosa succede alla
-       frase di prima, perche' e' l'unica differenza fra i due. */
-    const choice = (cls, reason) => {
-      const b = button(cls, null, () => choose(reason));
-      b.append(el('span', 'home-memory-choice-title', t(reason)),
-        el('span', 'home-memory-choice-sub', t(`${reason}Sub`)));
-      return b;
-    };
-    const actions = el('div', 'home-memory-actions');
-    actions.append(
-      el('div', 'home-memory-why-label', t('whyLabel')),
-      choice('home-memory-changed', 'changed'),
-      choice('home-memory-wrong', 'wrong'),
-    );
+    const save = button('home-memory-save', t('save'),
+      () => this._correct(fileKey, entry, field.value));
+    const drop = button('home-memory-drop', null, () => {
+      closeActionSheet(this.sheet);
+      this._remove(fileKey, entry);
+    });
+    drop.append(icon('ti-trash'), el('span', null, t('removeThis')));
     openActionSheet(this.sheet, {
       closeLabel: t('close'),
       onClose: () => closeActionSheet(this.sheet),
       children: [
-        ...sheetHead(t('editTitle'), t('editSub', { name: botName.get() })),
+        ...sheetHead(t('editTitle'), t('editSub')),
         field,
-        actions,
-        el('p', 'home-plan-sheet-note', t('lockNote', { name: botName.get() })),
+        save,
+        drop,
+        el('p', 'home-plan-sheet-note', t('keepNote', { name: botName.get() })),
       ],
     });
     field.focus?.();
   }
 
-  async _correct(fileKey, entry, text, reason) {
+  /* Una correzione fatta qui dice che la frase di prima non andava: non torna
+     da sola col richiamo per nome (`reason: 'wrong'`). Un fatto che e' cambiato
+     davvero si racconta in chat, e lo scrive Jenny. */
+  async _correct(fileKey, entry, text) {
     if (!String(text || '').trim()) return;
-    const ok = await this._call('correct', { file: fileKey, id: entry.id, text, reason });
+    const ok = await this._call('correct', { file: fileKey, id: entry.id, text, reason: 'wrong' });
     if (ok) {
       closeActionSheet(this.sheet);
-      showToast(t(reason === 'wrong' ? 'savedWrong' : 'savedChanged'));
+      showToast(t('saved'));
     }
   }
 
-  /** Il cestino: via subito, e «Annulla» la rimette com'era — sistemata da te
-   *  solo se lo era gia' (`lock`). */
+  /** Il cestino: via subito, e «Annulla» la rimette com'era — col lucchetto
+   *  solo se lo aveva gia' (`lock`). */
   async _remove(fileKey, entry) {
     const ok = await this._call('remove', { file: fileKey, id: entry.id });
     if (!ok) return;
-    showUndo(t('removed'), () => this._restore(entry.id, null, { lock: Boolean(entry.locked) }),
+    showUndo(t('removed'), () => this._restore(entry.id, { lock: Boolean(entry.locked) }),
       { label: i18n.t('apps.undo') });
   }
 
-  /** «Rimetti» (una frase vecchia accanto a *after*, o una voce tolta): la
-   *  scegli tu, e Dream non la riordina via di nuovo. «Annulla» passa *lock*. */
-  async _restore(id, after = null, { lock = true } = {}) {
-    const params = after ? { id, after } : { id };
-    if (!lock) params.lock = false;
-    await this._call('restore', params);
+  /** «Rimetti» da «Tolte da te»: la scegli tu, e Jenny non la riordina via di
+   *  nuovo. «Annulla» passa *lock* com'era la voce. */
+  async _restore(id, { lock = true } = {}) {
+    await this._call('restore', lock ? { id } : { id, lock: false });
   }
 
   /* Un comando, poi si rilegge. `conflict`: la voce e' cambiata nel

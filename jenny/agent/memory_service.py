@@ -31,15 +31,14 @@ from typing import Any
 
 from jenny.agent.memory_archive import (
     ArchivedEntry,
-    archive_chains,
     archive_entry,
     find_archived,
     list_archived,
-    lost_details,
     read_archived,
     unarchive,
 )
 from jenny.agent.memory_locks import MemoryLocks
+from jenny.agent.memory_themes import THEMED_SOURCE, MemoryThemes
 from jenny.agent.tools.memory_entries import (
     _FRAGMENT_NOTE,
     ENTRIES_LOCK,
@@ -128,7 +127,12 @@ def _find(text: str, wanted: str) -> Entry | None:
 
 
 def list_memory(workspace: Path, *, today: date | None = None) -> dict[str, Any]:
-    """Le due sezioni, le voci col lucchetto, i dettagli persi e «di recente»."""
+    """Le due sezioni, il tema di ogni frase di «Di te», e «Tolte da te».
+
+    ``locked`` non si mostra: serve all'«Annulla» del cestino, che rimette la
+    voce com'era. ``unsorted`` e' quante frasi di ``USER.md`` non hanno ancora
+    un tema (``agent/memory_themes.py``): chi chiama decide se farle ordinare.
+    """
     from jenny.agent.dream_cycle import cycle_in_flight
 
     workspace = Path(workspace)
@@ -137,91 +141,45 @@ def list_memory(workspace: Path, *, today: date | None = None) -> dict[str, Any]
     with ENTRIES_LOCK:
         texts = {f.key: _read(f.path) for f in _files(workspace)}
         archived = list_archived(_memory_dir(workspace))
-    live_text = "\n".join(texts.values())
     entries = {f.key: parse_entries(texts[f.key]) for f in _files(workspace)}
-    live_ids = {e.id: f.key for f in _files(workspace) for e in entries[f.key]}
-
-    lost_by_entry = _lost_by_live_entry(archived, live_text, live_ids)
+    themes = MemoryThemes(workspace).all()
 
     files = []
+    unsorted = 0
     for f in _files(workspace):
         locked = locks.locked_ids(f.rel)
-        files.append({
-            "file": f.key,
-            "entries": [
-                {
-                    "id": e.id,
-                    "text": plain(e.text),
-                    "heading": e.heading,
-                    "locked": e.id in locked,
-                    "lost": lost_by_entry.get(e.id, []),
-                }
-                for e in entries[f.key]
-            ],
-        })
+        themed = f.rel == THEMED_SOURCE
+        rows = []
+        for e in entries[f.key]:
+            row: dict[str, Any] = {
+                "id": e.id,
+                "text": plain(e.text),
+                "heading": e.heading,
+                "locked": e.id in locked,
+            }
+            if themed:
+                row["theme"] = themes.get(e.id, "")
+                unsorted += not row["theme"]
+            rows.append(row)
+        files.append({"file": f.key, "entries": rows})
     return {
         "ok": True,
         "dreaming": cycle_in_flight(),
         "files": files,
+        "unsorted": unsorted,
         "recent": _recent(archived, today),
     }
 
 
-def _lost_by_live_entry(
-    archived: list[ArchivedEntry], live_text: str, live_ids: dict[str, str],
-) -> dict[str, list[dict[str, Any]]]:
-    """Per ogni voce viva, i nomi e i numeri che le sue formulazioni vecchie
-    dicevano e che nessun file vivo dice piu'.
-
-    Una catena dell'archivio finisce in una voce viva quando la sua versione
-    piu' recente punta (``superseded_by``) a un id che e' vivo: e' li' che la
-    stanza mette «Rimetti».
-    """
-    chains = archive_chains(archived)
-    by_chain: dict[int, str] = {}
-    for index, chain in enumerate(chains):
-        # La voce che punta fuori dall'archivio, non la piu' recente per data:
-        # due riscritture dello stesso giorno escono dall'archivio in un ordine
-        # che non dice quale sia venuta dopo.
-        target = next((v.superseded_by for v in chain.versions if v.superseded_by in live_ids), None)
-        if target:
-            by_chain[index] = target
-    if not by_chain:
-        return {}
-    lost = lost_details(chains, live_text, only=set(by_chain))
-    # Una riga per **frase vecchia**, con tutte le parole che porta: «Metal»,
-    # «Gear» e «Solid» vengono dalla stessa formulazione, e tre righe con tre
-    # «Rimetti» che rimettono la stessa frase erano rumore (visto sui dati veri
-    # di jenny_s22 il 25/11/2026: 51 righe su 62 voci).
-    out: dict[str, list[dict[str, Any]]] = {}
-    for index, details in lost.items():
-        live_id = by_chain[index]
-        bucket = out.setdefault(live_id, [])
-        by_version = {item["id"]: item for item in bucket}
-        seen = {w for item in bucket for w in item["words"]}
-        for detail in details:
-            if detail.shown in seen:
-                continue
-            seen.add(detail.shown)
-            item = by_version.get(detail.version.id)
-            if item is None:
-                item = {"words": [], "id": detail.version.id,
-                        "text": plain(detail.version.text), "date": detail.version.demoted}
-                by_version[detail.version.id] = item
-                bucket.append(item)
-            item["words"].append(detail.shown)
-    return out
-
-
 def _recent(archived: list[ArchivedEntry], today: date) -> list[dict[str, Any]]:
-    """«Dimenticato di recente»: quel che non e' piu' nella lista.
+    """«Tolte da te»: le frasi che ha tolto l'utente, nelle ultime settimane.
 
-    Le voci tolte (con «Rimetti») e quelle che non erano vere. Fino al
-    25/11/2026 c'erano anche le «cambiate», cioe' le formulazioni vecchie di
-    voci che ci sono ancora: ripetevano le stesse frasi una seconda volta (la
-    loro storia sta sotto la voce, ``lost``), e dove il legame si era rotto —
-    una riscrittura in chat prima che archiviasse — erano solo doppioni (15
-    righe su 29 su jenny_s22, 26/11/2026).
+    Solo ``forgotten``, che e' l'unico segno certo dell'archivio: il cestino
+    della stanza o una riga cancellata a mano in officina. Fino al 26/11/2026
+    qui c'erano anche le formulazioni cambiate e quelle tolte da Dream, cioe'
+    cose che l'archivio in parte indovina (un legame fra due frasi scelto per
+    somiglianza, una fusione scritta come una rimozione): 13 righe su 14 su
+    jenny_s22, e nessuno le capiva.
     """
     since = today - timedelta(days=RECENT_DAYS)
     rows: list[dict[str, Any]] = []
@@ -237,14 +195,10 @@ def _recent(archived: list[ArchivedEntry], today: date) -> list[dict[str, Any]]:
             continue
         if entry.source not in files:
             continue
-        if entry.retracted:
-            kind = "wrong"
-        elif entry.forgotten or not entry.superseded_by:
-            kind = "removed"
-        else:
+        if not entry.forgotten:
             continue
         row: dict[str, Any] = {
-            "kind": kind,
+            "kind": "removed",
             "id": entry.id,
             "text": plain(entry.text),
             "date": entry.demoted,
@@ -295,6 +249,9 @@ def correct(
         atomic_write(f.path, updated)
         if not locks.move(f.rel, old.id, new):
             locks.lock(f.rel, new)
+        if f.rel == THEMED_SOURCE:
+            # La frase corretta resta nel suo tema: e' la stessa cosa detta giusta.
+            MemoryThemes(workspace).inherit(old.id, new.id)
     return {"ok": True, "id": new.id}
 
 
@@ -322,21 +279,14 @@ def remove(workspace: Path, file_key: str, wanted: str) -> dict[str, Any]:
     return {"ok": True, "id": old.id}
 
 
-def restore(
-    workspace: Path, wanted: str, *, after: str | None = None, lock: bool = True,
-) -> dict[str, Any]:
-    """Rimette una formulazione archiviata, come voce viva e col lucchetto.
+def restore(workspace: Path, wanted: str, *, lock: bool = True) -> dict[str, Any]:
+    """Rimette una frase tolta, come voce viva, sotto la sua intestazione.
 
-    Senza lucchetto con ``lock=False``: e' l'«Annulla» del cestino su una voce
-    che non l'aveva, che deve tornare com'era e non «sistemata da te» (visto sul
-    Titan il 25/11/2026: ogni voce rimessa con «Annulla» prendeva il lucchetto).
-
-    Sotto la sua intestazione, o subito dopo la voce viva *after*: e' «Rimetti»
-    accanto a un dettaglio perso, dove la frase vecchia torna **accanto** a
-    quella nuova invece di sovrascriverla — la nuova puo' sapere cose che la
-    vecchia non sapeva. Il file d'archivio se ne va (``unarchive``): l'archivio
-    torna a voler dire «formulazioni non vive». L'«Annulla» del cestino e'
-    questa stessa funzione.
+    E' «Rimetti» di «Tolte da te» (col lucchetto: la scegli tu, e Dream non la
+    riordina via di nuovo) e l'«Annulla» del cestino, che passa ``lock`` com'era
+    la voce prima: senza, ogni voce rimessa con «Annulla» prendeva il lucchetto
+    (visto sul Titan il 25/11/2026). Il file d'archivio se ne va (``unarchive``):
+    l'archivio torna a voler dire «formulazioni non vive».
     """
     workspace = Path(workspace)
     memory_dir = _memory_dir(workspace)
@@ -353,17 +303,11 @@ def restore(
         current = _read(f.path)
         body = plain(archived.text)
         if _find(current, entry_id(archived.text)) is None:
-            anchor = _find(current, after) if after else None
-            if anchor is not None:
-                lines = current.splitlines()
-                bullet = f"- {body}" if "\n" not in body else "- " + body.replace("\n", "\n  ")
-                updated = "\n".join(lines[: anchor.end] + [bullet] + lines[anchor.end:]) + "\n"
-            else:
-                updated, why = add_entry(current, body, heading=archived.heading or None)
-                if why and not why.startswith("already present"):
-                    raise MemoryEditError("bad_request", why)
-                if why:
-                    updated = current
+            updated, why = add_entry(current, body, heading=archived.heading or None)
+            if why and not why.startswith("already present"):
+                raise MemoryEditError("bad_request", why)
+            if why:
+                updated = current
             atomic_write(f.path, updated)
             current = updated
         live = _find(current, entry_id(archived.text))
