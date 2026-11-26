@@ -57,8 +57,9 @@ _ALL_CAPS_MIN = 3
 _NAME_MIN = 2
 
 # Parole che si scrivono maiuscole senza essere ancore di un fatto: i giorni e
-# i mesi (in inglese vanno maiuscoli), le parole dell'app stessa e dei suoi
-# file. Piegate (``fold``). Il nome che l'utente ha dato a Jenny si aggiunge da
+# i mesi (in inglese vanno maiuscoli), gli articoli e le preposizioni corte
+# (maiuscoli dentro un titolo: «The Wailing», «La Grande Bellezza» — il nome è
+# il resto), le parole dell'app stessa e dei suoi file. Piegate (``fold``). Il nome che l'utente ha dato a Jenny si aggiunge da
 # fuori (``extra_stop``), perché qui non si legge la config.
 _STOPWORDS = frozenset(
     fold(w)
@@ -68,6 +69,7 @@ _STOPWORDS = frozenset(
         "january february march april may june july august september october "
         "november december gennaio febbraio marzo aprile maggio giugno luglio "
         "agosto settembre ottobre novembre dicembre "
+        "the an of and il lo la gli le un una uno di del della dei degli delle "
         "jenny dream user memory soul agents md json api http https url ok ai llm "
         "webui telegram android"
     ).split()

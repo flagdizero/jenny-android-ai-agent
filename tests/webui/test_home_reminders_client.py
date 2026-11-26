@@ -2,9 +2,9 @@
 
 Fino al 25/11/2026 in casa i promemoria si vedevano solo quando erano troppi
 (la pastiglia dei risvegli), e il suo «Tutti i promemoria» portava in officina.
-Ora una riga dice quanti sono accesi, e la stanza li mostra in due gruppi —
-chiesti da te, messi da Jenny — con la pausa e il cestino. Quelli dei quaderni
-e i lavori di sistema restano fuori.
+Ora una riga dice quanti sono accesi, e la stanza li mostra in gruppi — chiesti
+da te, messi da Jenny, uno per quaderno — con la pausa e il cestino. I lavori di
+sistema restano fuori; quelli dei quaderni, fuori fino al 25/11/2026, ci sono.
 
 Si guida la casa intera (``support.home_dom``): conta il legame fra la riga,
 la stanza, le rotte ``/api/webui/cron`` e l'avviso con «Annulla».
@@ -31,6 +31,8 @@ const state = { jobs: [
   job('riepilogo', { autonomous: true, schedule: { kind: 'every', every_ms: 86400000, until_ms: NOW + 7 * 86400000 } }),
   job('vasi', { enabled: false, paused_at_ms: NOW - 1000, actions: ['resume', 'remove'] }),
   job('innaffia', { place: { notebook: 'orto', card: null } }),
+  job('pota', { place: { notebook: 'orto', card: 'c1', cardTitle: 'acero' } }),
+  job('ripasso', { place: { notebook: 'inglese', card: null } }),
   job('dream', { kind: 'system', actions: [] }),
 ] };
 routes['/api/webui/cron'] = state;
@@ -55,21 +57,27 @@ def test_the_settings_row_counts_the_ones_that_are_on() -> None:
     run_home(_HEAD + """
 const app = await boot();
 await until(() => $('home-reminders-value').textContent, { msg: 'la riga non dice niente' });
-// acqua, dentista, riepilogo: accesi. vasi in pausa, quello del quaderno e Dream fuori.
+// acqua, dentista, riepilogo e i tre dei quaderni: accesi. vasi in pausa, Dream fuori.
 assert.equal($('home-reminders-value').textContent, app.remindersRoom.value());
-assert.match($('home-reminders-value').textContent, /3/);
+assert.match($('home-reminders-value').textContent, /6/);
 """)
 
 
-def test_the_room_splits_yours_from_hers_and_leaves_out_notebooks_and_system() -> None:
+def test_the_room_splits_yours_hers_and_each_notebook_and_leaves_out_system() -> None:
     run_home(_HEAD + """
 const app = await boot();
 app.openReminders();
 await until(() => rows().length, { msg: 'la stanza e\\u2019 vuota' });
 assert.equal(app.view, 'reminders');
-assert.deepEqual(names().sort(), ['acqua', 'dentista', 'riepilogo', 'vasi'].sort());
+assert.deepEqual(names().sort(),
+  ['acqua', 'dentista', 'riepilogo', 'vasi', 'innaffia', 'pota', 'ripasso'].sort());
 const sections = [...$('home-reminders-body').querySelectorAll('.home-reminders-section')];
-assert.equal(sections.length, 2);
+assert.equal(sections.length, 4);
+// Un gruppo per quaderno, in ordine di nome, dopo i tuoi e i suoi.
+assert.deepEqual(sections.slice(2).map((s) => s.dataset.notebook), ['inglese', 'orto']);
+assert.deepEqual([...sections[3].querySelectorAll('.home-reminders-row')].map((r) => r.dataset.job).sort(),
+  ['innaffia', 'pota']);
+assert.ok(!sections[0].textContent.includes('innaffia'), 'uno del quaderno sta fra i tuoi');
 assert.ok(sections[1].textContent.includes('riepilogo'), 'quello di Jenny non sta nel suo gruppo');
 assert.ok(!sections[0].textContent.includes('riepilogo'));
 const paused = rows().find((r) => r.dataset.job === 'vasi');
@@ -108,6 +116,34 @@ await until(() => names().includes('acqua'), { msg: 'il promemoria non e\\u2019 
 """)
 
 
+def test_the_next_time_is_words_not_an_object() -> None:
+    # Visto sul Titan il 25/11/2026: ogni riga diceva «prossimo [object Object]».
+    run_home(_HEAD + """
+const app = await boot();
+app.openReminders();
+await until(() => rows().length);
+const when = (id) => rows().find((r) => r.dataset.job === id).querySelector('.home-reminders-when').textContent;
+for (const r of rows()) assert.ok(!r.textContent.includes('[object'), `${r.dataset.job}: ${r.textContent}`);
+assert.match(when('acqua'), /1/, 'la prossima volta non dice quando');
+// La scheda del quaderno sta davanti alla cadenza, senza ripetere il quaderno.
+assert.ok(when('pota').startsWith('acero · '), when('pota'));
+""")
+
+
+def test_a_notebook_group_opens_its_board() -> None:
+    run_home(_HEAD + """
+const app = await boot();
+const opened = [];
+app.openNotebook = async (name) => { opened.push(name); };
+app.openReminders();
+await until(() => rows().length);
+const orto = $('home-reminders-body').querySelector('.home-reminders-section[data-notebook="orto"]');
+orto.querySelector('.home-reminders-open').click();
+await until(() => opened.length, { msg: 'Apri non apre il quaderno' });
+assert.deepEqual(opened, ['orto']);
+""")
+
+
 def test_the_wakes_sheet_opens_the_room_not_the_workshop() -> None:
     run_home(_HEAD + """
 const app = await boot();
@@ -123,6 +159,6 @@ const app = await boot();
 app.openReminders();
 await until(() => $('home-reminders-body').querySelector('.home-reminders-empty'));
 assert.equal(rows().length, 0);
-const foot = $('home-reminders-body').querySelector('.home-reminders-foot').textContent;
-assert.ok(!foot.includes('chat'), 'la stanza vuota dice due volte di chiederlo in chat');
+assert.equal($('home-reminders-body').querySelector('.home-reminders-foot'), null,
+  'la stanza vuota dice due volte di chiederlo in chat');
 """)

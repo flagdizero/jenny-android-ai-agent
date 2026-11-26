@@ -6,15 +6,17 @@
  *  risvegli, `home-wakes.js`), e il suo «Tutti i promemoria» portava in
  *  officina.
  *
- *  Due gruppi: quelli **chiesti da te** e quelli **messi da Jenny** da sola,
- *  svegliata da un altro promemoria (`payload.autonomous`). Ognuno con
- *  l'interruttore della pausa e il cestino; il cestino toglie subito e offre
- *  «Annulla» (`CronService.restore_job`), senza domande prima.
+ *  I gruppi: quelli **chiesti da te** e quelli **messi da Jenny** da sola,
+ *  svegliata da un altro promemoria (`payload.autonomous`), poi uno per
+ *  **quaderno**, col tasto che apre la sua bacheca. Ognuno con l'interruttore
+ *  della pausa e il cestino; il cestino toglie subito e offre «Annulla»
+ *  (`CronService.restore_job`), senza domande prima.
  *
- *  **Cosa resta fuori.** I promemoria dei quaderni, che stanno sulle loro
- *  bacheche; i lavori di sistema (Dream, il giardiniere), che non sono
- *  dell'utente. Un promemoria nuovo si chiede in chat: questa stanza serve a
- *  vederli e a fermarli.
+ *  Fino al 25/11/2026 quelli dei quaderni restavano fuori («stanno sulle loro
+ *  bacheche»): non c'era un posto solo per vedere cosa fara' Jenny domani, e
+ *  l'officina li mostrava gia' tutti. **Cosa resta fuori**: i lavori di sistema
+ *  (Dream, il giardiniere), che non sono dell'utente. Un promemoria nuovo si
+ *  chiede in chat: questa stanza serve a vederli e a fermarli.
  *
  *  I dati sono gli stessi della pastiglia (`/api/webui/cron`), e le righe le
  *  costruisce la stessa vista condivisa dell'officina (`shared/cron-view.js`).
@@ -28,9 +30,14 @@ import { buildCronView } from './shared/cron-view.js';
 import { button, el, icon } from './shared/dom.js';
 import { showToast, showUndo } from './shared/utils.js';
 
-/** I promemoria che questa stanza mostra: dell'utente, della chat personale. */
-export function isPersonalReminder(job) {
-  return Boolean(job) && job.kind !== 'system' && !job.place;
+/** I promemoria che questa stanza mostra: dell'utente, ovunque stiano. */
+export function isUserReminder(job) {
+  return Boolean(job) && job.kind !== 'system';
+}
+
+/** Il quaderno di un promemoria, o `null` se e' della chat personale. */
+function notebookOf(job) {
+  return job?.place?.notebook || null;
 }
 
 /** Quanti sono attivi (accesi, non in pausa, non gia' conclusi): il numero
@@ -38,44 +45,65 @@ export function isPersonalReminder(job) {
 export function activeReminders(payload) {
   if (!payload || payload.available === false || !Array.isArray(payload.jobs)) return null;
   return payload.jobs
-    .filter(isPersonalReminder)
+    .filter(isUserReminder)
     .filter((job) => job.enabled !== false && !job.paused_at_ms).length;
 }
 
-/** Le due sezioni della stanza, dalle righe della vista condivisa. */
+/** Le sezioni della stanza, dalle righe della vista condivisa: le tue, le sue,
+ *  e una per quaderno (in ordine di nome). */
 export function reminderSections(payload, { locale } = {}) {
-  const view = buildCronView(payload, { tr, locale, keep: isPersonalReminder });
-  const enabled = new Map((payload?.jobs || []).map((job) => [job.id, job.enabled !== false]));
+  const view = buildCronView(payload, { tr, locale, keep: isUserReminder });
+  const jobs = new Map((payload?.jobs || []).map((job) => [job.id, job]));
+  const enabled = (id) => jobs.get(id)?.enabled !== false;
   const rows = view.rows.map((row) => ({
     ...row,
+    notebook: notebookOf(jobs.get(row.id)),
     paused: row.pausedAtMs != null,
     /* Un singolo gia' suonato: spento ma non in pausa. Resta finche' non lo
        togli, senza interruttore. */
-    done: !enabled.get(row.id) && row.pausedAtMs == null,
+    done: !enabled(row.id) && row.pausedAtMs == null,
     canToggle: row.actions.includes('pause') || row.actions.includes('resume'),
     canRemove: row.actions.includes('remove'),
   }));
+  const personal = rows.filter((row) => !row.notebook);
+  const byNotebook = new Map();
+  for (const row of rows.filter((r) => r.notebook)) {
+    if (!byNotebook.has(row.notebook)) byNotebook.set(row.notebook, []);
+    byNotebook.get(row.notebook).push(row);
+  }
   return {
     available: view.available,
-    mine: rows.filter((row) => !row.autonomous),
-    hers: rows.filter((row) => row.autonomous),
+    mine: personal.filter((row) => !row.autonomous),
+    hers: personal.filter((row) => row.autonomous),
+    notebooks: [...byNotebook.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, locale))
+      .map(([name, list]) => ({ name, rows: list })),
   };
 }
 
-/** La riga sotto il nome: quando, e cosa succede adesso. */
+/** La riga sotto il nome: quando, e cosa succede adesso.
+ *
+ *  `row.next` e' l'oggetto di `formatWhen` (`absolute`, `relative`,
+ *  `overdue`), non un testo: messo cosi' com'era nella frase, la casa
+ *  scriveva «prossimo [object Object]» (visto sul Titan il 25/11/2026). */
 export function reminderWhen(row) {
-  if (row.paused) return `${row.schedule} · ${i18n.t('board.cron.paused')}`;
-  if (row.done) return `${row.schedule} · ${i18n.t('home.reminders.done')}`;
-  if (row.next) return `${row.schedule} · ${i18n.t('home.reminders.next', { when: row.next })}`;
-  return row.schedule;
+  const where = row.notebook && row.place && row.place !== row.notebook
+    ? `${row.place.slice(row.notebook.length).replace(/^\s*›\s*/, '')} · ` : '';
+  if (row.paused) return `${where}${row.schedule} · ${i18n.t('board.cron.paused')}`;
+  if (row.done) return `${where}${row.schedule} · ${i18n.t('home.reminders.done')}`;
+  const when = row.next?.relative;
+  if (when) return `${where}${row.schedule} · ${i18n.t('home.reminders.next', { when })}`;
+  return `${where}${row.schedule}`;
 }
 
 export class HomeReminders {
   /** @param onChange  quel che conta e' cambiato: la riga di Impostazioni si
-   *                   riscrive (il numero degli attivi). */
-  constructor({ onChange } = {}) {
+   *                   riscrive (il numero degli attivi).
+   *  @param onOpenNotebook  il tasto di un quaderno: apre la sua bacheca. */
+  constructor({ onChange, onOpenNotebook } = {}) {
     this.body = document.getElementById('home-reminders-body');
     this.onChange = onChange;
+    this.onOpenNotebook = onOpenNotebook;
     this.payload = null;
     this.busy = false;
     this._failed = false;
@@ -120,13 +148,14 @@ export class HomeReminders {
         i18n.t(this._failed ? 'home.reminders.unavailable' : 'home.reminders.loading')));
       return;
     }
-    const { available, mine, hers } = reminderSections(this.payload, { locale: i18n.locale });
+    const { available, mine, hers, notebooks } = reminderSections(this.payload, { locale: i18n.locale });
     if (!available) {
       this.body.replaceChildren(el('div', 'home-card-note', i18n.t('home.reminders.unavailable')));
       return;
     }
     const parts = [];
-    if (!mine.length && !hers.length) {
+    const empty = !mine.length && !hers.length && !notebooks.length;
+    if (empty) {
       const empty = el('div', 'home-reminders-empty');
       empty.append(icon('ti-alarm'), el('p', null, i18n.t('home.reminders.empty')));
       parts.push(empty);
@@ -135,11 +164,10 @@ export class HomeReminders {
     if (hers.length) {
       parts.push(this._section(i18n.t('home.reminders.hers', { name: botName.get() }), hers));
     }
-    /* Vuota, la frase di sopra dice gia' come chiederne uno: sotto resta solo
-       dove stanno quelli dei quaderni (visto su jenny_s22 il 25/11/2026). */
-    const empty = !mine.length && !hers.length;
-    parts.push(el('p', 'home-reminders-foot',
-      i18n.t(empty ? 'home.reminders.notebooksElsewhere' : 'home.reminders.howToAdd')));
+    for (const nb of notebooks) parts.push(this._notebookSection(nb));
+    /* Vuota, la frase di sopra dice gia' come chiederne uno (visto su
+       jenny_s22 il 25/11/2026): niente piede. */
+    if (!empty) parts.push(el('p', 'home-reminders-foot', i18n.t('home.reminders.howToAdd')));
     this.body.replaceChildren(...parts);
   }
 
@@ -149,6 +177,20 @@ export class HomeReminders {
     const list = el('div', 'home-rows home-reminders-list');
     for (const row of rows) list.appendChild(this._row(row));
     wrap.appendChild(list);
+    return wrap;
+  }
+
+  /** Un quaderno: il suo nome, il tasto che apre la bacheca, le sue righe. */
+  _notebookSection({ name, rows }) {
+    const wrap = this._section(i18n.t('home.reminders.inNotebook', { name }), rows);
+    wrap.classList.add('is-notebook');
+    wrap.dataset.notebook = name;
+    if (this.onOpenNotebook) {
+      const open = button('home-reminders-open', i18n.t('home.reminders.openBoard'),
+        () => this.onOpenNotebook(name));
+      open.setAttribute('aria-label', i18n.t('home.reminders.openBoardOf', { name }));
+      wrap.firstChild.appendChild(open);
+    }
     return wrap;
   }
 

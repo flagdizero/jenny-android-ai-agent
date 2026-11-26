@@ -88,8 +88,8 @@ def test_it_was_never_true_is_retracted_and_recall_by_name_skips_it(ws) -> None:
     svc.correct(ws, "user", CREMONA, "Lives in Lodi with Oreste", "wrong")
     old = read_archived(find_archived(ws / "memory", CREMONA))
     assert old.retracted is True
-    rows = svc.list_memory(ws)["recent"]
-    assert [r["kind"] for r in rows] == ["wrong"]
+    # Una frase smentita non e' «tolta da te»: non sta fra quelle da rimettere.
+    assert svc.list_memory(ws)["recent"] == []
 
 
 def test_a_correction_moves_an_existing_lock_and_keeps_its_date(ws) -> None:
@@ -153,23 +153,6 @@ def test_undo_of_the_trash_puts_it_back_in_place_and_locked(ws) -> None:
     assert err.value.code == "not_found"
 
 
-def test_put_back_a_lost_detail_goes_next_to_the_new_wording(ws) -> None:
-    """Una riscrittura ha perso «Oreste»: «Rimetti» rimette la frase vecchia
-    accanto a quella nuova, senza sovrascriverla."""
-    new_id = svc.correct(ws, "user", CREMONA, "Lives in Lodi", "changed")["id"]
-    listed = {e["id"]: e for f in svc.list_memory(ws)["files"] for e in f["entries"]}
-    lost = listed[new_id]["lost"]
-    assert {w for d in lost for w in d["words"]} >= {"Oreste"}
-    carrier = next(d for d in lost if "Oreste" in d["words"])
-    assert carrier["id"] == CREMONA
-
-    svc.restore(ws, carrier["id"], after=new_id)
-
-    ids = [e.id for e in parse_entries(_user(ws))]
-    assert ids.index(CREMONA) == ids.index(new_id) + 1
-    again = {e["id"]: e for f in svc.list_memory(ws)["files"] for e in f["entries"]}
-    assert not again[new_id]["lost"], "il dettaglio e' tornato ma la voce dice ancora che manca"
-
 
 def test_recent_skips_old_rows(ws) -> None:
     svc.remove(ws, "user", CREMONA)
@@ -195,15 +178,62 @@ def test_a_hand_edit_of_another_file_is_ignored(ws) -> None:
     assert list_archived(ws / "memory") == []
 
 
-def test_lost_details_are_one_line_per_old_sentence(ws) -> None:
-    """Tre parole perse dalla stessa frase vecchia sono una riga, non tre."""
-    text = (ws / "USER.md").read_text(encoding="utf-8").replace(
-        "- Short answers", "- Plays Metal Gear Solid with Oreste")
-    (ws / "USER.md").write_text(text, encoding="utf-8")
-    old = entry_id("- Plays Metal Gear Solid with Oreste")
-    new_id = svc.correct(ws, "user", old, "Plays video games", "changed")["id"]
-    listed = {e["id"]: e for f in svc.list_memory(ws)["files"] for e in f["entries"]}
-    lost = listed[new_id]["lost"]
-    assert len(lost) == 1, lost
-    assert set(lost[0]["words"]) >= {"Metal", "Gear", "Solid"}
-    assert lost[0]["id"] == old
+
+def test_undo_with_lock_false_puts_it_back_as_it_was(ws) -> None:
+    """L'«Annulla» del cestino su una voce che non era sistemata dall'utente la
+    rimette senza lucchetto: prima ogni voce rimessa lo prendeva (visto sul
+    Titan il 25/11/2026)."""
+    svc.remove(ws, "user", CREMONA)
+    svc.restore(ws, CREMONA, lock=False)
+
+    assert CREMONA in _live(ws)
+    assert MemoryLocks(ws).locked_ids("USER.md") == set()
+
+
+def test_recent_leaves_out_a_change_whose_new_wording_is_still_there(ws) -> None:
+    """La frase vecchia di una voce che c'e' ancora sta sotto quella voce, non
+    anche in «Dimenticato di recente»; se la voce nuova se ne va, c'e' lei,
+    come tolta, e non anche tutte le sue versioni di prima."""
+    new_id = svc.correct(ws, "user", CREMONA, "Lives in Lodi with Oreste", "changed")["id"]
+    assert svc.list_memory(ws)["recent"] == []
+
+    svc.remove(ws, "user", new_id)
+    rows = svc.list_memory(ws)["recent"]
+    assert [(r["kind"], r["id"]) for r in rows] == [("removed", new_id)]
+
+
+def test_removed_by_you_leaves_out_what_dream_dropped(ws) -> None:
+    """«Tolte da te» ha solo quel che ha tolto l'utente. Una frase che Dream
+    toglie finisce in archivio senza ``forgotten``, e qui non compare: prima
+    stava nella stessa lista, con la stessa etichetta."""
+    from jenny.agent.memory_archive import ArchivedEntry, archive_entry
+
+    archive_entry(ws / "memory", ArchivedEntry(
+        id=entry_id("- Old plan"), text="- Old plan", source="USER.md"))
+    svc.remove(ws, "user", CREMONA)
+
+    rows = svc.list_memory(ws)["recent"]
+    assert [(r["kind"], r["id"]) for r in rows] == [("removed", CREMONA)]
+
+
+def test_the_list_carries_each_sentence_theme_and_counts_the_unsorted(ws) -> None:
+    from jenny.agent.memory_themes import MemoryThemes
+
+    out = svc.list_memory(ws)
+    assert out["unsorted"] == 3
+    MemoryThemes(ws).set_many({CREMONA: "identity"})
+
+    out = svc.list_memory(ws)
+    mine = {e["id"]: e for e in out["files"][0]["entries"]}
+    assert mine[CREMONA]["theme"] == "identity"
+    assert out["unsorted"] == 2
+    # Gli appunti non hanno temi: non contano fra quelli da ordinare.
+    assert "theme" not in out["files"][1]["entries"][0]
+
+
+def test_a_corrected_sentence_stays_in_its_theme(ws) -> None:
+    from jenny.agent.memory_themes import MemoryThemes
+
+    MemoryThemes(ws).set_many({CREMONA: "identity"})
+    new_id = svc.correct(ws, "user", CREMONA, "Lives in Lodi with Oreste", "wrong")["id"]
+    assert MemoryThemes(ws).all()[new_id] == "identity"

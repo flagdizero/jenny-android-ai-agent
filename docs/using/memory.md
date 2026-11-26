@@ -94,19 +94,20 @@ The archive is read into memory once, in the background, when the app starts, an
 
 ### What she remembers about you: the room
 
-In the home, **Settings → What she remembers about you** shows the two memory files as sentences: **About you** (`USER.md`) and **Her notes** (`memory/MEMORY.md`). The row says how many things she knows about you.
+In the home, **Settings → What she remembers about you** shows what Jenny knows about you as a portrait: the sentences of `USER.md`, grouped by theme (**Who you are**, **People**, **Health**, **Home and habits**, **Tastes**, **Character**, **Goals**, **How to answer you**, and **Other**). The row in Settings says how many things she knows.
 
-- **Tap a sentence to correct it.** Write it as it should be, then say why: **It changed** files the old wording in `memory/archive/`, linked to the new one; **It wasn't true** also marks it retracted, so recall by name never brings it back. The corrected entry gets a lock (below).
-- **The trash removes it** at once, with a few seconds of **Undo**. A removed entry is marked `forgotten` and stays out of recall by name.
-- **Details a rewrite lost.** When an older wording of an entry carried a name or a number that no memory file says any more, the entry says so ("A rewrite lost “Oreste”") with **Put back**: the older sentence comes back as its own entry, right under the newer one, so nothing the newer one knows is overwritten.
-- **Recently forgotten** lists what left the files in the last four weeks: removed (with **Put back**), changed, and not true (struck through).
-- While Dream is tidying up, the room says so and refreshes by itself; it does not lock you out. If an entry changed in the meantime, your edit is not written over it: the room says so and shows it as it is now.
+- **The themes are not in the file.** `USER.md` stays a plain list, as Dream writes it. The theme of each sentence is kept in the app's own database, and a small call to your model assigns one to the sentences that have none: it starts in the background when you open the room, a line says so, and the room refreshes when it is done. A sentence you correct stays in its theme; one Dream rewords keeps the theme of the sentence it replaced. If the model does not answer, the sentences are simply shown in a row, and the room tries again later.
+- **Tap a sentence** to open its sheet. **Save** replaces it with what you wrote: the old wording goes to `memory/archive/` marked as retracted, so recall by name never brings it back, and Jenny does not reword your version when she tidies up (below). A fact that really changed over time — you moved, you changed job — is better told in the chat, so she can remember the before too.
+- **Remove this sentence**, in the same sheet, removes it at once, with a few seconds of **Undo**, which puts it back exactly as it was. A removed sentence is marked `forgotten` and stays out of recall by name.
+- **Her notes** (`memory/MEMORY.md`, what she writes down about your projects) and **Removed by you** are two closed rows at the bottom; they open in place. *Removed by you* lists what you removed in the last four weeks, with **Put back**, and is there only if you removed something. What Dream rewords or drops on her own is not listed anywhere in the room: the archive keeps it, and recall by name is how it comes back.
+- While Dream is tidying up, the room says so and refreshes by itself; it does not lock you out. If a sentence changed in the meantime, your edit is not written over it: the room says so and shows it as it is now.
+- After a correction, a removal or an undo the room keeps your place: the sentence you were looking at stays where it was.
 
 Saving `USER.md` or `memory/MEMORY.md` from the workshop's file editor now goes through the archive too: a reworded line is filed as changed, and a line you deleted by hand counts as removed by you. When Jenny herself rewrites one of the two files during a chat, the lines she drops or rewords go to `memory/archive/` as well, the same way as Dream's: they are not marked as removed by you, so recall by name can still bring them back.
 
 ### Entries you corrected are locked
 
-An entry of `USER.md` or `memory/MEMORY.md` that you corrected yourself gets a lock, and Dream does not reword it. The lock is kept outside the workspace, in the app's own database, so nothing Dream can write reaches it, and the memory files carry no mark of it.
+An entry of `USER.md` or `memory/MEMORY.md` that you corrected yourself gets a lock. The room does not mark it — it does not freeze the entry: you can still correct or remove it, and Jenny still updates it when you tell her in chat. What it stops is Dream rewording it. **Put back** locks the sentence it brings back too, so the next tidy-up does not drop it again; **Undo** after a removal does not add a lock that was not there. The lock is kept outside the workspace, in the app's own database, so nothing Dream can write reaches it, and the memory files carry no mark of it.
 
 - Dream's entry tool refuses to replace or remove a locked entry, and lists it as `[locked]`.
 - If a whole-file rewrite (the review pass, mostly) drops or rewords it anyway, the app puts your wording back where it was at the end of the pass, and files Dream's wording in `memory/archive/`.

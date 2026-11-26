@@ -52,6 +52,7 @@ _SYSTEM_PROMPT_TEMPLATES = [
     "agent/plan_mode.md", "agent/plan_step.md", "agent/plan_done.md",
     "agent/peer_request.md",
     "agent/line_trace.md",
+    "agent/memory_themes.md",
     "agent/_snippets/untrusted_content.md",
     "agent/types/researcher.md", "agent/types/writer.md", "agent/types/coder.md",
     "agent/types/analyst.md", "agent/types/sysadmin.md", "agent/types/operator.md",

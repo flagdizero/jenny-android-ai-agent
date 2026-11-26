@@ -37,6 +37,12 @@ class TestNames:
     def test_months_weekdays_and_the_app_s_own_words_are_not_anchors(self):
         assert extract("ci vediamo il Monday di July, lo dice Jenny") == frozenset()
 
+    def test_an_article_inside_a_title_is_not_a_name(self):
+        # «The» e «La» vanno maiuscoli dentro un titolo, ma il nome e' il resto.
+        assert extract("ha amato The Wailing e La Grande Bellezza") == {
+            "wailing", "grande", "bellezza",
+        }
+
     def test_extra_stop_drops_a_name_given_from_outside(self):
         assert extract("ne parla Pina con Oreste", extra_stop=["Pina"]) == {"oreste"}
 

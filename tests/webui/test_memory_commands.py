@@ -43,6 +43,39 @@ async def test_list_correct_remove_restore(ctx) -> None:
     assert back["file"] == "user"
 
 
+async def test_undo_can_put_it_back_without_the_lock(ctx) -> None:
+    from jenny.agent.memory_locks import MemoryLocks
+
+    await dispatch_command(ctx, "memory.remove", {"file": "user", "id": CREMONA})
+    await dispatch_command(ctx, "memory.restore", {"id": CREMONA, "lock": False})
+    root = ctx.get_workspace_root()
+    assert MemoryLocks(root).locked_ids("USER.md") == set()
+
+
+async def test_listing_starts_the_sorting_and_says_so(ctx) -> None:
+    import asyncio
+
+    from jenny.agent import memory_themes as mt
+
+    mt._RETRY_AT.clear()
+    mt._IN_FLIGHT.clear()
+
+    class Provider:
+        async def chat_with_retry(self, **kwargs):
+            return SimpleNamespace(content='{"1": "identity"}', finish_reason="stop")
+
+    ctx.get_llm = lambda: (Provider(), "m")
+    out = await dispatch_command(ctx, "memory.list", {})
+    assert out["sorting"] is True
+    assert "unsorted" not in out
+    assert out["files"][0]["entries"][0]["theme"] == ""
+
+    await asyncio.gather(*mt._TASKS)
+    out = await dispatch_command(ctx, "memory.list", {})
+    assert out["sorting"] is False
+    assert out["files"][0]["entries"][0]["theme"] == "identity"
+
+
 async def test_a_stale_id_is_a_conflict(ctx) -> None:
     with pytest.raises(CommandError) as err:
         await dispatch_command(ctx, "memory.remove", {"file": "user", "id": "deadbeef"})
@@ -55,7 +88,7 @@ async def test_bad_params_are_refused(ctx) -> None:
         ("memory.remove", {"id": CREMONA}),
         ("memory.correct", {"file": "user", "id": CREMONA, "text": "", "reason": "changed"}),
         ("memory.restore", {"id": None}),
-        ("memory.restore", {"id": CREMONA, "after": "a/b"}),
+        ("memory.restore", {"id": CREMONA, "lock": "no"}),
     ):
         with pytest.raises(CommandError) as err:
             await dispatch_command(ctx, method, params)
