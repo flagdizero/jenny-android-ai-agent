@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from jenny.board.sections import section_resolver
-from jenny.board.store import mutate_board
+from jenny.board.store import mutate_board, read_board
 from jenny.board.view import build_board_view, build_card_view
 from jenny.webui.commands import CommandError, dispatch_command
 
@@ -256,3 +256,48 @@ def test_a_labels_box_grows_with_its_rows_up_to_the_shown_ones() -> None:
     assert one[1] < two[1] < three[1] < many[1]
     assert model.auto_box(0) == one and model.auto_box(4) == many
     assert two == model.AUTO_BOX, "a label placed by the user is sized as two crons"
+
+
+def test_a_reminder_says_whether_the_user_answered(notebook, tmp_path) -> None:
+    """Il post-it di un promemoria dice se l'utente ha risposto, non ripete il messaggio.
+
+    Una seduta serale (25/11/2026) stampava sulla bacheca i suoi tre paragrafi.
+    """
+    from jenny.board.cron_link import job_snapshot, make_link
+    from jenny.board.view import automations
+    from jenny.cron.service import CronService
+    from jenny.cron.types import CronSchedule
+
+    service = CronService(tmp_path / "workspace")
+    origin = {"session_key": "project:piante", "origin_channel": "websocket",
+              "origin_chat_id": "project:piante"}
+    mutate_board(notebook, lambda b: b["cards"].append(
+        {"id": "acero", "title": "Acero", "pages": [], "pos": {"x": 1, "y": 1}}))
+    seduta = service.add_job("Seduta", CronSchedule(kind="cron", expr="0 22 * * *",
+                                                    tz="Europe/Rome"),
+                             "apri la seduta", board=make_link("piante", "acero"), **origin)
+    gelo = service.add_job("Gelo", CronSchedule(kind="every", every_ms=3_600_000), "gela?",
+                           board=make_link("piante", "acero"), mode="monitor", **origin)
+    said = {"at": "2026-11-25T22:00:11+01:00", "status": "ok", "text": "ehi, come stai?",
+            "textAt": "2026-11-25T22:00:11+01:00"}
+    mutate_board(notebook, lambda b: b.__setitem__("cronResults", {
+        seduta.id: said, gelo.id: {**said, "text": "gela stanotte"}}))
+    board = read_board(notebook)
+    jobs = {j.id: job_snapshot(j) for j in (seduta, gelo)}
+
+    def results(replies):
+        rows = automations(board, jobs, "acero", replies)
+        return {r["name"]: r["result"] for r in rows}
+
+    assert results({seduta.id: True})["Seduta"]["replied"] is True
+    assert results({seduta.id: False})["Seduta"]["replied"] is False
+    # Senza notizie della chat, o del suo giro, non si dice niente; un monitor mai.
+    assert "replied" not in results(None)["Seduta"]
+    assert "replied" not in results({})["Seduta"]
+    assert "replied" not in results({gelo.id: True, seduta.id: True})["Gelo"]
+    # Il testo resta: il cassetto lo mostra intero.
+    assert results({seduta.id: False})["Seduta"]["text"] == "ehi, come stai?"
+    view = build_board_view(notebook, cron_jobs=jobs, replies={seduta.id: False})
+    [label] = view["autoLabels"]
+    assert {r["name"]: r["result"].get("replied") for r in label["rows"]} == {
+        "Seduta": False, "Gelo": None}

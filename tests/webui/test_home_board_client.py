@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from support import theme_tokens
 from support.home_dom import UI, requires_jsdom, run_home
 from support.js_harness import ASSETS, function, i18n_helpers, requires_node, run_js
@@ -2323,3 +2324,57 @@ def test_the_album_polaroid_is_square_and_the_viewer_shows_the_whole_photo() -> 
     assert "aspect-ratio: 1" in rules[".home-photos-pol-img"]
     assert "object-fit: cover" in rules[".home-photos-pol-img img"]
     assert "object-fit: contain" in rules[".home-photo-viewer-img"]
+
+
+def _reminder_board(replied) -> dict:
+    """Un promemoria (una seduta serale) sull'etichetta, col testo lungo che ha scritto."""
+    board = _auto_board()
+    result = {"at": "2026-11-25T22:00:11+01:00", "status": "ok",
+              "text": "ehi. 22:00, giornata chiusa. come stai adesso? " * 6,
+              "textAt": "2026-11-25T22:00:11+01:00"}
+    if replied is not None:
+        result["replied"] = replied
+    board["autoLabels"][0]["rows"][0] = {**board["autoLabels"][0]["rows"][0],
+                                         "name": "Seduta", "mode": "reminder", "result": result}
+    return board
+
+
+@requires_jsdom
+@pytest.mark.parametrize(("replied", "expected"), [
+    (False, "no reply yet"),
+    (True, "you talked"),
+    (None, "wrote to you"),
+])
+def test_a_reminder_says_how_it_went_not_what_it_wrote(replied, expected) -> None:
+    """Il 25/11/2026 una seduta serale stampava sull'etichetta i suoi tre paragrafi."""
+    _run_wall("""
+      routes['/api/board'] = __AUTO__;
+      await B.load('altro');
+      const row = document.querySelector('.home-board-autolabel-row');
+      const last = row.querySelector('.home-board-autolabel-last').textContent;
+      assert.match(last, /__EXPECTED__/);
+      assert.doesNotMatch(row.textContent, /giornata chiusa/);
+    """.replace("__AUTO__", json.dumps(_reminder_board(replied)))
+       .replace("__EXPECTED__", expected))
+
+
+@requires_jsdom
+def test_a_reminder_keeps_its_whole_text_in_the_drawer() -> None:
+    board = json.loads(json.dumps(BOARD))
+    card = json.loads(json.dumps(CARD))
+    card["automations"] = [{
+        "id": "ab12cd34", "name": "Seduta", "message": "apri la seduta",
+        "mode": "reminder", "schedule": {"kind": "every", "every_ms": 86400000},
+        "nextRunAtMs": 1791172800000, "lastRunAtMs": None, "lastStatus": None,
+        "paused": False, "enabled": True, "scope": "acero",
+        "result": {"at": "2026-11-25T22:00:11+01:00", "status": "ok", "replied": False,
+                   "text": "ehi, come stai adesso?", "textAt": "2026-11-25T22:00:11+01:00"},
+    }]
+    run_home(
+        _SETUP.replace("__BOARD__", json.dumps(board)).replace("__CARD__", json.dumps(card))
+        + """
+      await app.openCard('acero', 'Acero');
+      await tick(40);
+      const drawer = $('home-board-drawer');
+      assert.match(drawer.textContent, /(Wrote to you|Ti ha scritto) \\(.+\\): «ehi, come stai adesso\\?»/);
+    """)

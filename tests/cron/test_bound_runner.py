@@ -35,6 +35,7 @@ from jenny.cron.bound_runner import (
 from jenny.cron.service import CronService
 from jenny.cron.session_turns import (
     CRON_DEFER_UNTIL_IDLE_META,
+    CRON_FRESH_START_META,
     CRON_MONITOR_META,
     CRON_TRIGGER_META,
     is_bound_cron_job,
@@ -464,6 +465,9 @@ class TestReminderModeIsUnchanged:
         # Nessuna sessione isolata aperta né potata: quella è roba da monitor.
         assert agent.sessions.by_key == {}
         assert agent.sessions.saved == []
+        # Uno personale riprende il discorso: vede la chat, come sempre.
+        assert CRON_FRESH_START_META not in agent.received[0].metadata
+        assert "left out on purpose" not in agent.received[0].content
 
     async def test_a_reminder_run_record_carries_no_delivery_key(self) -> None:
         job = _bound_job()

@@ -2364,6 +2364,7 @@
       "next": "next {when}",
       "costs": "Jenny does it (uses the model)",
       "last": "Last result ({when}): {text}",
+      "said": "Wrote to you ({when}): «{text}»",
       "quiet": "Last run {when}: nothing to tell you.",
       "changePrompt": "In the {card} drawer, the automation «{name}»: I'd like ",
       "prompt": "In the {card} drawer, every ",
@@ -2464,6 +2465,9 @@
       "notebook": "The whole notebook",
       "trouble": "couldn't look for {count} runs",
       "last": "last: «{text}»",
+      "wrote": "wrote to you {when}",
+      "waiting": "wrote to you {when}, no reply yet",
+      "replied": "{when}, you talked",
       "quiet": "last run {when}: nothing",
       "onlyIf": "writes only if it matters"
     },

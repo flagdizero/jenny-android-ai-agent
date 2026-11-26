@@ -23,6 +23,7 @@ from jenny.agent.turn_types import TurnState
 from jenny.bus.events import WEBSOCKET_CHANNEL
 from jenny.bus.progress import build_silent_progress_callback
 from jenny.command import CommandContext
+from jenny.cron.session_turns import cron_fresh_start
 from jenny.runtime.user_text import say
 from jenny.utils.document import extract_documents, prepare_attachments
 from jenny.utils.helpers import clip
@@ -302,7 +303,13 @@ class StateHandlersMixin:
         self.sessions.save(session)
 
     async def _state_build(self, ctx: TurnContext) -> str:
-        if not ctx.ephemeral:
+        # Il promemoria di un quaderno nasce dal job e dalle pagine, non dall'ultimo
+        # discorso della chat (v. ``CRON_FRESH_START_META``): niente cronologia e
+        # niente riassunto archiviato, che porterebbe dentro lo stesso clima.
+        fresh = cron_fresh_start(ctx.msg.metadata)
+        if fresh:
+            ctx.pending_summary = None
+        if not ctx.ephemeral and not fresh:
             await self.consolidator.maybe_consolidate_by_tokens(
                 ctx.session,
                 replay_max_messages=self._max_messages,
@@ -337,7 +344,7 @@ class StateHandlersMixin:
             "extend_to_user": False,
             "replay_sent": True,
         }
-        ctx.history = ctx.session.get_history(**_hist_kwargs)
+        ctx.history = [] if fresh else ctx.session.get_history(**_hist_kwargs)
         self._runtime_events().record_turn_runtime(
             ctx.session_key,
             await self.llm_runtime(),

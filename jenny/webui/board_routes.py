@@ -17,6 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
@@ -31,6 +32,24 @@ from jenny.channels.http_utils import (
 # Le foto delle sezioni: solo immagini, solo da ``raw/photos/``.
 _PHOTO_MIMES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
                 ".webp": "image/webp"}
+
+
+def _cron_replies(workspace: Path, notebook: str, jobs: dict[str, Any]) -> dict[str, bool] | None:
+    """Per ogni promemoria del quaderno: l'utente ha risposto al suo ultimo giro? (nel thread)
+
+    Serve solo ai promemoria (il post-it dice se ha risposto): senza, non si apre
+    il database. ``None`` quando non serve o non si legge: il post-it non dice niente.
+    """
+    if not any(job.get("mode") != "monitor" for job in jobs.values()):
+        return None
+    from jenny.session.keys import project_session_key
+    from jenny.session.last_said import cron_replies
+
+    try:
+        return cron_replies(workspace, project_session_key(notebook))
+    except Exception:  # noqa: BLE001 — una lettura mancata: il post-it non dice niente
+        logger.opt(exception=True).debug("board: chat of {} not readable", notebook)
+        return None
 
 
 class BoardRoutes:
@@ -91,10 +110,14 @@ class BoardRoutes:
 
         workspace = self._get_workspace_root()
         jobs = self._cron_jobs(root.name)
-        payload: dict[str, Any] = await asyncio.to_thread(
-            build_board_view, root, alert_probe=alert_probe(workspace),
-            workspace=workspace, cron_jobs=jobs,
-        )
+
+        def _build() -> dict[str, Any]:
+            return build_board_view(
+                root, alert_probe=alert_probe(workspace), workspace=workspace,
+                cron_jobs=jobs, replies=_cron_replies(workspace, root.name, jobs),
+            )
+
+        payload: dict[str, Any] = await asyncio.to_thread(_build)
         return http_json_response(payload)
 
     async def _card(self, request: WsRequest) -> Response:
@@ -121,6 +144,7 @@ class BoardRoutes:
                 sections_resolver=section_resolver(workspace, root),
                 corrections=list_corrections(root, card_id),
                 cron_jobs=jobs,
+                replies=_cron_replies(workspace, root.name, jobs),
             )
 
         payload = await asyncio.to_thread(_build)

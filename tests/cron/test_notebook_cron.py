@@ -279,3 +279,32 @@ async def test_removing_a_notebook_cron_from_anywhere_cleans_its_board(notebook,
     assert out == f"Removed job {job.id}"
     board = read_board(root)
     assert board["cards"][0]["userSections"] == [] and board["cronResults"] == {}
+
+
+async def test_a_notebook_reminder_starts_from_the_job_not_the_chat(notebook, tmp_path) -> None:
+    """Parla nella chat del quaderno, ma senza la chat recente davanti (25/11/2026)."""
+    from jenny.cron.session_turns import CRON_FRESH_START_META
+
+    workspace = tmp_path / "workspace"
+    await _tool(workspace).execute(action="add", card="annunci", message="apri la seduta",
+                                   cron_expr="0 22 * * *")
+    job = CronService(workspace).list_jobs()[0]
+    agent = _Agent("come stai?")
+    await run_bound_cron_job(job, agent=agent, cron=_Recorder())
+    msg = agent.received[0]
+    assert msg.session_key_override == "project:casa"
+    assert msg.metadata[CRON_FRESH_START_META] is True
+    assert "recent chat of this notebook is left out on purpose" in msg.content
+
+
+async def test_a_notebook_monitor_keeps_its_own_history(notebook, tmp_path) -> None:
+    """Un monitor ha già una sessione sua, e il suo prompt conta sui giri di prima."""
+    from jenny.cron.session_turns import CRON_FRESH_START_META
+
+    workspace = tmp_path / "workspace"
+    await _tool(workspace).execute(action="add", card="annunci", message="cerca",
+                                   every_seconds=3600, mode="monitor")
+    job = CronService(workspace).list_jobs()[0]
+    agent = _Agent("niente")
+    await run_bound_cron_job(job, agent=agent, cron=_Recorder())
+    assert CRON_FRESH_START_META not in agent.received[0].metadata
