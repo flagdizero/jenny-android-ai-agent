@@ -33,8 +33,10 @@ export function automationRow(job, { stamp, onPause, onChange, onRemove }) {
   if (job.message) body.appendChild(el('p', 'home-drawer-text', job.message));
   const result = job.result;
   if (result?.text) {
+    /* Un promemoria ha parlato all'utente: non è un esito, è quel che gli ha scritto. */
+    const key = job.mode === 'monitor' ? 'board.cron.last' : 'board.cron.said';
     body.appendChild(el('p', 'home-drawer-proof',
-      i18n.t('board.cron.last', { when: stamp(result.textAt || result.at), text: result.text })));
+      i18n.t(key, { when: stamp(result.textAt || result.at), text: result.text })));
   } else if (result?.at) {
     body.appendChild(el('p', 'home-drawer-hint', i18n.t('board.cron.quiet', { when: stamp(result.at) })));
   }

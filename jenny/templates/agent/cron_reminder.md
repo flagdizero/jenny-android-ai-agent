@@ -5,6 +5,9 @@ Rules:
 - Do not narrate internal progress.
 - Do not include user IDs.
 - Do not add status reports like "Done" or "Reminded" unless they are the natural response.
+{% if fresh_start %}
+- The recent chat of this notebook is left out on purpose: start from this job and the notebook, not from whatever was being discussed before. Do not pick up a conversation you cannot see.
+{% endif %}
 {% if why_page %}
 - A page from the notebook explains why this matters. Say what is due and why, using ONLY that page — never invent — and ask in one short line when they want to do it.
 {% endif %}

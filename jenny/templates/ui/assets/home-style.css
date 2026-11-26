@@ -3962,7 +3962,17 @@ button.home-wakes-act:active { background: var(--active); }
 }
 .home-board-autolabel-rhythm { display: block; font-size: 2.6cqw; font-weight: 700; line-height: 1.05; }
 .home-board-autolabel-rhythm::first-letter { text-transform: uppercase; }
-.home-board-autolabel-last { display: block; font-size: 1.75cqw; font-weight: 700; opacity: 0.7; }
+/* Due righe al massimo, come il nome sopra: l'esito lungo di un monitor sta nel
+   cassetto, non sulla bacheca. */
+.home-board-autolabel-last {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 1.75cqw;
+  font-weight: 700;
+  opacity: 0.7;
+}
 .home-board-autolabel-row.is-paused { opacity: 0.55; }
 .home-board-autolabel-row.is-trouble .home-board-autolabel-last,
 .home-board-autolabel-row.is-alert .home-board-autolabel-last { color: var(--board-alert); opacity: 1; }

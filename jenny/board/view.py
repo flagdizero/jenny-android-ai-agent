@@ -26,8 +26,6 @@ from jenny.utils.wiki_paths import iter_wiki_pages
 AlertProbe = Callable[[Mapping[str, Any]], bool]
 
 _EPOCH = datetime(1970, 1, 1).astimezone()
-
-
 def wiki_titles(project_root: Path) -> dict[str, str]:
     """``{percorso relativo a wiki/: titolo}`` di ogni pagina del quaderno."""
     return dict(iter_wiki_pages(project_root / "wiki"))
@@ -189,11 +187,17 @@ def _app_card(workspace: Path, card: Mapping[str, Any]) -> dict[str, Any]:
 
 def automations(
     board: Mapping[str, Any], cron_jobs: Mapping[str, Any] | None, scope: str,
+    replies: Mapping[str, bool] | None = None,
 ) -> list[dict[str, Any]]:
     """I cron del quaderno con ambito *scope*, dal prossimo giro, ognuno col suo ultimo esito.
 
     Derivati dai job dello scheduler (``cron_link.notebook_jobs``), mai da una
     sezione del cassetto: il job è l'unica cosa che dice se un cron esiste.
+
+    Un promemoria (``mode`` non ``monitor``) apre un discorso nella chat del
+    quaderno: il suo esito porta anche ``replied``, se l'utente ha scritto dopo
+    il suo ultimo giro (*replies*, per id del job: ``session.last_said.cron_replies``).
+    Il post-it dice quello, non ripete il messaggio. Senza notizie, niente ``replied``.
     """
     from jenny.board.cron_link import result_of
 
@@ -204,7 +208,11 @@ def automations(
         if snap.get("scope") != scope or not (snap.get("enabled") or snap.get("paused")):
             continue
         item = dict(snap)
-        item["result"] = result_of(results, job_id) or None
+        result = result_of(results, job_id) or None
+        if (result is not None and result.get("text") and snap.get("mode") != "monitor"
+                and replies is not None and job_id in replies):
+            result = {**result, "replied": bool(replies[job_id])}
+        item["result"] = result
         out.append(item)
     out.sort(key=lambda a: (a.get("nextRunAtMs") is None, a.get("nextRunAtMs") or 0, a["id"]))
     return out
@@ -228,6 +236,7 @@ def board_notes(
 
 def _recurring(
     board: Mapping[str, Any], cron_jobs: Mapping[str, Any] | None, scope: str,
+    replies: Mapping[str, bool] | None = None,
 ) -> list[dict[str, Any]]:
     """I cron che si ripetono dell'ambito *scope*: le righe della sua etichetta.
 
@@ -236,7 +245,7 @@ def _recurring(
     """
     from jenny.board.cron_link import is_note
 
-    return [a for a in automations(board, cron_jobs, scope)
+    return [a for a in automations(board, cron_jobs, scope, replies)
             if not is_note((a.get("schedule") or {}).get("kind"), a.get("condition"),
                            a.get("once"))]
 
@@ -249,6 +258,7 @@ def build_board_view(
     workspace: Path | None = None,
     cron_jobs: Mapping[str, Any] | None = None,
     timezone_name: str | None = None,
+    replies: Mapping[str, bool] | None = None,
 ) -> dict[str, Any]:
     """La risposta di ``GET /api/board``.
 
@@ -364,7 +374,7 @@ def build_board_view(
     # Un cron «una volta sola» è una data, e sta sul post-it (non qui).
     auto_labels = []
     for card in board["cards"]:
-        rows = _recurring(board, cron_jobs, card["id"])
+        rows = _recurring(board, cron_jobs, card["id"], replies)
         if not rows:
             continue
         w, h = model.card_box(card)
@@ -379,7 +389,7 @@ def build_board_view(
         })
     # L'etichetta di tutto il quaderno: libera, senza filo, e c'è anche su una
     # bacheca senza schede.
-    rows = _recurring(board, cron_jobs, model.NOTEBOOK)
+    rows = _recurring(board, cron_jobs, model.NOTEBOOK, replies)
     if rows:
         auto_labels.append({
             "card": model.NOTEBOOK,
@@ -428,6 +438,7 @@ def build_card_view(
     corrections: list[dict[str, Any]] | None = None,
     cron_jobs: Mapping[str, Any] | None = None,
     timezone_name: str | None = None,
+    replies: Mapping[str, bool] | None = None,
 ) -> dict[str, Any] | None:
     """La risposta di ``GET /api/board/card``, o ``None`` se la scheda non c'è.
 
@@ -524,7 +535,7 @@ def build_card_view(
         "reminders": [n for n in notes_from_jobs(cron_jobs, timezone_name or user_timezone())
                       if n["card"] == card_id],
         # I cron della scheda che si ripetono, dal prossimo giro.
-        "automations": _recurring(board, cron_jobs, card_id),
+        "automations": _recurring(board, cron_jobs, card_id, replies),
         # Le note e le foto dell'utente, dalla più recente.
         "notes": notes,
         "photos": photos,

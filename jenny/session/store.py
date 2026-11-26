@@ -110,6 +110,27 @@ def load(database, key: str) -> dict[str, Any] | None:
     }
 
 
+def tail(database, key: str, limit: int) -> list[dict[str, Any]]:
+    """Gli ultimi *limit* messaggi di *key*, dal più nuovo: senza caricare la sessione.
+
+    Per chi vuole sapere com'è finita una conversazione (la bacheca: «hai risposto?»)
+    e non la deve rileggere tutta. Un messaggio illeggibile si salta.
+    """
+    rows = database.read(
+        "SELECT data FROM session_messages WHERE key = ? ORDER BY seq DESC LIMIT ?",
+        (key, int(limit)),
+    )
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            message = json.loads(row["data"])
+        except ValueError:
+            continue
+        if isinstance(message, dict):
+            out.append(message)
+    return out
+
+
 def head(database, key: str) -> dict[str, Any] | None:
     """Solo i metadati di *key* (``created_at``, ``updated_at``, ``metadata``,
     ``count``, ``bytes``), o ``None``."""

@@ -125,6 +125,15 @@ function autoLastLine(job, locale = i18n.locale) {
   if (job.paused) return i18n.t('board.cron.paused');
   if (job.couldNotCheck > 0) return i18n.t('board.auto.trouble', { count: job.couldNotCheck });
   const result = job.result;
+  /* Un promemoria apre un discorso nella chat del quaderno: qui si dice com'è
+     andata, non si ripete il messaggio (una seduta serale riempiva la bacheca
+     coi suoi tre paragrafi). Il testo intero resta nel cassetto. */
+  if (result?.text && job.mode !== 'monitor') {
+    const when = shortStamp(result.textAt || result.at, locale);
+    if (result.replied === true) return i18n.t('board.auto.replied', { when });
+    if (result.replied === false) return i18n.t('board.auto.waiting', { when });
+    return i18n.t('board.auto.wrote', { when });
+  }
   if (result?.text) return i18n.t('board.auto.last', { text: result.text });
   if (result?.at) {
     let when = '';

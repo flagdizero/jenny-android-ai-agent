@@ -1422,6 +1422,9 @@ class HomeApp {
     else document.documentElement.style.setProperty('--home-composer-h', `${FLOOR_NO_COMPOSER}px`);
     this._reportChatOnScreen();
     this.unseen?.refresh();
+    /* Chi ha appena risposto a un promemoria del quaderno lo ritrova detto
+       sull'etichetta («avete parlato»): la bacheca sotto si rilegge. */
+    if (this.board?.notebook) this.board.refreshNotebook(this.board.notebook);
     return true;
   }
 

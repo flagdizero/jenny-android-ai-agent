@@ -36,6 +36,7 @@ from jenny.cron.monitor_followup import resolve_pending_delegation
 from jenny.cron.service import CronJobSkippedError
 from jenny.cron.session_turns import (
     CRON_DEFER_UNTIL_IDLE_META,
+    CRON_FRESH_START_META,
     CRON_MIRROR_META,
     CRON_MONITOR_META,
     CRON_TRIGGER_META,
@@ -270,12 +271,22 @@ def _prune_monitor_session(agent: BoundCronAgent, session_key: str) -> None:
     agent.sessions.save(session)
 
 
+def _fresh_start(job: CronJob) -> bool:
+    """Il promemoria di un quaderno si scrive senza la chat recente (``CRON_FRESH_START_META``).
+
+    Uno della chat personale no: può riprendere il discorso da cui è nato. Un
+    monitor ha già una sessione sua.
+    """
+    return job.payload.mode != "monitor" and job.payload.board is not None
+
+
 def _timed_prompt(job: CronJob, *, monitor: bool, escalate: bool, observed: Any) -> str:
     """Il prompt di un job a orario: promemoria o controllo."""
     return render_template(
         "agent/cron_monitor.md" if monitor else "agent/cron_reminder.md",
         strip=True,
         message=job.payload.message,
+        fresh_start=_fresh_start(job),
         # Assenti per un job senza filtro e senza perché: il prompt resta quello.
         condition=describe_condition(job.payload.condition) if job.payload.condition else "",
         observed=observed,
@@ -387,7 +398,8 @@ async def _run_bound_cron_job(
         # Non è un'ora che arriva, è un posto: il turno lo deve sapere, e deve
         # sapere se la consegna è in ritardo (rete assente all'arrivo).
         prompt = render_template(
-            "agent/cron_zone.md", strip=True, why_page=_why_page(job), **_zone_vars(job),
+            "agent/cron_zone.md", strip=True, why_page=_why_page(job),
+            fresh_start=_fresh_start(job), **_zone_vars(job),
         )
     else:
         prompt = _timed_prompt(job, monitor=monitor, escalate=escalate, observed=observed)
@@ -407,6 +419,8 @@ async def _run_bound_cron_job(
         # quaderno davanti: ci pensa il ``ChannelDeliverer`` (v. ``_mirror_reply``).
         # Uno personale no: suona nella chat da cui è stato chiesto, e basta.
         metadata[CRON_MIRROR_META] = True
+    if _fresh_start(job):
+        metadata[CRON_FRESH_START_META] = True
     metadata[CRON_TRIGGER_META] = {
         "job_id": job.id,
         "job_name": job_display_name(job),

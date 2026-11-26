@@ -21,6 +21,14 @@ CRON_MONITOR_META = "_cron_monitor"
 # un quaderno, e lo leggono il ``ChannelDeliverer`` (il tool ``message``) e lo
 # stesso ``bound_runner`` (la risposta finale, v. ``AgentLoop.mirror_delivery``).
 CRON_MIRROR_META = "_cron_mirror"
+# Il turno si scrive senza la chat recente della sessione in cui gira: lo mette
+# ``bound_runner`` sul promemoria di un quaderno, che parla nella chat del
+# quaderno ma nasce dal job e dalle pagine, non dall'ultimo discorso. Il
+# 25/11/2026 una seduta serale si è aperta con «ci siamo lasciati con una patch
+# a metà», perché aveva davanti due ore di lavoro tecnico. Lo legge
+# ``AgentLoop._state_build``: cronologia vuota e niente riassunto archiviato.
+# La riga del trigger e la risposta si salvano nella sessione come sempre.
+CRON_FRESH_START_META = "_cron_fresh_start"
 
 
 def cron_trigger(metadata: Mapping[str, Any] | None) -> dict[str, Any] | None:
@@ -31,6 +39,14 @@ def cron_trigger(metadata: Mapping[str, Any] | None) -> dict[str, Any] | None:
 
 def is_cron_turn(metadata: Mapping[str, Any] | None) -> bool:
     return cron_trigger(metadata) is not None
+
+
+def cron_fresh_start(metadata: Mapping[str, Any] | None) -> bool:
+    """Vero per un turno cron che non deve vedere la chat recente (v. ``CRON_FRESH_START_META``)."""
+    return bool(
+        is_cron_turn(metadata)
+        and (metadata or {}).get(CRON_FRESH_START_META) is True
+    )
 
 
 def defer_cron_until_session_idle(metadata: Mapping[str, Any] | None) -> bool:

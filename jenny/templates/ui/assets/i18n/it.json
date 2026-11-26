@@ -2364,6 +2364,7 @@
       "next": "prossimo {when}",
       "costs": "lo fa Jenny (usa il modello)",
       "last": "Ultimo esito ({when}): {text}",
+      "said": "Ti ha scritto ({when}): «{text}»",
       "quiet": "Ultimo giro {when}: niente da dirti.",
       "changePrompt": "Nel cassetto {card}, l'automazione «{name}»: vorrei ",
       "prompt": "Nel cassetto {card}, ogni ",
@@ -2464,6 +2465,9 @@
       "notebook": "Tutto il quaderno",
       "trouble": "non riesce a guardare da {count} giri",
       "last": "ultimo: «{text}»",
+      "wrote": "ti ha scritto {when}",
+      "waiting": "ti ha scritto {when}, nessuna risposta",
+      "replied": "{when}, avete parlato",
       "quiet": "ultimo giro {when}: niente",
       "onlyIf": "ti scrive solo se serve"
     },
