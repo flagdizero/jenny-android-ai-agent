@@ -10,11 +10,12 @@ casa, con l'id del turno del verbale (lo stesso ``turn_id`` dei frame).
   ha solo cercato sul web nemmeno — le ricerche si elencano dentro, quando c'e'
   dell'altro.
 - ``turn.work {turn}`` → l'elenco intero, con il gettone dell'anteprima
-  (``expect_end``) che ``turn.undo`` verifica.
+  (``expect_end``) che ``turn.undo`` verifica. ``running`` dice che il turno
+  stesso sta ancora lavorando: allora niente gettone.
 - ``turn.undo {turn, expect_end}`` → rimette i file come prima del turno
   (anche quelli dei suoi aiutanti) e toglie i promemoria che il turno ha
-  creato. Rifiuta finche' un aiutante del turno lavora (``busy``), e se i file
-  sono cambiati dall'anteprima (``conflict``).
+  creato. Rifiuta finche' il turno e' in corso (``running``) o un suo aiutante
+  lavora (``busy``), e se i file sono cambiati dall'anteprima (``conflict``).
 - ``turn.redo {turn}`` → l'«Annulla» dell'annulla: i file tornano come il turno
   li aveva lasciati, e i promemoria tornano (``CronService.restore_job``, finche'
   la sua finestra e' aperta).
@@ -38,7 +39,12 @@ from jenny.webui.commands import CommandContext, CommandError
 MAX_TURNS = 120
 
 # Le note che non bastano da sole a fare una riga: cercare non cambia niente.
-_QUIET_NOTES = frozenset({"web_search", "web_fetch", "browser"})
+# Sono i ``what`` che gli strumenti dichiarano in ``Tool.outside_undo``: ``web``
+# per ``web_search``, ``web_fetch`` e ``browser_open``, ``browser`` per
+# ``browser_do``. Fino al 26/11/2026 qui c'erano i nomi degli strumenti
+# (``web_search``, ``web_fetch``), che nessuno dichiara: ogni risposta che aveva
+# guardato il web prendeva la riga.
+_QUIET_NOTES = frozenset({"web", "browser"})
 
 
 def _root(ctx: CommandContext) -> Path:
@@ -52,6 +58,13 @@ def _turn(params: Mapping[str, Any]) -> str:
     if not isinstance(value, str) or not _TURN_ID_RE.match(value):
         raise CommandError("bad_request", "turn required")
     return value
+
+
+def _redo_journal_key(turn: str) -> str:
+    """Il registro dell'«Annulla» di un ritorno: dove ``turn.redo`` annota i file che rimette."""
+    from jenny.agent.turn_work import undo_journal_key
+
+    return f"{undo_journal_key(turn)}-r"
 
 
 def _cron(ctx: CommandContext) -> Any | None:
@@ -95,6 +108,26 @@ def _working(ctx: CommandContext, turn: str) -> bool:
         manager = getter() if getter else None
         return bool(manager and manager.working_for_turn(turn))
     except Exception:  # noqa: BLE001
+        return False
+
+
+def _running(root: Path, turn: str) -> bool:
+    """Se il turno *turn* sta ancora lavorando: non si torna a prima sotto i suoi piedi.
+
+    In corso nel loop (``turn_work.in_flight``), oppure finito con un thread di
+    ``python_exec`` che scrive ancora nel suo registro — quello che
+    ``release_journal`` non lascia andare. Un registro vivo ma fermo non conta:
+    lo riapre anche l'anteprima di ``turn.work``.
+    """
+    from jenny.agent.turn_work import in_flight, turn_journal_key
+    from jenny.agent.write_journal import live_journal
+
+    if in_flight(turn):
+        return True
+    try:
+        journal = live_journal(root, turn_journal_key(turn))
+        return journal is not None and bool(journal.busy)
+    except Exception:  # noqa: BLE001 — nel dubbio decide ``in_flight``
         return False
 
 
@@ -161,11 +194,12 @@ async def turn_work(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
     root = _root(ctx)
     cron = _JobsNow(_cron(ctx)).usable
     working = _working(ctx, turn)
+    running = _running(root, turn)
 
     def read() -> dict[str, Any]:
-        view = turn_view(root, turn, cron=cron, working=working)
+        view = {**turn_view(root, turn, cron=cron, working=working), "running": running}
         token = None
-        if view["state"] == STATE_OPEN and not working:
+        if view["state"] == STATE_OPEN and not working and not running:
             try:
                 report = undo_journals(root, journals_of(root, turn), undo_journal_key(turn),
                                        dry_run=True)
@@ -197,7 +231,7 @@ async def turn_undo(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
         undo_journal_key,
     )
     from jenny.agent.work_done import undo_journals
-    from jenny.agent.write_journal import UndoConflictError
+    from jenny.agent.write_journal import UndoConflictError, drop_journals
 
     turn = _turn(params)
     token = params.get("expect_end")
@@ -206,12 +240,21 @@ async def turn_undo(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
     if _working(ctx, turn):
         raise CommandError("busy", "a helper of this turn is still working")
     root = _root(ctx)
+    if _running(root, turn):
+        raise CommandError("running", "this turn is still working")
     row = read_row(root, turn)
     if row is not None and row["state"] != STATE_OPEN:
         raise CommandError("bad_state", f"this turn is {row['state']}")
     cron = _cron(ctx)
 
     def undo() -> dict[str, Any]:
+        # Il registro del ritorno riparte vuoto. Un ritorno di prima, già
+        # rimesso con ``turn.redo``, ci ha lasciato le sue righe: con quelle di
+        # questo la catena di ogni file avrebbe due «prima» uguali di fila, e il
+        # redo dopo la leggerebbe come «cambiato in mezzo» e non rimetterebbe
+        # niente (trovato il 26/11/2026). Il turno qui è ``open``: quelle righe
+        # non servono più a nessuno.
+        drop_journals(root, [undo_journal_key(turn), _redo_journal_key(turn)])
         report = undo_journals(root, journals_of(root, turn), undo_journal_key(turn), token=token)
         counts = report.outcomes() if report is not None else {}
         mark_state(root, turn, "undone")
@@ -251,7 +294,7 @@ async def turn_redo(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str,
     cron = _cron(ctx)
 
     def redo() -> dict[str, Any]:
-        report = undo_journals(root, [undo_journal_key(turn)], f"{undo_journal_key(turn)}-r")
+        report = undo_journals(root, [undo_journal_key(turn)], _redo_journal_key(turn))
         counts = report.outcomes() if report is not None else {}
         mark_state(root, turn, "open")
         return {"restored": len(counts.get("restored", ())), "removed": len(counts.get("removed", ())),

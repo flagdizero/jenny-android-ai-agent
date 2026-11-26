@@ -1924,6 +1924,7 @@
       "undoneNote": "You went back to before this turn.",
       "expired": "Too long ago: you can't go back from here any more.",
       "workingNote": "A helper of this turn is still working: wait for her to finish.",
+      "runningNote": "This turn is not finished yet: wait for it to end.",
       "conflict": "Something changed in the meantime: here is the list now.",
       "failed": "That didn't work, try again."
     },

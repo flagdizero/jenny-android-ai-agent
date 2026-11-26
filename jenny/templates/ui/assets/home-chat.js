@@ -234,7 +234,8 @@ export class HomeChat {
        la risposta che non e' arrivata): riceve `{text, media, entries}`, cioe'
        la domanda intera, allegati compresi. */
     this.onRetry = null;
-    /* Chi vuole sapere quali risposte (per turno) sono a schermo: «Ho fatto». */
+    /* Chi vuole sapere quali risposte (per turno) sono a schermo: «Ho fatto».
+       Riceve gli id e `{closed}`, vero per il turno dal vivo appena chiuso. */
     this.onTurnsShown = null;
     /* Un turno dal vivo appena chiuso, con quanto ci ha messo. */
     this.onTurnClosed = null;
@@ -807,7 +808,9 @@ export class HomeChat {
     const closing = this.turnNode;
     this._resetTurn();
     this._announce(closing);
-    if (closing?.dataset?.turn) this.onTurnsShown?.([closing.dataset.turn]);
+    /* `closed`: i conti di questo turno vanno richiesti anche se erano gia'
+       stati chiesti mentre girava (una pagina di storia caricata in mezzo). */
+    if (closing?.dataset?.turn) this.onTurnsShown?.([closing.dataset.turn], { closed: true });
     /* Un turno lungo: chi vuole proporre il piano a passi (`home-plan.js`). */
     if (closing?.isConnected) this.onTurnClosed?.(closing, latencyMs);
   }
@@ -816,7 +819,10 @@ export class HomeChat {
      di tutte in una volta (`home-did.js`). */
   _shownTurns() {
     if (!this.onTurnsShown) return;
+    /* Non la bolla del turno in corso: i suoi conti sono parziali, e si
+       chiedono alla sua fine (`_turnEnd`). */
     const turns = [...this.el.querySelectorAll('.home-msg-jenny[data-turn]')]
+      .filter((n) => n !== this.turnNode)
       .map((n) => n.dataset.turn);
     if (turns.length) this.onTurnsShown(turns);
   }

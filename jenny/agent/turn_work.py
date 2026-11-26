@@ -34,9 +34,11 @@ filo, come fanno i recinti delle scritture.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import sqlite3
+import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -159,13 +161,48 @@ def bound(ref: TurnRef | None) -> Iterator[None]:
         _CURRENT.reset(token)
 
 
+# I turni ordinari in corso adesso: id → il task che li porta. «Torna a prima»
+# non si fa su un turno che sta ancora scrivendo (``webui/turn_commands.py``): i
+# file tornerebbero indietro sotto i piedi di Jenny, che poi ne scriverebbe
+# altri sopra. Per id e basta: gli id del filo sono unici, e la radice arriva a
+# chi chiede in due forme (``/data/user/0`` è un link). Il task serve da rete:
+# se :func:`end` salta (un'eccezione nel ``finally`` del loop prima di lui), il
+# segno cade da solo quando il task finisce, invece di restare fino al riavvio.
+_IN_FLIGHT: dict[str, Any] = {}
+_IN_FLIGHT_LOCK = threading.Lock()
+
+
+def _current_task() -> Any:
+    try:
+        return asyncio.current_task()
+    except RuntimeError:  # fuori da un loop (un test sincrono)
+        return None
+
+
+def in_flight(turn: str) -> bool:
+    """Se il turno *turn* è ancora in corso in questo processo."""
+    with _IN_FLIGHT_LOCK:
+        if turn not in _IN_FLIGHT:
+            return False
+        task = _IN_FLIGHT[turn]
+        if task is not None and task.done():
+            del _IN_FLIGHT[turn]
+            return False
+        return True
+
+
 def begin(
     root: Path, metadata: Mapping[str, Any] | None, *, session: str = "", chat: str = "",
 ) -> TurnRef | None:
-    """Il turno ordinario che parte, se ha un id; ``None`` se non ne ha (niente registro)."""
+    """Il turno ordinario che parte, se ha un id; ``None`` se non ne ha (niente registro).
+
+    Da qui a :func:`end` il turno risulta in corso (:func:`in_flight`).
+    """
     turn = turn_id_of(metadata)
     if turn is None:
         return None
+    with _IN_FLIGHT_LOCK:
+        _IN_FLIGHT[turn] = _current_task()
     return TurnRef(Path(root), turn, session=session, chat=chat, started_at=time.time())
 
 
@@ -176,6 +213,8 @@ def end(ref: TurnRef, journal: Any) -> None:
     """
     from jenny.agent.write_journal import release_journal
 
+    with _IN_FLIGHT_LOCK:
+        _IN_FLIGHT.pop(ref.turn, None)
     try:
         if journal is not None and (journal.changed_files or journal.busy):
             _ensure(ref)
@@ -509,6 +548,7 @@ __all__ = [
     "current_turn",
     "end",
     "helper_started",
+    "in_flight",
     "journals_of",
     "kept_journal_keys",
     "note",
