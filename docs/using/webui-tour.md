@@ -42,7 +42,7 @@ The **Settings** page is short on purpose, and every row shows its current value
 | Row | Opens |
 |---|---|
 | **Theme** | A card on the page itself: pick a theme and see it applied at once. See [Themes and mascot](themes-mascot.md). |
-| **Who answers** | The configured providers, the key of the one you are looking at, and its models. Tapping a model is what switches — provider and model together. |
+| **Who answers** | The configured providers, the key of the one you are looking at, and its models. Tapping a model is what switches — provider and model together. **Add who answers** adds a new provider, saved only after a test question answers. |
 | **Jenny** (her name) | **Her name** (the row and the page are titled with whatever you chose), how big the mascot is, the floating mascot over other apps (on Android), and **The rules you gave her**: a text of yours that she reads every turn and never rewrites. |
 | **Updates** | Whether the update check works, what is available, and the install. See [Updates](#updates). |
 | **Backup** | When you last exported a backup, export and restore, and a note on the local workspace history. See [Backup](backup.md). |

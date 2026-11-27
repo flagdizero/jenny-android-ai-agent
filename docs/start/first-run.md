@@ -99,7 +99,7 @@ If you have an encrypted `.jbk` backup file instead, tap **Restore from backup**
 
 ## Things to know that aren't obvious
 
-- **The wizard runs once.** It only appears while no provider is configured, and there is no way back to it from the interface afterwards. (Under the hood, saving it writes a provider list with just the provider you entered — which is why there's no "run setup again" button.) Add further providers from the workshop's **Brain → Who thinks → Add provider**.
+- **The wizard runs once.** It only appears while no provider is configured, and there is no way back to it from the interface afterwards. (Under the hood, saving it writes a provider list with just the provider you entered — which is why there's no "run setup again" button.) Add further providers from the home's **Settings → Who answers → Add who answers**, or from the workshop's **Brain → Who thinks → Add provider**.
 - **The test question is a real request.** It costs a handful of tokens on your provider account, once, when you press Launch (and again for each **Try again**).
 - **An empty model list is not an error.** If the provider's `/models` endpoint returns zero models (wrong key, wrong base URL, or the provider just doesn't have any), the backend still responds with HTTP 200 and a status saying why; the wizard shows the reason in your language instead of an error banner, and reveals the manual model-ID field.
 

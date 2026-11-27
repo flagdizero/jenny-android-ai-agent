@@ -26,9 +26,10 @@ import { wsManager } from './ws-manager.js';
 // Quanto aspettare che il socket si apra prima di lasciar rispondere `request`
 // (che, a socket chiuso, rifiuta con «gateway offline»).
 const OPEN_TIMEOUT_MS = 8000;
-// Il salvataggio del primo avvio aspetta la domanda di prova al provider: 15 s
-// lato server, piu' la costruzione del provider e il viaggio. Con i 20 s di
-// base un provider lento faceva scadere la richiesta a prova ancora in corso.
+// Il salvataggio del primo avvio, e l'aggiunta di un provider dalla casa,
+// aspettano la domanda di prova al provider: 15 s lato server, piu' la
+// costruzione del provider e il viaggio. Con i 20 s di base un provider lento
+// faceva scadere la richiesta a prova ancora in corso.
 const ONBOARDING_SAVE_TIMEOUT_MS = 45000;
 // `WebSocket.OPEN`, scritto come numero: fuori dal browser (i banchi node)
 // `WebSocket` non esiste.
@@ -264,6 +265,24 @@ export const rpc = {
       if (v !== null && v !== undefined && v !== '') clean[k] = String(v);
     }
     return send('settings.provider.update', clean);
+  },
+
+  /** Aggiunge un provider **nuovo** dalla casa: nome, formato, chiave,
+   *  indirizzo (vuoto = quello del formato) e il modello della domanda di
+   *  prova. Non sovrascrive mai: un nome gia' usato torna
+   *  `{ ok: false, error: 'name_taken' }`, una prova fallita
+   *  `{ ok: false, probe: <tipo> }`, come il primo avvio; `skip_probe` e'
+   *  «Salva lo stesso». A salvataggio riuscito `{ ok: true, ...impostazioni }`.
+   *  Chi risponde non cambia: lo cambia chi chiama, con `switchModel`. */
+  addProvider(params) {
+    return send('settings.provider.add', {
+      name: params.name || '',
+      format: params.format || '',
+      api_key: params.api_key || '',
+      api_base: params.api_base || '',
+      model: params.model || '',
+      skip_probe: params.skip_probe ? '1' : '',
+    }, { timeoutMs: ONBOARDING_SAVE_TIMEOUT_MS });
   },
 
   /** Salva il token del bot Telegram (il server lo valida con `getMe`). */

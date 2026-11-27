@@ -92,6 +92,13 @@ const rpc = {
   updateProvider: (params) => api.updateProvider(params),
 };
 
+/* Il foglio dell'aggiunta (`home-provider-add.js`) ha il suo banco: qui un
+   finto che ricorda le aperture e le callback che la stanza gli passa. */
+class HomeProviderAdd {
+  constructor(opts) { this.opts = opts; this.opened = 0; }
+  open() { this.opened++; }
+}
+
 __CATALOGS__
 __SHORT_BRAND__
 __TILE_NAMES__
@@ -99,6 +106,7 @@ __MODEL_VALUE__
 
 class HomeModel {
   __CTOR__
+  __ADDED__
   __OPEN__
   __SET_SETTINGS__
   __VIEW_NAME__
@@ -194,6 +202,7 @@ def _harness() -> str:
         .replace("__TILE_NAMES__", function(src, "tileNames"))
         .replace("__MODEL_VALUE__", function(src, "modelValue"))
         .replace("__CTOR__", member(src, "constructor"))
+        .replace("__ADDED__", member(src, "added"))
         .replace("__OPEN__", member(src, "open"))
         .replace("__SET_SETTINGS__", member(src, "setSettings"))
         .replace("__VIEW_NAME__", member(src, "viewName"))
@@ -704,4 +713,52 @@ def test_a_key_saved_from_the_home_carries_the_format() -> None:
       await s.saveKey();
       assert.deepEqual(saves, [{ type: 'provider', name: 'claude', api_key: 'una-chiave-finta',
                                  format: 'anthropic' }]);
+    """)
+
+
+# ── Un provider aggiunto dal foglio ─────────────────────────────────────────
+
+
+def test_the_add_row_opens_the_sheet() -> None:
+    _run_js("""
+      const s = await room(settings([{ name: 'groq' }], 'groq', 'llama'), {});
+      assert.equal(s.adder.opened, 0);
+      for (const fn of nodi['home-provider-add'].listeners.click || []) fn({});
+      assert.equal(s.adder.opened, 1, 'la riga non apre il foglio');
+      assert.equal(typeof s.adder.opts.onAdded, 'function');
+      assert.deepEqual(s.adder.opts.getProviders().map((p) => p.name), ['groq']);
+    """)
+
+
+def test_an_added_provider_is_looked_at_and_answers_through_switch_model() -> None:
+    """«Fallo rispondere adesso»: la scheda guarda la marca nuova e la attiva
+    con lo stesso salvataggio del tocco su un modello — modello e provider in
+    una chiamata."""
+    _run_js("""
+      const data = settings([{ name: 'groq' }], 'groq', 'llama');
+      const s = await room(data, { groq: { status: 'available', models: [{ id: 'llama' }] },
+                                   studio: { status: 'available', models: [{ id: 'm-3' }] } });
+      const added = settings([{ name: 'groq' }, { name: 'studio' }], 'groq', 'llama');
+      lastPayload = settings(added.providers, 'studio', 'm-3');
+      await s.added(added, { name: 'studio', model: 'm-3', useNow: true });
+
+      assert.equal(s.viewing, 'studio');
+      assert.deepEqual(saves, [{ type: 'settings', model: 'm-3', default_provider: 'studio' }]);
+      assert.equal(s.data.default_provider, 'studio');
+    """)
+
+
+def test_an_added_provider_that_should_not_answer_changes_nobody() -> None:
+    _run_js("""
+      const data = settings([{ name: 'groq' }], 'groq', 'llama');
+      const s = await room(data, { groq: { status: 'available', models: [{ id: 'llama' }] },
+                                   studio: { status: 'available', models: [{ id: 'm-3' }] } });
+      const added = settings([{ name: 'groq' }, { name: 'studio' }], 'groq', 'llama');
+      await s.added(added, { name: 'studio', model: 'm-3', useNow: false });
+
+      assert.equal(s.viewing, 'studio', 'la scheda guarda la marca nuova');
+      assert.deepEqual(saves, [], 'chi risponde e cambiato');
+      assert.equal(s.data.default_provider, 'groq');
+      assert.equal(toasts.length, 1);
+      assert.equal(toasts[0][1], 'success');
     """)

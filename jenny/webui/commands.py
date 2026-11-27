@@ -1405,6 +1405,39 @@ async def settings_provider_update(
     return payload
 
 
+# I campi di un provider aggiunto dalla casa, come li legge
+# ``settings_api.add_provider``; ``skip_probe`` e' «Salva lo stesso».
+_PROVIDER_ADD_KEYS = ("name", "format", "api_key", "api_base", "model", "skip_probe")
+
+
+async def settings_provider_add(
+    ctx: CommandContext, params: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Aggiunge un provider nuovo dalla casa, dopo una domanda di prova.
+
+    Un nome gia' usato o una prova fallita non sono errori del comando: tornano
+    come risultato (``{"ok": false, "error": "name_taken"}``,
+    ``{"ok": false, "probe": <tipo>}``), che la casa dice nella sua lingua.
+    ``on_settings_changed`` solo a salvataggio avvenuto: chi risponde non
+    cambia qui, ma il gancio decide da se' (impronta del provider attivo).
+    """
+    from jenny.webui.settings_api import add_provider
+
+    query = _as_query(params, _PROVIDER_ADD_KEYS)
+    data = {key: query_first(query, key) or "" for key in _PROVIDER_ADD_KEYS}
+    # La chiave non si logga: solo la sua lunghezza.
+    logger.info(
+        "[provider-add] received: name={!r} format={!r} model={!r} api_key_len={} "
+        "skip_probe={}",
+        data["name"], data["format"], data["model"], len(data["api_key"]),
+        bool(data["skip_probe"]),
+    )
+    payload = await add_provider(data)
+    if payload.get("ok"):
+        _fire(ctx.on_settings_changed, "on_settings_changed")
+    return payload
+
+
 async def telegram_save(ctx: CommandContext, params: Mapping[str, Any]) -> dict[str, Any]:
     """Salva il token del bot Telegram (lo valida con ``getMe``) e riavvia il
     canale. Era ``GET /api/telegram/save?token=…``."""
@@ -1497,6 +1530,7 @@ COMMANDS: dict[str, Command] = {
     "home.pages.set": home_pages_set,
     "settings.provider.models": settings_provider_models,
     "settings.provider.update": settings_provider_update,
+    "settings.provider.add": settings_provider_add,
     "telegram.save": telegram_save,
     "ssh.host.save": ssh_host_save,
     "onboarding.save": onboarding_save,

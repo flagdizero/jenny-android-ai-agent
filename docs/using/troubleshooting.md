@@ -31,7 +31,7 @@ there's usually nothing to actively fix: the WebUI retries forever, with a backo
 
 ## Chat looks fine but nothing happens after onboarding
 
-If the app loads, the input works, but sending a message never produces a reply (or immediately errors), the most common cause is a provider problem: go to **Settings → Who answers** and confirm a provider is actually configured with a valid key. Providers are added and removed in the workshop, under **Brain → Who thinks**.
+If the app loads, the input works, but sending a message never produces a reply (or immediately errors), the most common cause is a provider problem: go to **Settings → Who answers** and confirm a provider is actually configured with a valid key. Providers are added there too (**Add who answers**) or in the workshop, under **Brain → Who thinks**, where they are also removed.
 
 In the home, an answer that ended in a model error carries the buttons that fit it. A rejected key or used-up credit shows **Open Who answers**, since trying again with the same key would fail the same way. A dropped connection or a timeout shows **Try again** and **Open Who answers**. Anything else shows **Try again**. *Try again* sends the whole question again, photos and files included, as long as you sent it from this screen; an answer reloaded from history can be retried only when the question had no attachments.
 

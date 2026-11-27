@@ -74,7 +74,7 @@ Before this split, every path shared the 90 s stall timeout, so a local 3B never
 
 ## Configuring it
 
-Same provider entry shape as any other `openai_compat` provider — via **Add provider** in the workshop's **Brain → Who thinks** group (Format *OpenAI Compatible*), or directly in `config.json`:
+Same provider entry shape as any other `openai_compat` provider — via the home's **Settings → Who answers → Add who answers** (format *OpenAI Compatible*, the server's address, and any non-empty key: Jenny requires one even when the server ignores it), via **Add provider** in the workshop's **Brain → Who thinks** group, or directly in `config.json`:
 
 ```json
 {

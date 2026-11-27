@@ -57,6 +57,10 @@ await rpc.saveOnboarding({ provider: 'openai', format: 'openai_compat', api_key:
   model: 'gpt-x', bot_name: 'Jenny', locale: 'it' });
 await rpc.saveOnboarding({ provider: 'openai', format: 'openai_compat', api_key: 'sk-prima',
   model: 'gpt-x', bot_name: 'Jenny', locale: 'it', skip_probe: true });
+await rpc.addProvider({ name: 'openrouter', format: 'openai_compat', api_key: 'sk-nuova',
+  api_base: 'https://openrouter.ai/api/v1', model: 'm-1' });
+await rpc.addProvider({ name: 'studio', format: 'anthropic', api_key: 'sk-nuova',
+  model: 'm-2', skip_probe: true });
 
 assert.deepEqual(requests, [
   ['settings.provider.models',
@@ -72,12 +76,19 @@ assert.deepEqual(requests, [
   ['onboarding.save', { provider_name: 'openai', format: 'openai_compat', api_key: 'sk-prima',
     api_base: '', model: 'gpt-x', bot_name: 'Jenny', bot_icon: '', locale: 'it',
     skip_probe: '1' }],
+  ['settings.provider.add', { name: 'openrouter', format: 'openai_compat', api_key: 'sk-nuova',
+    api_base: 'https://openrouter.ai/api/v1', model: 'm-1', skip_probe: '' }],
+  ['settings.provider.add', { name: 'studio', format: 'anthropic', api_key: 'sk-nuova',
+    api_base: '', model: 'm-2', skip_probe: '1' }],
 ]);
-// Il primo avvio aspetta la domanda di prova al provider (15 s lato server):
-// i 20 s di base la facevano scadere a prova ancora in corso.
-assert.deepEqual(options.filter(([m]) => m === 'onboarding.save'), [
+// Il primo avvio, e l'aggiunta dalla casa, aspettano la domanda di prova al
+// provider (15 s lato server): i 20 s di base la facevano scadere a prova
+// ancora in corso.
+assert.deepEqual(options.filter(([m]) => m === 'onboarding.save' || m === 'settings.provider.add'), [
   ['onboarding.save', { timeoutMs: 45000 }],
   ['onboarding.save', { timeoutMs: 45000 }],
+  ['settings.provider.add', { timeoutMs: 45000 }],
+  ['settings.provider.add', { timeoutMs: 45000 }],
 ]);
 assert.deepEqual(fetched, [], 'nessun segreto in un URL');
 

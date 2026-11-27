@@ -248,6 +248,7 @@ _UI_MANIFEST = [
     "assets/home-memory.js",
     "assets/home-model.js",
     "assets/home-pages.js",
+    "assets/home-provider-add.js",
     "assets/home-strip.js",
     "assets/home-work.js",
     "assets/home-ui-query.js",

@@ -1329,6 +1329,89 @@ async def update_provider(data: dict[str, Any]) -> dict[str, Any]:
     return settings_payload()
 
 
+async def add_provider(data: dict[str, Any]) -> dict[str, Any]:
+    """Aggiunge un provider **nuovo** dalla casa, dopo una domanda di prova.
+
+    Non e' :func:`update_provider` con un nome diverso, per due ragioni:
+
+    - **Un nome gia' usato non si sovrascrive.** ``update_provider`` e' un
+      upsert per nome, quindi lo stesso nome rimpiazzerebbe chiave, indirizzo e
+      formato del provider che c'era, senza dirlo. Qui torna
+      ``{"ok": False, "error": "name_taken"}``, controllato prima della prova e
+      di nuovo dentro il lock: fra i due un altro scrittore puo' averlo preso.
+    - **Si salva solo cio' che ha risposto.** La prova e' quella del primo
+      avvio (:func:`_probe_provider`, una domanda minima al modello scelto), su
+      un provider costruito da una *copia* della config, fuori da
+      ``store.mutate``. Un guasto torna ``{"ok": False, "probe": <tipo>}``, che
+      la casa dice con le frasi del primo avvio (``onboarding.probe.<tipo>``).
+      ``skip_probe`` («Salva lo stesso») salta la domanda, non la costruzione.
+
+    Chi risponde non cambia qui: ``providers.default`` resta quello che era, e
+    l'attivazione la fa la casa con ``switchModel``, che passa dallo scambio a
+    caldo e dice se serve un riavvio. Il caso «nessun provider ancora» non
+    arriva fin qui: la scheda che apre l'aggiunta esiste solo dopo il primo
+    avvio, che il primo provider lo scrive da se'.
+    """
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise WebUISettingsError("name is required")
+    fmt = (data.get("format") or "").strip()
+    if fmt not in ("openai_compat", "anthropic"):
+        raise WebUISettingsError(f"unknown format: {fmt or '(empty)'}")
+    model = (data.get("model") or "").strip()
+    if not model:
+        raise WebUISettingsError("model is required")
+    api_key = (data.get("api_key") or "").strip() or None
+    api_base = normalize_api_base(data.get("api_base"))
+    skip_probe = parse_flag(data.get("skip_probe"))
+
+    def _taken(config: Config) -> bool:
+        return any(p.name == name for p in config.providers.providers)
+
+    def _new_provider() -> Any:
+        from jenny.config.schema import ProviderConfig
+
+        return ProviderConfig(name=name, format=fmt, api_key=api_key, api_base=api_base)
+
+    candidate = load_config()
+    if _taken(candidate):
+        return {"ok": False, "error": "name_taken"}
+
+    # La prova sulla copia: il provider nuovo diventa l'attivo solo li', perche'
+    # ``make_provider`` costruisce quello attivo. Sul file il default non cambia.
+    from jenny.providers.factory import make_provider
+
+    candidate.providers.providers.append(_new_provider())
+    candidate.providers.default = name
+    try:
+        provider = make_provider(candidate)
+    except (ValueError, RuntimeError) as exc:
+        logger.warning("[provider-add] provider configuration is invalid: {}", exc)
+        return {"ok": False, "probe": "config"}
+    try:
+        failure = None if skip_probe else await _probe_provider(provider, model)
+    finally:
+        await _close_quietly(provider)
+    if failure is not None:
+        logger.warning("[provider-add] probe failed: {}", failure)
+        return {"ok": False, "probe": failure}
+
+    taken_meanwhile = False
+
+    def _apply(config: Config) -> bool | None:
+        nonlocal taken_meanwhile
+        if _taken(config):
+            taken_meanwhile = True
+            return False
+        config.providers.providers.append(_new_provider())
+        return None
+
+    await store.mutate(_apply)
+    if taken_meanwhile:
+        return {"ok": False, "error": "name_taken"}
+    return {"ok": True, **settings_payload()}
+
+
 def _resolved_ca_bundle(
     stored: str | None, requested: str | None, clear: bool
 ) -> str | None:
