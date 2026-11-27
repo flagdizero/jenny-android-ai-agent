@@ -23,7 +23,7 @@ Both default base URLs apply only when you leave the base URL field empty. Chang
 
 ## Managing providers
 
-Providers are managed in the workshop, under **Brain → Who thinks** (the same list the onboarding wizard's "Connect your provider" step writes to). Which of them answers, and with which model, is chosen right there — each provider's group lists its models, and a tap on one makes it answer — or on the home's **Settings → Who answers** page, which can also add or replace a provider's key. Each provider has:
+Providers are managed in the workshop, under **Brain → Who thinks** (the same list the onboarding wizard's "Connect your provider" step writes to). Which of them answers, and with which model, is chosen right there — each provider's group lists its models, and a tap on one makes it answer — or on the home's **Settings → Who answers** page, which can also add or replace a provider's key and add a new provider (**Add who answers**: format, address, name, key and model, saved only after a test question answers; see [Settings](./settings.md#who-answers)). Each provider has:
 
 - **Name** — a free-form label (e.g. "My Claude"), not a service identifier. It's what other config, like model presets, refers to.
 - **Format** — the `anthropic` / `openai_compat` choice above.
@@ -186,7 +186,7 @@ Jenny sends whatever string you put in the model field straight to the provider.
 | `messages[N]: "name" is not supported by this endpoint` (HTTP 400, after the first tool call) | An OpenCode base URL reached by a code path that skips the provider's message sanitiser. See [OpenCode Go](#name-is-stripped-from-messages). |
 | `ModelProtocolUnsupported` (HTTP 400) on an OpenCode base URL | Should not reach you: Jenny retries on Go's other endpoints. If it does, no endpoint accepted that model ID. See [OpenCode Go](#one-base-url-three-endpoints-picked-per-model). |
 | `This Go model trains on request data. Allow paid endpoints that train on request data…` (HTTP 400) | Muse Spark on an OpenCode workspace whose Privacy settings do not allow models that train on your data. It's an account setting on opencode.ai, not a Jenny one; see the privacy note under [OpenCode Go](#two-things-to-know-before-subscribing). |
-| `No provider configured. Add a provider in Settings or edit workspace/config.json...` | `providers.providers` is empty. Add one from the workshop's **Brain → Who thinks → Add provider**, or by hand-editing `config.json`. |
+| `No provider configured. Add a provider in Settings or edit workspace/config.json...` | `providers.providers` is empty. Add one from the home's **Settings → Who answers → Add who answers**, the workshop's **Brain → Who thinks → Add provider**, or by hand-editing `config.json`. |
 | 401 / unauthorized | The key is missing, expired, has stray whitespace, or belongs to a different service than the configured base URL. |
 | Model not found | The model ID doesn't exist on the endpoint you configured — check it's the exact ID that endpoint serves, not a name copied from a different provider's docs. |
 | Connection refused | A local/self-hosted server isn't running, or the base URL has the wrong host, port, or path. See [Local models](./local-models.md) if the endpoint is off-device. |

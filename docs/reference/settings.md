@@ -54,7 +54,15 @@ The model in use is always listed first, even if the provider's list doesn't inc
 
 Under the tiles, **Key** shows the masked key of the provider you're looking at, with **Add** or **Replace**. The field starts empty, because the stored key never comes back to the client. **Save** stays off until you paste something, and saving reloads that provider's model list.
 
-There is no field for typing a model ID by hand on this page. You pick an ID from the provider's list, or enter one as the **First model** when you add a provider in the workshop.
+At the bottom of the card, **Add who answers** opens a sheet that adds a new provider in three steps:
+
+1. **The format**: *OpenAI Compatible* (already selected) or *Anthropic Compatible*, the same two choices as the first-run wizard.
+2. **Address, name and key**. An empty address means the format's default. The name is filled in from the address host (`https://api.deepseek.com/v1` → `deepseek`) until you edit it, and it is never one already in use. A name that is taken stops the step with a note, because adding never replaces an existing provider. To change an existing provider's key, use **Key** on its tile. The key is required.
+3. **The model**. The list comes from the service, with a search box when it is long. If the service gives no list, you type the model ID instead. **Make it answer now** is on by default.
+
+**Test and save** asks that model a short test question, the same one the first-run wizard asks, and saves only if it answers. If the test fails, nothing is written and the sheet says why. A rejected key, used-up credit or an unknown model offers only the fix and **Try again**. A network problem, a timeout or a busy server also offers **Save anyway**, since the key may be right. A key that the service already rejects when it lists its models sends you straight back to the key. With **Make it answer now** on, the new provider and that model become the ones that answer, through the same save as a tap on a model. With it off, the provider joins the tiles and nothing else changes.
+
+The private CA certificate, editing a provider's address or format, and deleting a provider stay in the workshop.
 
 ### Jenny
 
