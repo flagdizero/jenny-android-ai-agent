@@ -32,6 +32,7 @@ import { i18n } from './shared/i18n.js';
 import { getProviderBrand } from './shared/provider-brand.js';
 import { showToast } from './shared/utils.js';
 import { CATALOG_NOTE_KEYS, ModelCatalogs, switchModel } from './shared/model-catalog.js';
+import { HomeProviderAdd } from './home-provider-add.js';
 
 /** Il nome di marca, per una pastiglia e per un titolo.
  *
@@ -115,6 +116,31 @@ export class HomeModel {
     this.keyBtn?.addEventListener('click', () => this.toggleKeyEdit());
     this.keySave?.addEventListener('click', () => this.saveKey());
     this.keyInput?.addEventListener('input', () => this._syncKeySave());
+
+    /* Un provider nuovo: il foglio in tre passi di `home-provider-add.js`. */
+    this.addRow = document.getElementById('home-provider-add');
+    this.addLabel = document.getElementById('home-provider-add-label');
+    this.adder = new HomeProviderAdd({
+      getProviders: () => this.data?.providers || [],
+      onAdded: (payload, added) => this.added(payload, added),
+    });
+    this.addRow?.addEventListener('click', () => this.adder.open());
+  }
+
+  /** Un provider appena aggiunto dal foglio. La scheda guarda i suoi modelli
+   *  e, se l'hai chiesto, lo fa rispondere con il modello della prova — con
+   *  `switchModel`, come un tocco su un modello: modello e provider insieme,
+   *  scambio a caldo, e il toast che dice se serve un riavvio. Se l'attivazione
+   *  non riesce il provider resta fra le marche, e il toast l'ha gia' detto. */
+  async added(payload, { name, model, useNow } = {}) {
+    this.viewing = name || this.viewing;
+    this._apply(payload);
+    this._loadModels(this.viewing);
+    if (useNow && name && model) {
+      await this.pickModel(model);
+    } else {
+      showToast(i18n.t('home.model.add.added', { name: this.viewName() || name }), 'success');
+    }
   }
 
   /** La stanza si apre. I dati sono gia' arrivati: li porta chi la apre. */
@@ -172,6 +198,7 @@ export class HomeModel {
     if (this.keyLabel) this.keyLabel.textContent = i18n.t('home.model.key');
     if (this.keySave) this.keySave.textContent = i18n.t('common.save');
     if (this.keyInput) this.keyInput.placeholder = i18n.t('home.model.keyPlaceholder');
+    if (this.addLabel) this.addLabel.textContent = i18n.t('home.model.add.row');
     this._paint();
   }
 

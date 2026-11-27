@@ -622,6 +622,16 @@
                  autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
           <button class="home-save" id="home-key-save" type="button"></button>
         </div>
+
+        <!-- Un provider nuovo, senza l'officina (`home-provider-add.js`). In
+             fondo alla scheda e non in coda alle mattonelle: la striscia
+             scorre di lato, e con quattro marche un «+» li' finiva fuori
+             schermo proprio quando servirebbe di piu'. -->
+        <button class="home-padd-row" id="home-provider-add" type="button">
+          <i class="ti ti-plus" aria-hidden="true"></i>
+          <span id="home-provider-add-label"></span>
+          <i class="ti ti-chevron-right" aria-hidden="true"></i>
+        </button>
       </div>
 
       <div class="home-card">
@@ -822,6 +832,12 @@
 <!-- «Con chi parli» (`home-line.js`): le Jenny in alto, le chat di quella
      accesa sotto. La forma dei fogli del piano. -->
 <dialog class="oc-sheet home-plan-sheet home-line-sheet" id="home-line-sheet">
+  <div class="oc-sheet-inner home-plan-sheet-inner"></div>
+</dialog>
+
+<!-- «Aggiungi chi risponde» (`home-provider-add.js`): un provider nuovo in tre
+     passi. La forma dei fogli del piano. -->
+<dialog class="oc-sheet home-plan-sheet home-provider-sheet" id="home-provider-sheet">
   <div class="oc-sheet-inner home-plan-sheet-inner"></div>
 </dialog>
 

@@ -35,6 +35,19 @@ export const CATALOG_NOTE_KEYS = Object.freeze({
   rejected: 'common.modelsKeyRejected',
 });
 
+/* I guasti della domanda di prova dopo cui la chiave può essere giusta: la rete,
+   il tempo, il server, il limite di richieste, o un errore che non si sa dire
+   (un 400 per un parametro che quel provider non accetta non dice niente della
+   chiave, e senza «Salva lo stesso» il primo avvio non avrebbe un'uscita). Con
+   la chiave rifiutata, il credito finito o il modello che non c'è, salvare
+   vorrebbe dire una Jenny che non risponde. Vale per il primo avvio
+   (`onboarding-wizard.js`) e per un provider aggiunto dalla casa
+   (`home-provider-add.js`): i tipi sono quelli di `settings_api._probe_provider`. */
+export const PROBE_SAVE_ANYWAY = new Set(['connection', 'timeout', 'server', 'rate_limit', 'generic']);
+export const PROBE_KINDS = new Set([
+  'auth', 'credit', 'model', 'config', ...PROBE_SAVE_ANYWAY,
+]);
+
 export class ModelCatalogs {
   /** *fetchModels(name)*: la richiesta (`rpc.providerModels`). */
   constructor(fetchModels) {

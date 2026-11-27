@@ -52,8 +52,8 @@ def _bench(scenario: str) -> str:
         "let answer = async () => ({ ok: true });\n"
         "const importRpc = async () => ({ rpc: { saveOnboarding: (p) => { sent.push(p); return answer(p); } } });\n"
         f"{_const(catalog, 'CATALOG_NOTE_KEYS')}\n"
-        f"{_const(source, 'PROBE_SAVE_ANYWAY')}\n"
-        f"{_const(source, 'PROBE_KINDS')}\n"
+        f"{_const(catalog, 'PROBE_SAVE_ANYWAY')}\n"
+        f"{_const(catalog, 'PROBE_KINDS')}\n"
         "class W {\n"
         "  constructor() {\n"
         "    this.contentEl = document.getElementById('c');\n"
@@ -202,7 +202,7 @@ assert.equal(said(''), 'onboarding.noModels');
 
 
 def test_every_probe_sentence_exists_in_both_languages() -> None:
-    source = WIZARD_JS.read_text(encoding="utf-8")
+    source = CATALOG_JS.read_text(encoding="utf-8")
     kinds = set(re.findall(r"'([a-z_]+)'", _const(source, "PROBE_SAVE_ANYWAY")))
     kinds |= set(re.findall(r"'([a-z_]+)'", _const(source, "PROBE_KINDS")))
     # I tipi del server: quelli di ``classify_user_error`` più ``model`` e ``config``.

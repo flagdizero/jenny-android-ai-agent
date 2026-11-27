@@ -901,3 +901,211 @@ def test_provider_models_payload_tells_a_rejected_key_from_a_missing_one(
                 config_path)
     missing = provider_models_payload({"provider": ["openrouter"]})
     assert missing["status"] == "not_configured"
+
+
+# ---------------------------------------------------------------------------
+# add_provider: un provider nuovo dalla casa, dopo la domanda di prova
+# ---------------------------------------------------------------------------
+#
+# La prova e' la stessa del primo avvio (``_probe_provider``): qui il provider e'
+# finto come sopra, e si misura cio' che l'aggiunta fa di suo — non sovrascrive
+# mai un nome, non scrive se la prova non risponde, non cambia chi risponde.
+
+_ADD_DATA = {
+    "name": "openrouter",
+    "format": "openai_compat",
+    "api_key": "not-a-real-credential",
+    "api_base": "https://openrouter.ai/api/v1",
+    "model": "m-1",
+}
+
+
+def _seed_active(config_path) -> None:
+    config = _add_provider(Config(), "attivo", api_key="sk-attivo")
+    config.providers.default = "attivo"
+    config.agents.defaults.model = "modello-attivo"
+    save_config(config, config_path)
+
+
+@pytest.mark.asyncio
+async def test_add_provider_that_answers_is_added_and_changes_nobody(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jenny.webui.settings_api import add_provider
+
+    _seed_active(config_path)
+    provider = _FakeProvider()
+    _use_provider(monkeypatch, provider)
+
+    result = await add_provider(dict(_ADD_DATA))
+
+    assert result["ok"] is True
+    assert "openrouter" in {p["name"] for p in result["providers"]}
+    saved = load_config(config_path)
+    by_name = {p.name: p for p in saved.providers.providers}
+    assert by_name["openrouter"].api_key == "not-a-real-credential"
+    assert by_name["openrouter"].api_base == "https://openrouter.ai/api/v1"
+    assert by_name["openrouter"].format == "openai_compat"
+    # Chi risponde non cambia: lo cambia la casa, con ``switchModel``.
+    assert saved.providers.default == "attivo"
+    assert saved.agents.defaults.model == "modello-attivo"
+    assert by_name["attivo"].api_key == "sk-attivo"
+    [(_, kwargs)] = provider.calls
+    assert kwargs["model"] == "m-1"
+    assert provider.closed
+
+
+@pytest.mark.asyncio
+async def test_add_provider_never_overwrites_a_name_in_use(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``update_provider`` e' un upsert: lo stesso nome rimpiazzerebbe la chiave
+    dell'altro. Qui no, e senza nemmeno fare la domanda."""
+    from jenny.webui.settings_api import add_provider
+
+    _seed_active(config_path)
+    before = config_path.read_bytes()
+    provider = _FakeProvider()
+    _use_provider(monkeypatch, provider)
+
+    result = await add_provider({**_ADD_DATA, "name": "attivo", "api_key": "sk-altra"})
+
+    assert result == {"ok": False, "error": "name_taken"}
+    assert config_path.read_bytes() == before
+    assert provider.calls == []
+
+
+@pytest.mark.asyncio
+async def test_add_provider_name_taken_during_the_probe_writes_nothing(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fra la prova e il lock un altro scrittore prende il nome: vince lui."""
+    from jenny.webui.settings_api import add_provider
+
+    _seed_active(config_path)
+
+    async def another_writer_meanwhile(provider, model):
+        config = load_config(config_path)
+        config.providers.providers.append(
+            ProviderConfig(name="openrouter", format="openai_compat", api_key="sk-sua")
+        )
+        save_config(config, config_path)
+        return None
+
+    monkeypatch.setattr("jenny.webui.settings_api._probe_provider", another_writer_meanwhile)
+    _use_provider(monkeypatch, _FakeProvider())
+
+    result = await add_provider(dict(_ADD_DATA))
+
+    assert result == {"ok": False, "error": "name_taken"}
+    saved = [p for p in load_config(config_path).providers.providers if p.name == "openrouter"]
+    assert [p.api_key for p in saved] == ["sk-sua"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("response", "kind"),
+    [
+        ({"error_status_code": 401}, "auth"),
+        ({"error_status_code": 402}, "credit"),
+        ({"error_kind": "connection"}, "connection"),
+        ({"error_status_code": 404, "error_code": "model_not_found"}, "model"),
+    ],
+)
+async def test_add_provider_probe_failure_writes_nothing(
+    config_path, monkeypatch: pytest.MonkeyPatch, response: dict, kind: str
+) -> None:
+    from jenny.webui.settings_api import add_provider
+
+    _seed_active(config_path)
+    before = config_path.read_bytes()
+    provider = _FakeProvider(_error(**response))
+    _use_provider(monkeypatch, provider)
+
+    assert await add_provider(dict(_ADD_DATA)) == {"ok": False, "probe": kind}
+    assert config_path.read_bytes() == before
+    assert provider.closed
+
+
+@pytest.mark.asyncio
+async def test_add_provider_save_anyway_skips_only_the_question(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jenny.webui.settings_api import add_provider
+
+    _seed_active(config_path)
+    provider = _FakeProvider(_error(error_kind="connection"))
+    _use_provider(monkeypatch, provider)
+
+    result = await add_provider({**_ADD_DATA, "skip_probe": "1"})
+
+    assert result["ok"] is True
+    assert provider.calls == []
+    assert "openrouter" in {p.name for p in load_config(config_path).providers.providers}
+
+
+@pytest.mark.asyncio
+async def test_add_provider_save_anyway_still_refuses_a_provider_without_a_key(
+    config_path,
+) -> None:
+    """Saltare la domanda non salta la costruzione: la fabbrica vera vuole una
+    chiave (``factory.py``), quindi «Salva lo stesso» non salva un provider muto."""
+    from jenny.webui.settings_api import add_provider
+
+    _seed_active(config_path)
+    before = config_path.read_bytes()
+
+    result = await add_provider({**_ADD_DATA, "api_key": "", "skip_probe": "1"})
+
+    assert result == {"ok": False, "probe": "config"}
+    assert config_path.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_add_provider_asks_before_taking_the_config_lock(
+    config_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La domanda dura secondi: dentro ``store.mutate`` terrebbe preso il lucchetto."""
+    from jenny.config import store
+    from jenny.webui.settings_api import add_provider
+
+    _seed_active(config_path)
+    order: list = []
+    _use_provider(monkeypatch, _FakeProvider(calls=order))
+    real_mutate = store.mutate
+
+    async def recording_mutate(apply, **kwargs):
+        order.append(("mutate", None))
+        return await real_mutate(apply, **kwargs)
+
+    monkeypatch.setattr(store, "mutate", recording_mutate)
+
+    assert (await add_provider(dict(_ADD_DATA)))["ok"] is True
+    assert [step for step, _ in order] == ["probe", "mutate"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"name": "  "},
+        {"format": ""},
+        {"format": "gemini"},
+        {"model": ""},
+        {"api_base": "Http:/openrouter.ai"},
+    ],
+)
+async def test_add_provider_refuses_what_it_cannot_save(
+    config_path, monkeypatch: pytest.MonkeyPatch, bad: dict
+) -> None:
+    from jenny.webui.settings_api import add_provider
+
+    _seed_active(config_path)
+    before = config_path.read_bytes()
+    provider = _FakeProvider()
+    _use_provider(monkeypatch, provider)
+
+    with pytest.raises(WebUISettingsError):
+        await add_provider({**_ADD_DATA, **bad})
+    assert config_path.read_bytes() == before
+    assert provider.calls == []

@@ -399,3 +399,57 @@ def test_the_gateway_hands_the_onboarding_wiring_to_the_commands(tmp_path: Path)
     )
     assert services.commands.onboarding_event is event
     assert services.commands.session_manager is sessions
+
+
+# ---------------------------------------------------------------------------
+# settings.provider.add
+# ---------------------------------------------------------------------------
+
+
+async def test_provider_add_saves_and_fires_settings_changed(
+    tmp_path: Path, config_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def answers(provider, model):
+        return None
+
+    monkeypatch.setattr("jenny.webui.settings_api._probe_provider", answers)
+    on_changed = MagicMock()
+    payload = await dispatch_command(
+        _ctx(tmp_path, on_settings_changed=on_changed),
+        "settings.provider.add",
+        {"name": "nuovo", "format": "openai_compat", "api_key": "sk-test", "model": "m-1"},
+    )
+    assert payload["ok"] is True
+    saved = {p.name: p.api_key for p in load_config(config_path).providers.providers}
+    assert saved["nuovo"] == "sk-test"
+    on_changed.assert_called_once()
+
+
+async def test_provider_add_that_is_refused_fires_nothing(
+    tmp_path: Path, config_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Una prova fallita torna come risultato, non come errore del comando, e
+    niente e' cambiato: il gancio resta fermo."""
+
+    async def refuses(provider, model):
+        return "auth"
+
+    monkeypatch.setattr("jenny.webui.settings_api._probe_provider", refuses)
+    on_changed = MagicMock()
+    payload = await dispatch_command(
+        _ctx(tmp_path, on_settings_changed=on_changed),
+        "settings.provider.add",
+        {"name": "nuovo", "format": "openai_compat", "api_key": "sk-test", "model": "m-1"},
+    )
+    assert payload == {"ok": False, "probe": "auth"}
+    on_changed.assert_not_called()
+
+
+async def test_provider_add_without_a_format_is_a_bad_request(
+    tmp_path: Path, config_path: Path
+) -> None:
+    err = await _refused(
+        _ctx(tmp_path), "settings.provider.add",
+        {"name": "nuovo", "api_key": "sk-test", "model": "m-1"},
+    )
+    assert err.code == "bad_request"

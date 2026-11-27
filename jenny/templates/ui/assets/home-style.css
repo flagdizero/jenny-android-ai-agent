@@ -6388,6 +6388,200 @@ dialog.home-photo-viewer[open] { display: flex; }
 
 .home-key-input:focus { outline: none; border-color: var(--focus-ring); box-shadow: 0 0 0 1px var(--focus-ring); }
 
+/* ── «Aggiungi chi risponde» ─────────────────────────────────────────────
+   La riga in fondo alla scheda delle marche e il foglio in tre passi di
+   `home-provider-add.js`. Il foglio veste `.oc-sheet` + `.home-plan-sheet`;
+   qui c'e' quel che ci sta dentro. I campi sono `.home-key-input`, cresciuti a
+   misura di dito. */
+
+.home-padd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  border-top: .5px solid var(--border);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.home-padd-row > .ti { font-size: 19px; }
+.home-padd-row > span { flex: 1; }
+.home-padd-row > .ti-chevron-right { color: var(--text-muted); font-size: 16px; }
+.home-padd-row:active { background: var(--active); }
+.home-padd-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.home-padd-top { display: flex; align-items: center; gap: 6px; padding-right: 40px; }
+.home-padd-top .home-plan-sheet-title { margin: 2px 0; padding-right: 0; }
+.home-padd-back {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-left: -6px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font-size: 20px;
+}
+.home-padd-back:active { background: var(--active); }
+.home-padd-steps { margin-left: auto; display: flex; align-items: center; gap: 5px; }
+.home-padd-steps i { width: 6px; height: 6px; border-radius: 3px; background: var(--border-strong); }
+.home-padd-steps i.is-on { width: 16px; background: var(--accent); }
+
+.home-padd-lead { margin: 10px 4px 0; font-size: 13.5px; line-height: 1.45; color: var(--text); }
+
+.home-padd-formats { display: grid; gap: 10px; margin: 12px 4px 0; }
+.home-padd-format {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--overlay);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.home-padd-format.is-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.home-padd-format-icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  background: var(--overlay-strong);
+  color: var(--text);
+}
+.home-padd-format.is-on .home-padd-format-icon {
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.home-padd-format-text { flex: 1; min-width: 0; }
+.home-padd-format-text b { display: block; font-size: 15px; font-weight: 600; color: var(--heading); }
+.home-padd-format-text span { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.4; color: var(--text-muted); }
+
+/* Il pallino delle scelte: un formato, un modello. */
+.home-padd-radio {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+}
+.is-on > .home-padd-radio { border-color: var(--accent); }
+.is-on > .home-padd-radio::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.home-padd-chip {
+  align-self: flex-start;
+  margin: 6px 4px 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--overlay-strong);
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.home-padd-label {
+  display: block;
+  margin: 16px 4px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.home-padd-field { display: flex; align-items: center; gap: 8px; margin: 0 4px; }
+.home-padd-field .home-key-input { min-height: 46px; padding: 0 12px; border-radius: 12px; font-size: 14px; }
+.home-padd-field .home-key-input[type="search"] { font-family: inherit; min-height: 40px; font-size: 13.5px; }
+.home-padd-field .home-key-input.is-bad { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
+.home-padd-dot { flex: none; width: 12px; height: 12px; margin-left: 4px; border-radius: 50%; box-shadow: 0 0 0 1px var(--border-strong); }
+
+.home-padd-note { margin: 6px 4px 0; font-size: 12px; line-height: 1.4; color: var(--text-muted); }
+.home-padd-note[hidden] { display: none; }
+.home-padd-note.is-bad { color: var(--error); }
+
+/* L'elenco scorre dentro la sua scatola: con dodici modelli il foglio intero
+   spingeva «Prova e salva» sotto il bordo, e il bottone che chiude il passo
+   non si vedeva (visto sul rig). In vh: il Titan e' quadrato. */
+.home-padd-models {
+  max-height: 38vh;
+  overflow-y: auto;
+  margin: 8px 4px 0;
+  padding: 2px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.home-padd-model {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  border-top: .5px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  text-align: left;
+}
+.home-padd-model:first-child { border-top: 0; }
+.home-padd-model.is-on { color: var(--text); }
+.home-padd-model-id { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.home-padd-switch { display: flex; align-items: center; gap: 12px; margin: 14px 4px 0; font-size: 14px; color: var(--text); }
+.home-padd-switch-text { flex: 1; }
+.home-padd-switch-text small { display: block; margin-top: 1px; font-size: 12px; color: var(--text-muted); }
+
+.home-padd-actions { display: flex; flex-direction: column; gap: 8px; margin: 18px 4px 2px; }
+.home-padd-wide { justify-content: center; width: 100%; }
+
+.home-padd-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 12px 4px 0;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--error) 45%, transparent);
+  background: color-mix(in oklab, var(--error) 9%, transparent);
+}
+.home-padd-alert > .ti { flex: none; margin-top: 1px; font-size: 20px; color: var(--error); }
+.home-padd-alert.is-soft {
+  border-color: color-mix(in oklab, var(--warning) 45%, transparent);
+  background: color-mix(in oklab, var(--warning) 8%, transparent);
+}
+.home-padd-alert.is-soft > .ti { color: var(--warning); }
+.home-padd-alert b { display: block; font-size: 14px; font-weight: 600; color: var(--heading); }
+.home-padd-alert span { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.45; color: var(--text-muted); }
+.home-padd-alert span:first-child { margin-top: 0; color: var(--heading); font-size: 13.5px; }
+.home-padd-alert-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
 /* ── I modelli ── */
 
 .home-models {
