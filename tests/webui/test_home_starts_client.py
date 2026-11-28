@@ -14,7 +14,7 @@ pytestmark = requires_jsdom
 
 _HEAD = """
 import assert from 'node:assert/strict';
-import { boot, tick, until, threads, sent, $ } from './boot.mjs';
+import { boot, tick, until, threads, sent, routes, $ } from './boot.mjs';
 const starts = () => [...$('home-thread').querySelectorAll('.home-start')];
 const messages = () => sent.filter((m) => m.type === 'message');
 """
@@ -65,12 +65,29 @@ await until(() => app.input.value === 'la mia bozza', { msg: 'la bozza non e\\u2
 
 def test_the_apps_page_says_where_apps_come_from() -> None:
     run_home(_HEAD + """
+routes['/api/webui/apps'] = { apps: [] };
 const app = await boot();
+app.homePages.goToId('app', { animated: false });
 const tile = $('home-ask-app');
+await until(() => app.appsSource().jennyListLoaded(), { msg: 'elenco delle app mai letto' });
+await tick(10);
+assert.equal(tile.hidden, false, 'senza app la tessera non si vede');
 assert.ok(tile, 'nessuna tessera');
 assert.ok($('home-ask-app-title').textContent.length > 0, 'la tessera e\\u2019 senza testo');
 let asked = null;
 app.openChatOver = (opts) => { asked = opts; return true; };
 tile.click();
 assert.ok(asked?.prefill, 'la tessera non apre la chat con un esempio');
+""")
+
+
+def test_the_tile_goes_once_you_have_an_app() -> None:
+    """Insegna da dove nascono le app: con una Jenny App la strada la conosci."""
+    run_home(_HEAD + """
+routes['/api/webui/apps'] = { apps: [{ slug: 'spese', name: 'Spese' }] };
+const app = await boot();
+app.homePages.goToId('app', { animated: false });
+await until(() => app.appsSource().jennyListLoaded(), { msg: 'elenco delle app mai letto' });
+await tick(10);
+assert.equal($('home-ask-app').hidden, true, 'la tessera resta con un\u2019app gia\u2019 fatta');
 """)
