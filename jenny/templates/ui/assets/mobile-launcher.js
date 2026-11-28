@@ -872,9 +872,17 @@ export class LauncherController {
    *  mentre si cerca, perché lì la risposta è la griglia stessa.
    */
   _renderTop(query) {
-    /* La tessera «Chiedi a Jenny un'app» della casa: solo a ricerca vuota. */
+    /* La tessera «Chiedi a Jenny un'app» della casa insegna da dove nascono le
+       app: serve finche' non ne hai nessuna, perche' con una Jenny App la strada
+       la conosci gia'. Si mostra solo a elenco arrivato (niente lampo a chi di
+       app ne ha) e a ricerca vuota; a elenco rotto si mostra, perche' «non lo
+       so» non vuol dire «ne hai». */
     const ask = document.getElementById('home-ask-app');
-    if (ask) ask.hidden = Boolean(query.trim());
+    if (ask) {
+      const known = !this._apps || this._apps.jennyListLoaded?.() !== false;
+      const hasJennyApp = this._entries.some((entry) => entry.kind === 'jenny');
+      ask.hidden = Boolean(query.trim()) || !known || hasJennyApp;
+    }
     if (!this.topEl) return;
     const top = query.trim() ? [] : rankEntries(this._entries, '', this._usage, i18n.locale)
       .filter((entry) => this._usage.get(entry.key).count > 0)

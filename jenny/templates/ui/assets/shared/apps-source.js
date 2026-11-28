@@ -151,6 +151,12 @@ export class AppsSource {
     return this._failed.jenny;
   }
 
+  /** La risposta sulle Jenny App e' arrivata, buona o rotta. Prima di allora
+   *  «non ne hai» e «non lo so ancora» si confondono. */
+  jennyListLoaded() {
+    return this._jennyLoaded;
+  }
+
   /** Riprova. `ensureLoaded()` fa gia' lo stesso a ogni apertura, quindi
    *  chiudere e riaprire basta; questo e' il pulsante per chi il foglio ce
    *  l'ha gia' aperto sotto gli occhi e non deve indovinare che riaprirlo
